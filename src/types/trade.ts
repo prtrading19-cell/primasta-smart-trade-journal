@@ -176,6 +176,7 @@ export const STRATEGIES = [
   "A+ Higher Timeframe POI + Lower Timeframe Confirmation",
   "A+ Bullish Breaker Block Retest",
   "A+ Bearish Breaker Block Retest",
+  "SH+BMS + RTO",
   NO_TRADE_STRATEGY
 ];
 export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
@@ -195,6 +196,7 @@ export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
     "Price reaches a Daily/4H POI, then lower timeframe confirms liquidity sweep, displacement, MSS, and refined entry.",
   "A+ Bullish Breaker Block Retest": "A bearish order block fails, price breaks above it, then retests it as support for bullish continuation.",
   "A+ Bearish Breaker Block Retest": "A bullish order block fails, price breaks below it, then retests it as resistance for bearish continuation.",
+  "SH+BMS + RTO": "Price performs a stop hunt at a key liquidity level, confirms a break of market structure, then returns to a valid order block for entry.",
   [NO_TRADE_STRATEGY]: "Use this when the setup does not meet A+ requirements or the market is unclear."
 };
 export const SESSIONS: Session[] = ["Asian", "London", "New York", "London/New York overlap"];
