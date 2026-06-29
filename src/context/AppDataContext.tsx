@@ -294,8 +294,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         impactLevel: input.impactLevel,
         timeSensitivity: input.timeSensitivity,
         confidenceScore: input.confidenceScore,
+        headlineSummary: input.headlineSummary,
+        newsDriverSummary: input.newsDriverSummary,
+        chartObservationInterpretation: input.chartObservationInterpretation,
         explanation: input.explanation,
         goldMeaning: input.goldMeaning,
+        bullishGoldClues: input.bullishGoldClues,
+        bearishGoldClues: input.bearishGoldClues,
+        keyConflictOrRisk: input.keyConflictOrRisk,
         checklistEffect: input.checklistEffect,
         tradingCaution: input.tradingCaution,
         finalGuidance: input.finalGuidance
@@ -502,6 +508,40 @@ function normalizeGoldDriverFields(value: unknown): GoldDriverFields | undefined
   return Object.fromEntries(Object.entries(value).map(([key, fieldValue]) => [key, String(fieldValue ?? "")]));
 }
 
+function normalizeGoldAnalysisResult(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  return {
+    headlineSummary: typeof source.headlineSummary === "string" ? source.headlineSummary : undefined,
+    newsDriverSummary: typeof source.newsDriverSummary === "string" ? source.newsDriverSummary : undefined,
+    chartObservationInterpretation: typeof source.chartObservationInterpretation === "string" ? source.chartObservationInterpretation : undefined,
+    bullishGoldClues: Array.isArray(source.bullishGoldClues) ? source.bullishGoldClues.map((item) => String(item)) : undefined,
+    bearishGoldClues: Array.isArray(source.bearishGoldClues) ? source.bearishGoldClues.map((item) => String(item)) : undefined,
+    keyConflictOrRisk: typeof source.keyConflictOrRisk === "string" ? source.keyConflictOrRisk : undefined
+  };
+}
+
+function toGoldAnalysisResult(report: GoldResearchReport) {
+  return {
+    driverName: report.driverName,
+    goldBias: report.goldBias,
+    impactLevel: report.impactLevel,
+    timeSensitivity: report.timeSensitivity,
+    confidenceScore: report.confidenceScore,
+    headlineSummary: report.headlineSummary,
+    newsDriverSummary: report.newsDriverSummary,
+    chartObservationInterpretation: report.chartObservationInterpretation,
+    explanation: report.explanation,
+    whatThisMeansForGold: report.goldMeaning,
+    bullishGoldClues: report.bullishGoldClues,
+    bearishGoldClues: report.bearishGoldClues,
+    keyConflictOrRisk: report.keyConflictOrRisk,
+    checklistEffect: report.checklistEffect,
+    tradingCaution: report.tradingCaution,
+    finalGuidance: report.finalGuidance
+  };
+}
+
 function normalizeTrade(trade: Trade): Trade {
   const checklist = normalizeChecklist(trade.smcChecklist ?? trade.checklist);
   return {
@@ -627,6 +667,7 @@ function toTradeRow(trade: Trade) {
 }
 
 function fromGoldResearchRow(row: any): GoldResearchReport {
+  const analysisResult = normalizeGoldAnalysisResult(row.analysis_result);
   return {
     id: row.id,
     userId: row.user_id,
@@ -634,19 +675,25 @@ function fromGoldResearchRow(row: any): GoldResearchReport {
     updatedAt: row.updated_at,
     reportDate: row.report_date,
     driverName: row.driver_name,
-    inputHeadline: row.input_headline ?? "",
-    inputSummary: row.input_summary ?? "",
+    inputHeadline: row.news_headline ?? row.input_headline ?? "",
+    inputSummary: row.news_summary ?? row.input_summary ?? "",
     currentValue: row.current_value ?? undefined,
     chartObservation: row.chart_observation ?? undefined,
     sourceLink: row.source_link ?? undefined,
     notes: row.notes ?? undefined,
-    driverFields: normalizeGoldDriverFields(row.driver_fields),
+    driverFields: normalizeGoldDriverFields(row.driver_specific_data ?? row.driver_fields),
     goldBias: row.gold_bias,
     impactLevel: row.impact_level,
     timeSensitivity: row.time_sensitivity,
     confidenceScore: Number(row.confidence_score ?? 0),
+    headlineSummary: analysisResult.headlineSummary ?? row.news_headline ?? row.input_headline ?? "",
+    newsDriverSummary: analysisResult.newsDriverSummary ?? row.news_summary ?? row.input_summary ?? "",
+    chartObservationInterpretation: analysisResult.chartObservationInterpretation ?? row.chart_observation ?? "",
     explanation: row.explanation ?? "",
     goldMeaning: row.gold_meaning ?? "",
+    bullishGoldClues: analysisResult.bullishGoldClues ?? [],
+    bearishGoldClues: analysisResult.bearishGoldClues ?? [],
+    keyConflictOrRisk: analysisResult.keyConflictOrRisk ?? row.trading_caution ?? "",
     checklistEffect: row.checklist_effect,
     tradingCaution: row.trading_caution ?? "",
     finalGuidance: row.final_guidance ?? ""
@@ -663,11 +710,15 @@ function toGoldResearchRow(report: GoldResearchReport) {
     driver_name: report.driverName,
     input_headline: report.inputHeadline,
     input_summary: report.inputSummary,
+    news_headline: report.inputHeadline,
+    news_summary: report.inputSummary,
     current_value: report.currentValue ?? null,
     chart_observation: report.chartObservation ?? null,
     source_link: report.sourceLink ?? null,
     notes: report.notes ?? null,
     driver_fields: report.driverFields ?? null,
+    driver_specific_data: report.driverFields ?? null,
+    analysis_result: toGoldAnalysisResult(report),
     gold_bias: report.goldBias,
     impact_level: report.impactLevel,
     time_sensitivity: report.timeSensitivity,

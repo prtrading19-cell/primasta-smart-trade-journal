@@ -7,7 +7,6 @@ import {
   type GoldChecklistEffect,
   type GoldChecklistResult,
   type GoldDriverAnalysis,
-  type GoldDriverName,
   type GoldImpactLevel,
   type GoldPreTradeVerdict,
   type GoldResearchChecklist,
@@ -354,8 +353,21 @@ export function analyzeEtfCentralBankDriver(input: GoldAnalysisInput): GoldDrive
   if (hasAny(text, ["etf inflows", "strong central bank buying", "reserve buying", "gold demand rises", "accumulation"])) {
     addSignal(state, 1, "text confirms stronger Gold demand");
   }
-  if (hasAny(text, ["etf outflows", "central bank selling", "redemptions", "gold demand weakens"])) {
-    addSignal(state, -1, "text confirms weaker Gold demand");
+  if (hasAny(text, ["asia inflows", "asia has recorded", "asian inflows", "central bank annual target", "700-900t", "700–900t", "reserve asset", "surpassed us treasuries"])) {
+    addSignal(state, 2, "Asia or central-bank reserve demand provides a longer-term floor");
+  }
+  if (hasAny(text, ["etf outflows", "outflows of", "central bank selling", "redemptions", "gold demand weakens", "western etfs bearish", "western etf demand is weak"])) {
+    addSignal(state, -2, "Western ETF flows are weak or showing outflows");
+  }
+  if (hasAny(text, ["underwater", "trapped longs", "overhead supply", "supply wall", "supply ceiling", "structural ceiling", "4000-4500", "4,000-4,500", "4,000–4,500"])) {
+    addSignal(state, -2, "trapped ETF longs or overhead supply can cap rallies");
+  }
+  if (hasAny(text, ["lowered december gold forecast", "lowered forecast", "forecast cut", "goldman sachs lowered"])) {
+    addSignal(state, -1, "a lowered Gold forecast adds demand-side caution");
+  }
+
+  if (state.bullishSignals.length && state.bearishSignals.length) {
+    state.forceMixed = true;
   }
 
   return finalizeDriver(input, state, {
@@ -363,11 +375,13 @@ export function analyzeEtfCentralBankDriver(input: GoldAnalysisInput): GoldDrive
     bullishExplanation: "ETF flows or central-bank demand are supporting a longer-term Gold bid.",
     bearishExplanation: "ETF outflows or central-bank selling are weakening longer-term Gold demand.",
     neutralExplanation: "ETF and central-bank data are flat or unknown, so this is not a trade trigger.",
-    mixedExplanation: "ETF flows and central-bank demand are not pointing the same way.",
+    mixedExplanation: "ETF and central-bank demand are split between short-term overhead supply and longer-term physical demand support.",
     bullishMeaning: "Demand data supports the bigger Gold backdrop, but intraday entries still need structure.",
     bearishMeaning: "Weak demand can reduce longer-term support for Gold, especially if macro drivers also turn bearish.",
     neutralMeaning: "Use this as background context until demand data becomes clearer.",
-    mixedMeaning: "Wait for demand data to align before treating it as a strong Gold filter."
+    mixedMeaning: "Western ETF outflows or trapped longs can limit upside, while Asia and central banks may provide a floor rather than automatic buy confirmation.",
+    caution: "Do not chase Gold longs into a known supply zone unless price structure, DXY, yields, and liquidity confirm continuation.",
+    finalGuidance: "Wait for technical confirmation. Do not chase Gold longs into the $4,000-$4,500 supply zone unless price structure, DXY, yields, and liquidity confirm continuation. Treat Asia and central-bank demand as a floor, not automatic buy confirmation."
   });
 }
 
@@ -490,7 +504,17 @@ export function buildGoldBiasSummary(reports: GoldResearchReport[]): GoldBiasSum
     mainRisk,
     bestSessionToWaitFor: highRisk ? "Wait until after the news reaction settles" : "London-New York Overlap",
     preTradeVerdict,
-    personalRule: GOLD_PERSONAL_RULE
+    personalRule: GOLD_PERSONAL_RULE,
+    driverSummaries: latestByDriver.map((report) => ({
+      driverName: report.driverName,
+      newsHeadline: report.inputHeadline || "No headline saved",
+      newsSummary: report.inputSummary || "No news summary saved",
+      chartObservation: report.chartObservation || "No chart observation saved",
+      goldBias: report.goldBias,
+      impactLevel: report.impactLevel,
+      confidenceScore: report.confidenceScore,
+      finalGuidance: report.finalGuidance
+    }))
   };
 }
 
@@ -541,6 +565,10 @@ function finalizeDriver(input: GoldAnalysisInput, state: ScoreState, messages: D
   const impactLevel = getImpactLevel(goldBias, state);
   const explanation = `${getExplanation(goldBias, messages)}${signalSentence(state)}`;
   const goldMeaning = getGoldMeaning(goldBias, messages);
+  const headlineSummary = summarizeHeadline(input);
+  const newsDriverSummary = summarizeNewsDriver(input, state);
+  const chartObservationInterpretation = interpretChartObservation(input, goldBias);
+  const keyConflictOrRisk = getKeyConflictOrRisk(state, goldBias, messages);
 
   return {
     driverName: input.driverName,
@@ -548,13 +576,73 @@ function finalizeDriver(input: GoldAnalysisInput, state: ScoreState, messages: D
     impactLevel,
     timeSensitivity: messages.timeSensitivity,
     confidenceScore,
+    headlineSummary,
+    newsDriverSummary,
+    chartObservationInterpretation,
     explanation,
     goldMeaning,
     whatThisMeansForGold: goldMeaning,
+    bullishGoldClues: state.bullishSignals,
+    bearishGoldClues: state.bearishSignals,
+    keyConflictOrRisk,
     checklistEffect: getChecklistEffect(goldBias, confidenceScore),
     tradingCaution: messages.caution ?? getTradingCaution(goldBias, impactLevel, messages.timeSensitivity),
     finalGuidance: messages.finalGuidance ?? getFinalGuidance(goldBias, confidenceScore, messages.timeSensitivity, impactLevel)
   };
+}
+
+function summarizeHeadline(input: GoldAnalysisInput) {
+  const headline = cleanText(input.headline);
+  if (!headline) return "No headline entered.";
+  return `${input.driverName} headline: ${headline}`;
+}
+
+function summarizeNewsDriver(input: GoldAnalysisInput, state: ScoreState) {
+  const summary = cleanText(input.summary);
+  const sourceNote = input.sourceLink ? " Source link is logged for review." : " No source link was added.";
+  const driverFieldText = formatDriverSpecificData(input);
+  const signalText = [...state.bullishSignals, ...state.bearishSignals].slice(0, 6).join("; ");
+
+  if (summary && signalText) {
+    return `${summary} Driver-specific data: ${driverFieldText || "none entered"}. Detected clues: ${signalText}.${sourceNote}`;
+  }
+
+  if (summary) {
+    return `${summary} Driver-specific data: ${driverFieldText || "none entered"}.${sourceNote}`;
+  }
+
+  return `No news summary entered. Driver-specific data: ${driverFieldText || "none entered"}.${sourceNote}`;
+}
+
+function interpretChartObservation(input: GoldAnalysisInput, goldBias: GoldBias) {
+  const observation = cleanText(input.chartObservation);
+  if (!observation) return "No chart observation entered, so the analysis needs price-structure confirmation.";
+
+  const text = normalize(observation);
+  if (hasAny(text, ["overhead supply", "supply wall", "supply ceiling", "resistance", "trapped longs", "underwater", "4000-4500", "4,000-4,500", "4,000–4,500"])) {
+    return `${observation} This warns that Gold may have limited upside until price breaks and holds above the supply/resistance zone with strong demand.`;
+  }
+  if (hasAny(text, ["floor", "support", "demand zone", "central banks providing floor", "asia", "inflows"])) {
+    return `${observation} This suggests underlying support, but support is not automatic buy confirmation without structure and liquidity alignment.`;
+  }
+  if (hasAny(text, ["rejecting resistance", "break of structure", "breaking support", "liquidity sweep", "displacement", "order block"])) {
+    return `${observation} This chart note can become useful only when it aligns with the macro driver and Gold execution structure.`;
+  }
+
+  if (goldBias === "Bullish Gold") return `${observation} This chart note should confirm higher-timeframe structure before treating the driver as a buy filter.`;
+  if (goldBias === "Bearish Gold") return `${observation} This chart note should confirm resistance, failed continuation, or bearish structure before short-side action.`;
+  return `${observation} This chart note keeps the setup conditional until Gold price structure confirms direction.`;
+}
+
+function getKeyConflictOrRisk(state: ScoreState, goldBias: GoldBias, messages: DriverMessages) {
+  if (state.bullishSignals.length && state.bearishSignals.length) {
+    return `Conflict: ${state.bullishSignals[0]} but ${state.bearishSignals[0]}. ${messages.mixedMeaning}`;
+  }
+
+  if (goldBias === "Mixed / Wait") return messages.mixedMeaning;
+  if (goldBias === "Neutral") return "Risk: the core research inputs do not give a clean directional edge yet.";
+  if (messages.timeSensitivity === "Immediate") return "Risk: immediate news sensitivity can create fast false moves.";
+  return messages.caution ?? getTradingCaution(goldBias, getImpactLevel(goldBias, state), messages.timeSensitivity);
 }
 
 function scoreYieldDirection(state: ScoreState, direction: string, label: string) {
@@ -660,6 +748,18 @@ function formatDriverNames(reports: GoldResearchReport[]) {
   return reports.length ? reports.map((report) => report.driverName).join(", ") : "None yet";
 }
 
+function formatDriverSpecificData(input: GoldAnalysisInput) {
+  const coreKeys = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
+  return Object.entries(input.driverFields ?? {})
+    .filter(([key, value]) => !coreKeys.has(key) && String(value ?? "").trim())
+    .map(([key, value]) => `${formatFieldLabel(key)}: ${value}`)
+    .join("; ");
+}
+
+function formatFieldLabel(value: string) {
+  return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
 function driverText(input: GoldAnalysisInput) {
   const fieldValues = Object.values(input.driverFields ?? {}).join(" ");
   return normalize(`${input.headline} ${input.summary} ${input.currentValue} ${input.chartObservation} ${input.notes} ${fieldValues}`);
@@ -675,6 +775,10 @@ function lowerField(input: GoldAnalysisInput, key: string) {
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function cleanText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function hasAny(text: string, terms: string[]) {

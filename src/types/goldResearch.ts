@@ -35,9 +35,15 @@ export interface GoldDriverAnalysis {
   impactLevel: GoldImpactLevel;
   timeSensitivity: GoldTimeSensitivity;
   confidenceScore: number;
+  headlineSummary: string;
+  newsDriverSummary: string;
+  chartObservationInterpretation: string;
   explanation: string;
   goldMeaning: string;
   whatThisMeansForGold?: string;
+  bullishGoldClues: string[];
+  bearishGoldClues: string[];
+  keyConflictOrRisk: string;
   checklistEffect: GoldChecklistEffect;
   tradingCaution: string;
   finalGuidance: string;
@@ -173,4 +179,16 @@ export interface GoldBiasSummary {
   bestSessionToWaitFor: string;
   preTradeVerdict: GoldPreTradeVerdict;
   personalRule: string;
+  driverSummaries: GoldBiasSummaryDriver[];
+}
+
+export interface GoldBiasSummaryDriver {
+  driverName: GoldDriverName;
+  newsHeadline: string;
+  newsSummary: string;
+  chartObservation: string;
+  goldBias: GoldBias;
+  impactLevel: GoldImpactLevel;
+  confidenceScore: number;
+  finalGuidance: string;
 }

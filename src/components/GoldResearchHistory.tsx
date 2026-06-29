@@ -160,7 +160,13 @@ function ReportDetail({ report }: { report: GoldResearchReport | null }) {
         <DetailRow label="Summary" value={report.inputSummary || "-"} />
         <DetailRow label="Current data/value" value={report.currentValue || "-"} />
         <DetailRow label="Chart observation" value={report.chartObservation || "-"} />
-        {Object.entries(report.driverFields ?? {}).map(([key, value]) => (
+        <DetailRow label="Summary of the news headline" value={report.headlineSummary || "-"} />
+        <DetailRow label="Summary of the news driver" value={report.newsDriverSummary || "-"} />
+        <DetailRow label="Chart observation interpretation" value={report.chartObservationInterpretation || "-"} />
+        <DetailRow label="Bullish Gold clues" value={formatClues(report.bullishGoldClues)} />
+        <DetailRow label="Bearish Gold clues" value={formatClues(report.bearishGoldClues)} />
+        <DetailRow label="Key conflict or risk" value={report.keyConflictOrRisk || "-"} />
+        {Object.entries(report.driverFields ?? {}).filter(([key]) => !CORE_FIELD_KEYS.has(key)).map(([key, value]) => (
           <DetailRow key={key} label={formatDriverFieldLabel(key)} value={value || "-"} />
         ))}
         <DetailRow label="Explanation" value={report.explanation} />
@@ -182,6 +188,12 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-slate-800 dark:text-slate-100">{value}</p>
     </div>
   );
+}
+
+const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
+
+function formatClues(clues: string[] | undefined) {
+  return clues?.length ? clues.join("; ") : "None detected";
 }
 
 function formatDriverFieldLabel(value: string) {

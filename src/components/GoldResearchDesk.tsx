@@ -37,6 +37,16 @@ interface DriverFormConfig {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
+
+const CORE_RESEARCH_FIELDS: DriverFieldConfig[] = [
+  { key: "newsHeadline", label: "News Headline", type: "text", placeholder: "Paste the exact headline or write a clear research title" },
+  { key: "newsSummary", label: "News Summary", type: "textarea", placeholder: "Summarize the news driver, numbers, reaction, and important context" },
+  { key: "chartObservation", label: "My Chart Observation", type: "textarea", placeholder: "Write what price structure shows: resistance, support, supply, demand, rejection, breakout, or liquidity" },
+  { key: "sourceLink", label: "Source Link", type: "url", placeholder: "https://..." },
+  { key: "notes", label: "Notes", type: "textarea", placeholder: "Optional: extra risk, timing, or confirmation notes" }
+];
+
 const DRIVER_FORM_CONFIG: Record<GoldDriverName, DriverFormConfig> = {
   "DXY / US Dollar": {
     description: "Dollar pressure, DXY direction, and chart context.",
@@ -169,6 +179,7 @@ export function GoldResearchDesk() {
   const [showSummary, setShowSummary] = useState(false);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
+  const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
   const biasSummary = useMemo(() => buildGoldBiasSummary(goldResearchReports), [goldResearchReports]);
   const checklistResult = useMemo(() => getGoldChecklistResult(checklist), [checklist]);
   const todayReports = useMemo(() => goldResearchReports.filter((report) => report.reportDate === today()), [goldResearchReports]);
@@ -292,12 +303,30 @@ export function GoldResearchDesk() {
             </div>
             <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className={inputClass} />
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {formConfig.fields.map((fieldConfig) => (
-              <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
-                <DriverInput config={fieldConfig} value={driverFields[fieldConfig.key] ?? ""} onChange={(value) => updateDriverField(fieldConfig.key, value)} />
-              </Field>
-            ))}
+          <div className="mt-4 space-y-5">
+            {driverSpecificFields.length ? (
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Driver-specific data</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  {driverSpecificFields.map((fieldConfig) => (
+                    <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
+                      <DriverInput config={fieldConfig} value={driverFields[fieldConfig.key] ?? ""} onChange={(value) => updateDriverField(fieldConfig.key, value)} />
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Main research inputs</p>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                {CORE_RESEARCH_FIELDS.map((fieldConfig) => (
+                  <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
+                    <DriverInput config={fieldConfig} value={driverFields[fieldConfig.key] ?? ""} onChange={(value) => updateDriverField(fieldConfig.key, value)} />
+                  </Field>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={() => void analyzeDriver()} disabled={analyzing} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
@@ -406,6 +435,12 @@ function AnalysisPanel({ analysis }: { analysis: GoldDriverAnalysis }) {
       <div className="mt-4 grid gap-3 text-sm">
         <ResultRow label="Impact" value={analysis.impactLevel} />
         <ResultRow label="Time sensitivity" value={analysis.timeSensitivity} />
+        <ResultRow label="Summary of the news headline" value={analysis.headlineSummary} />
+        <ResultRow label="Summary of the news driver" value={analysis.newsDriverSummary} />
+        <ResultRow label="Chart observation interpretation" value={analysis.chartObservationInterpretation} />
+        <ResultRow label="Bullish Gold clues" value={formatClues(analysis.bullishGoldClues)} />
+        <ResultRow label="Bearish Gold clues" value={formatClues(analysis.bearishGoldClues)} />
+        <ResultRow label="Key conflict or risk" value={analysis.keyConflictOrRisk} />
         <ResultRow label="Checklist effect" value={analysis.checklistEffect} />
         <ResultRow label="Explanation" value={analysis.explanation} />
         <ResultRow label="What this means for Gold" value={analysis.goldMeaning} />
@@ -435,6 +470,13 @@ function SummaryPanel({ summary }: { summary: ReturnType<typeof buildGoldBiasSum
         <ResultRow label="Best session to wait for" value={summary.bestSessionToWaitFor} />
         <ResultRow label="Pre-trade verdict" value={summary.preTradeVerdict} />
         <ResultRow label="Personal Gold rule" value={summary.personalRule} />
+        {summary.driverSummaries.map((driverSummary) => (
+          <ResultRow
+            key={driverSummary.driverName}
+            label={`Driver: ${driverSummary.driverName}`}
+            value={`News Headline: ${driverSummary.newsHeadline} | News Summary: ${driverSummary.newsSummary} | Chart Observation: ${driverSummary.chartObservation} | Gold Bias: ${driverSummary.goldBias} | Impact: ${driverSummary.impactLevel} | Confidence: ${driverSummary.confidenceScore}% | Final Guidance: ${driverSummary.finalGuidance}`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -483,7 +525,7 @@ function buildAnalysisInput(driverName: GoldDriverName, reportDate: string, driv
     headline: driverFields.newsHeadline ?? "",
     summary: driverFields.newsSummary ?? "",
     currentValue: getCurrentValue(driverName, driverFields),
-    chartObservation: driverFields.chartObservation ?? driverFields.myInterpretation ?? driverFields.keyQuote ?? "",
+    chartObservation: driverFields.chartObservation ?? "",
     sourceLink: driverFields.sourceLink ?? "",
     notes: driverFields.notes ?? "",
     driverFields
@@ -500,6 +542,10 @@ function getCurrentValue(driverName: GoldDriverName, fields: GoldDriverFields) {
   if (driverName === "Geopolitics") return [fields.geopoliticalRiskLevel, fields.eventType, fields.dxyReaction].filter(Boolean).join(" / ");
   if (driverName === "ETF / Central Bank Demand") return [fields.etfFlowDirection, fields.centralBankDemand, fields.reportPeriod].filter(Boolean).join(" / ");
   return fields.newsCategory ?? "";
+}
+
+function formatClues(clues: string[]) {
+  return clues.length ? clues.join("; ") : "None detected yet";
 }
 
 function biasClass(value: string) {

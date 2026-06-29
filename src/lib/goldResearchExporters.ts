@@ -8,11 +8,19 @@ export function exportGoldResearchCsv(reports: GoldResearchReport[], filename = 
     Date: report.reportDate,
     Driver: report.driverName,
     Headline: report.inputHeadline,
+    "News summary": report.inputSummary,
+    "Chart observation": report.chartObservation ?? "",
     "Driver fields": formatDriverFields(report),
     Bias: report.goldBias,
     Impact: report.impactLevel,
     "Time sensitivity": report.timeSensitivity,
     Confidence: report.confidenceScore,
+    "Headline summary": report.headlineSummary,
+    "News driver summary": report.newsDriverSummary,
+    "Chart interpretation": report.chartObservationInterpretation,
+    "Bullish clues": formatClues(report.bullishGoldClues),
+    "Bearish clues": formatClues(report.bearishGoldClues),
+    "Key conflict or risk": report.keyConflictOrRisk,
     "Checklist effect": report.checklistEffect,
     Guidance: report.finalGuidance,
     Source: report.sourceLink ?? "",
@@ -92,13 +100,14 @@ export async function exportGoldResearchPackPdf(
 
   (doc as any).autoTable({
     startY: (doc as any).lastAutoTable.finalY + 8,
-    head: [["Date", "Driver", "Bias", "Impact", "Time", "Confidence", "Guidance"]],
-    body: reports.map((report) => [
-      report.reportDate,
+    head: [["Driver", "News Headline", "News Summary", "Chart Observation", "Bias", "Impact", "Confidence", "Guidance"]],
+    body: summary.driverSummaries.map((report) => [
       report.driverName,
+      report.newsHeadline,
+      report.newsSummary,
+      report.chartObservation,
       report.goldBias,
       report.impactLevel,
-      report.timeSensitivity,
       `${report.confidenceScore}%`,
       report.finalGuidance
     ]),
@@ -119,6 +128,7 @@ function reportRows(report: GoldResearchReport) {
     ["Date", report.reportDate],
     ["Driver", report.driverName],
     ["Headline", report.inputHeadline || "-"],
+    ["News summary", report.inputSummary || "-"],
     ["Current data/value", report.currentValue || "-"],
     ["Chart observation", report.chartObservation || "-"],
     ["Driver fields", formatDriverFields(report) || "-"],
@@ -126,6 +136,12 @@ function reportRows(report: GoldResearchReport) {
     ["Impact level", report.impactLevel],
     ["Time sensitivity", report.timeSensitivity],
     ["Confidence score", `${report.confidenceScore}%`],
+    ["Summary of the news headline", report.headlineSummary],
+    ["Summary of the news driver", report.newsDriverSummary],
+    ["Chart observation interpretation", report.chartObservationInterpretation],
+    ["Bullish Gold clues", formatClues(report.bullishGoldClues)],
+    ["Bearish Gold clues", formatClues(report.bearishGoldClues)],
+    ["Key conflict or risk", report.keyConflictOrRisk],
     ["Explanation", report.explanation],
     ["What this means for Gold", report.goldMeaning],
     ["Checklist effect", report.checklistEffect],
@@ -142,11 +158,19 @@ function emptyRow() {
     Date: "",
     Driver: "",
     Headline: "",
+    "News summary": "",
+    "Chart observation": "",
     "Driver fields": "",
     Bias: "",
     Impact: "",
     "Time sensitivity": "",
     Confidence: "",
+    "Headline summary": "",
+    "News driver summary": "",
+    "Chart interpretation": "",
+    "Bullish clues": "",
+    "Bearish clues": "",
+    "Key conflict or risk": "",
     "Checklist effect": "",
     Guidance: "",
     Source: "",
@@ -156,9 +180,16 @@ function emptyRow() {
 
 function formatDriverFields(report: GoldResearchReport) {
   return Object.entries(report.driverFields ?? {})
+    .filter(([key]) => !CORE_FIELD_KEYS.has(key))
     .filter(([, value]) => String(value ?? "").trim())
     .map(([key, value]) => `${formatDriverFieldLabel(key)}: ${value}`)
     .join(" | ");
+}
+
+const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
+
+function formatClues(clues: string[] | undefined) {
+  return clues?.length ? clues.join(" | ") : "None detected";
 }
 
 function formatDriverFieldLabel(value: string) {
