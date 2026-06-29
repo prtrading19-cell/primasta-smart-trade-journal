@@ -14,6 +14,7 @@ The production data layer is Supabase. The app includes a local demo mode only f
 - Professional 15-point A+ SMC checklist with live A+ score, automatic setup grade, news-risk warning, and rule status
 - SMC execution fields for HTF bias, swept liquidity, entry POI, confirmation timeframe, setup grade, news risk, and trading rule status
 - No Trade / Setup Not Confirmed observations that can be saved without entry price, stop loss, take profit, or lot size
+- PRIMASTA Gold Research Desk for manual Gold/XAUUSD driver analysis, saved research reports, full bias summaries, pre-trade checklist, session guide, PDF/CSV exports, and optional research attachment to trades
 - Close Trade flow for adding only the final result details later
 - Spreadsheet-style trading journal with tabs, filters, search, sorting, edit, delete, detail view, and per-trade PDF export
 - Dashboard metrics and charts based only on closed trades
@@ -52,6 +53,8 @@ npm install
 This creates the database tables, RLS policies, and a private Supabase Storage bucket named `trade-screenshots`.
 
 If you already have an older PRIMASTA database, run `supabase/smc-a-plus-upgrade.sql` instead of recreating tables. It adds nullable SMC columns and preserves existing trades.
+
+For the PRIMASTA Gold Research Desk, also run `supabase/gold-research-desk.sql`. It creates `gold_research_reports`, RLS policies, and the optional trade attachment column without deleting existing data.
 
 4. Enable email/password auth:
 

@@ -124,6 +124,7 @@ alter table public.trades add column if not exists setup_grade text;
 alter table public.trades add column if not exists news_risk text;
 alter table public.trades add column if not exists trading_rule_status text;
 alter table public.trades add column if not exists a_plus_score integer;
+alter table public.trades add column if not exists gold_research_report_id uuid;
 alter table public.trades add column if not exists emotion_before text default 'Calm';
 alter table public.trades add column if not exists screenshot_before text;
 alter table public.trades add column if not exists status text default 'Open';
@@ -155,10 +156,37 @@ No trading without a clear setup';
 alter table public.trading_plans add column if not exists created_at timestamptz default now();
 alter table public.trading_plans add column if not exists updated_at timestamptz default now();
 
+create table if not exists public.gold_research_reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  report_date date not null default current_date,
+  driver_name text not null,
+  input_headline text,
+  input_summary text,
+  current_value text,
+  chart_observation text,
+  source_link text,
+  gold_bias text not null,
+  impact_level text not null,
+  time_sensitivity text not null,
+  confidence_score integer not null default 0,
+  explanation text not null default '',
+  gold_meaning text not null default '',
+  checklist_effect text not null,
+  trading_caution text not null default '',
+  final_guidance text not null default '',
+  notes text
+);
+
 create index if not exists trades_user_date_idx on public.trades(user_id, date desc);
 create index if not exists trades_user_status_idx on public.trades(user_id, status);
 create index if not exists trades_user_pair_idx on public.trades(user_id, pair);
 create unique index if not exists trading_plans_user_id_unique_idx on public.trading_plans(user_id);
+create index if not exists gold_research_reports_user_date_idx on public.gold_research_reports(user_id, report_date desc);
+create index if not exists gold_research_reports_user_driver_idx on public.gold_research_reports(user_id, driver_name);
+create index if not exists gold_research_reports_user_bias_idx on public.gold_research_reports(user_id, gold_bias);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -173,6 +201,9 @@ create trigger trades_set_updated_at before update on public.trades for each row
 
 drop trigger if exists trading_plans_set_updated_at on public.trading_plans;
 create trigger trading_plans_set_updated_at before update on public.trading_plans for each row execute function public.set_updated_at();
+
+drop trigger if exists gold_research_reports_set_updated_at on public.gold_research_reports;
+create trigger gold_research_reports_set_updated_at before update on public.gold_research_reports for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -197,6 +228,7 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 alter table public.profiles enable row level security;
 alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
+alter table public.gold_research_reports enable row level security;
 
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
@@ -249,6 +281,27 @@ with check (auth.uid() = user_id);
 drop policy if exists "Users can delete own trading plan" on public.trading_plans;
 create policy "Users can delete own trading plan"
 on public.trading_plans for delete
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own gold research" on public.gold_research_reports;
+create policy "Users can insert own gold research"
+on public.gold_research_reports for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can view own gold research" on public.gold_research_reports;
+create policy "Users can view own gold research"
+on public.gold_research_reports for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own gold research" on public.gold_research_reports;
+create policy "Users can update own gold research"
+on public.gold_research_reports for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own gold research" on public.gold_research_reports;
+create policy "Users can delete own gold research"
+on public.gold_research_reports for delete
 using (auth.uid() = user_id);
 
 drop policy if exists "Users can view own screenshots" on storage.objects;

@@ -54,6 +54,7 @@ create table public.trades (
   news_risk text,
   trading_rule_status text,
   a_plus_score integer,
+  gold_research_report_id uuid,
   emotion_before text not null check (emotion_before in ('Calm', 'Confident', 'Fearful', 'Greedy', 'Impatient', 'Revenge')),
   screenshot_before text,
   status text not null default 'Open' check (status in ('Open', 'Closed')),
@@ -98,9 +99,36 @@ No trading without a clear setup',
   updated_at timestamptz not null default now()
 );
 
+create table public.gold_research_reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  report_date date not null default current_date,
+  driver_name text not null,
+  input_headline text,
+  input_summary text,
+  current_value text,
+  chart_observation text,
+  source_link text,
+  gold_bias text not null,
+  impact_level text not null,
+  time_sensitivity text not null,
+  confidence_score integer not null default 0,
+  explanation text not null default '',
+  gold_meaning text not null default '',
+  checklist_effect text not null,
+  trading_caution text not null default '',
+  final_guidance text not null default '',
+  notes text
+);
+
 create index trades_user_date_idx on public.trades(user_id, date desc);
 create index trades_user_status_idx on public.trades(user_id, status);
 create index trades_user_pair_idx on public.trades(user_id, pair);
+create index gold_research_reports_user_date_idx on public.gold_research_reports(user_id, report_date desc);
+create index gold_research_reports_user_driver_idx on public.gold_research_reports(user_id, driver_name);
+create index gold_research_reports_user_bias_idx on public.gold_research_reports(user_id, gold_bias);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -112,6 +140,7 @@ $$ language plpgsql;
 
 create trigger trades_set_updated_at before update on public.trades for each row execute function public.set_updated_at();
 create trigger trading_plans_set_updated_at before update on public.trading_plans for each row execute function public.set_updated_at();
+create trigger gold_research_reports_set_updated_at before update on public.gold_research_reports for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -135,6 +164,7 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 alter table public.profiles enable row level security;
 alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
+alter table public.gold_research_reports enable row level security;
 
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
@@ -148,6 +178,11 @@ create policy "Users can insert own trading plan" on public.trading_plans for in
 create policy "Users can view own trading plan" on public.trading_plans for select using (auth.uid() = user_id);
 create policy "Users can update own trading plan" on public.trading_plans for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Users can delete own trading plan" on public.trading_plans for delete using (auth.uid() = user_id);
+
+create policy "Users can insert own gold research" on public.gold_research_reports for insert with check (auth.uid() = user_id);
+create policy "Users can view own gold research" on public.gold_research_reports for select using (auth.uid() = user_id);
+create policy "Users can update own gold research" on public.gold_research_reports for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Users can delete own gold research" on public.gold_research_reports for delete using (auth.uid() = user_id);
 
 drop policy if exists "Users can view own screenshots" on storage.objects;
 create policy "Users can view own screenshots"

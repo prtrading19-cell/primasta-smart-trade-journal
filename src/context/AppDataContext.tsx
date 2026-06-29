@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { calculateMetrics, type DashboardMetrics } from "@/lib/calculations";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import type { GoldResearchReport, NewGoldResearchReportInput } from "@/types/goldResearch";
 import {
   DEFAULT_CHECKLIST,
   DEFAULT_PLAN,
@@ -29,6 +30,7 @@ interface AppDataContextValue {
   dataError: string | null;
   isCloudSync: boolean;
   trades: Trade[];
+  goldResearchReports: GoldResearchReport[];
   plan: TradingPlan | null;
   metrics: DashboardMetrics;
   signIn: (email: string, password: string) => Promise<void>;
@@ -39,12 +41,15 @@ interface AppDataContextValue {
   updateTrade: (id: string, updates: Partial<Trade>) => Promise<void>;
   closeTrade: (id: string, details: ClosingDetails) => Promise<void>;
   deleteTrade: (id: string) => Promise<void>;
+  addGoldResearchReport: (input: NewGoldResearchReportInput) => Promise<GoldResearchReport>;
+  deleteGoldResearchReport: (id: string) => Promise<void>;
   savePlan: (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
 const TRADE_STORAGE_KEY = "primasta-smart-trade-journal:trades";
+const GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:gold-research";
 const PLAN_STORAGE_KEY = "primasta-smart-trade-journal:plan";
 const DEMO_USER: JournalUser = { id: "demo-user", email: "demo@primasta.local", name: "Demo Trader" };
 
@@ -56,6 +61,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [goldResearchReports, setGoldResearchReports] = useState<GoldResearchReport[]>([]);
   const [plan, setPlan] = useState<TradingPlan | null>(null);
 
   const metrics = useMemo(() => calculateMetrics(trades), [trades]);
@@ -77,8 +83,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
         setTrades((tradeRows ?? []).map(fromTradeRow));
         setPlan(planRows?.[0] ? fromPlanRow(planRows[0]) : createDefaultPlan(user.id));
+
+        const { data: researchRows, error: researchError } = await supabase
+          .from("gold_research_reports")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (!researchError) {
+          setGoldResearchReports((researchRows ?? []).map(fromGoldResearchRow));
+        } else {
+          setGoldResearchReports([]);
+        }
       } else {
         setTrades(readLocalTrades());
+        setGoldResearchReports(readLocalGoldResearchReports());
         setPlan(readLocalPlan() ?? createDefaultPlan(user.id));
       }
     } catch (error) {
@@ -117,6 +136,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       void refreshData();
     } else {
       setTrades([]);
+      setGoldResearchReports([]);
       setPlan(null);
     }
   }, [refreshData, user]);
@@ -252,6 +272,66 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [trades, user]
   );
 
+  const addGoldResearchReport = useCallback(
+    async (input: NewGoldResearchReportInput) => {
+      if (!user) throw new Error("You must be signed in to save Gold research.");
+      const now = new Date().toISOString();
+      const report: GoldResearchReport = {
+        id: makeId(),
+        userId: user.id,
+        createdAt: now,
+        updatedAt: now,
+        reportDate: input.reportDate,
+        driverName: input.driverName,
+        inputHeadline: input.headline,
+        inputSummary: input.summary,
+        currentValue: input.currentValue,
+        chartObservation: input.chartObservation,
+        sourceLink: input.sourceLink,
+        notes: input.notes,
+        goldBias: input.goldBias,
+        impactLevel: input.impactLevel,
+        timeSensitivity: input.timeSensitivity,
+        confidenceScore: input.confidenceScore,
+        explanation: input.explanation,
+        goldMeaning: input.goldMeaning,
+        checklistEffect: input.checklistEffect,
+        tradingCaution: input.tradingCaution,
+        finalGuidance: input.finalGuidance
+      };
+
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.from("gold_research_reports").insert(toGoldResearchRow(report)).select("*").single();
+        if (error) throw error;
+        const savedReport = fromGoldResearchRow(data);
+        setGoldResearchReports((current) => [savedReport, ...current]);
+        return savedReport;
+      }
+
+      const nextReports = [report, ...goldResearchReports];
+      setGoldResearchReports(nextReports);
+      writeLocalGoldResearchReports(nextReports);
+      return report;
+    },
+    [goldResearchReports, user]
+  );
+
+  const deleteGoldResearchReport = useCallback(
+    async (id: string) => {
+      if (!user) throw new Error("You must be signed in to delete Gold research.");
+
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from("gold_research_reports").delete().eq("id", id).eq("user_id", user.id);
+        if (error) throw error;
+      }
+
+      const nextReports = goldResearchReports.filter((report) => report.id !== id);
+      setGoldResearchReports(nextReports);
+      if (!isSupabaseConfigured) writeLocalGoldResearchReports(nextReports);
+    },
+    [goldResearchReports, user]
+  );
+
   const savePlan = useCallback(
     async (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => {
       if (!user) throw new Error("You must be signed in to save a trading plan.");
@@ -292,6 +372,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       dataError,
       isCloudSync: isSupabaseConfigured,
       trades,
+      goldResearchReports,
       plan,
       metrics,
       signIn,
@@ -302,6 +383,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       updateTrade,
       closeTrade,
       deleteTrade,
+      addGoldResearchReport,
+      deleteGoldResearchReport,
       savePlan
     }),
     [
@@ -312,6 +395,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       authError,
       dataError,
       trades,
+      goldResearchReports,
       plan,
       metrics,
       signIn,
@@ -322,6 +406,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       updateTrade,
       closeTrade,
       deleteTrade,
+      addGoldResearchReport,
+      deleteGoldResearchReport,
       savePlan
     ]
   );
@@ -368,6 +454,21 @@ function readLocalTrades() {
 function writeLocalTrades(trades: Trade[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(TRADE_STORAGE_KEY, JSON.stringify(trades));
+  }
+}
+
+function readLocalGoldResearchReports() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(GOLD_RESEARCH_STORAGE_KEY) ?? "[]") as GoldResearchReport[];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalGoldResearchReports(reports: GoldResearchReport[]) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(GOLD_RESEARCH_STORAGE_KEY, JSON.stringify(reports));
   }
 }
 
@@ -459,6 +560,7 @@ function fromTradeRow(row: any): Trade {
     newsRisk: row.news_risk ?? undefined,
     tradingRuleStatus: row.trading_rule_status ?? undefined,
     aPlusScore: row.a_plus_score === null || row.a_plus_score === undefined ? countChecklistScore(checklist) : Number(row.a_plus_score),
+    goldResearchReportId: row.gold_research_report_id ?? undefined,
     emotionBefore: row.emotion_before,
     screenshotBefore: row.screenshot_before ?? undefined,
     status: row.status,
@@ -513,7 +615,60 @@ function toTradeRow(trade: Trade) {
     lesson_learned: trade.lessonLearned ?? null,
     screenshot_after: trade.screenshotAfter ?? null,
     created_at: trade.createdAt,
-    updated_at: trade.updatedAt
+    updated_at: trade.updatedAt,
+    ...(trade.goldResearchReportId ? { gold_research_report_id: trade.goldResearchReportId } : {})
+  };
+}
+
+function fromGoldResearchRow(row: any): GoldResearchReport {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    reportDate: row.report_date,
+    driverName: row.driver_name,
+    inputHeadline: row.input_headline ?? "",
+    inputSummary: row.input_summary ?? "",
+    currentValue: row.current_value ?? undefined,
+    chartObservation: row.chart_observation ?? undefined,
+    sourceLink: row.source_link ?? undefined,
+    notes: row.notes ?? undefined,
+    goldBias: row.gold_bias,
+    impactLevel: row.impact_level,
+    timeSensitivity: row.time_sensitivity,
+    confidenceScore: Number(row.confidence_score ?? 0),
+    explanation: row.explanation ?? "",
+    goldMeaning: row.gold_meaning ?? "",
+    checklistEffect: row.checklist_effect,
+    tradingCaution: row.trading_caution ?? "",
+    finalGuidance: row.final_guidance ?? ""
+  };
+}
+
+function toGoldResearchRow(report: GoldResearchReport) {
+  return {
+    id: report.id,
+    user_id: report.userId,
+    created_at: report.createdAt,
+    updated_at: report.updatedAt,
+    report_date: report.reportDate,
+    driver_name: report.driverName,
+    input_headline: report.inputHeadline,
+    input_summary: report.inputSummary,
+    current_value: report.currentValue ?? null,
+    chart_observation: report.chartObservation ?? null,
+    source_link: report.sourceLink ?? null,
+    notes: report.notes ?? null,
+    gold_bias: report.goldBias,
+    impact_level: report.impactLevel,
+    time_sensitivity: report.timeSensitivity,
+    confidence_score: report.confidenceScore,
+    explanation: report.explanation,
+    gold_meaning: report.goldMeaning,
+    checklist_effect: report.checklistEffect,
+    trading_caution: report.tradingCaution,
+    final_guidance: report.finalGuidance
   };
 }
 

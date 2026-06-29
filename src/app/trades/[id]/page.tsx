@@ -13,9 +13,10 @@ import { CHECKLIST_LABELS } from "@/types/trade";
 import { getAPlusScore, getPlannedRiskReward, isRuleFollowed } from "@/lib/calculations";
 
 export default function TradeDetailPage({ params }: { params: { id: string } }) {
-  const { trades, closeTrade } = useAppData();
+  const { trades, goldResearchReports, closeTrade } = useAppData();
   const [closing, setClosing] = useState(false);
   const trade = trades.find((item) => item.id === params.id);
+  const goldResearchReport = trade?.goldResearchReportId ? goldResearchReports.find((report) => report.id === trade.goldResearchReportId) : null;
 
   if (!trade) {
     return (
@@ -112,6 +113,25 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
             <DetailCard label="Emotion before trade" value={trade.emotionBefore} />
             <DetailCard label="Rule followed" value={isRuleFollowed(trade.checklist) ? "Yes" : "No"} />
           </div>
+        </Panel>
+      </section>
+
+      <section>
+        <Panel title="Attached Gold Research Report">
+          {goldResearchReport ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <DetailCard label="Driver" value={goldResearchReport.driverName} />
+                <DetailCard label="Gold bias" value={goldResearchReport.goldBias} />
+                <DetailCard label="Impact" value={goldResearchReport.impactLevel} />
+                <DetailCard label="Drivers supported trade" value={goldResearchReport.checklistEffect === "Supports trade" ? "Yes" : "No / Wait"} />
+              </div>
+              <TextBlock label="Research explanation" value={goldResearchReport.explanation} />
+              <TextBlock label="Final guidance" value={goldResearchReport.finalGuidance} />
+            </div>
+          ) : (
+            <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-950 dark:text-slate-400">No Gold research report attached to this trade.</p>
+          )}
         </Panel>
       </section>
 
