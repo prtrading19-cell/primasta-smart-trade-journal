@@ -15,15 +15,18 @@ export type GoldTimeSensitivity = "Immediate" | "Intraday" | "This Week" | "Long
 export type GoldChecklistEffect = "Supports trade" | "Warns against trade" | "Wait";
 export type GoldPreTradeVerdict = "Trade only if setup confirms" | "Wait" | "Avoid trading before news" | "Manage existing trade only";
 export type GoldChecklistResult = "Aligned" | "Mixed" | "Not aligned" | "Wait";
+export type GoldDriverFields = Record<string, string>;
 
 export interface GoldAnalysisInput {
   driverName: GoldDriverName;
+  reportDate?: string;
   headline: string;
   summary: string;
   currentValue: string;
   chartObservation: string;
   sourceLink: string;
   notes: string;
+  driverFields: GoldDriverFields;
 }
 
 export interface GoldDriverAnalysis {
@@ -34,6 +37,7 @@ export interface GoldDriverAnalysis {
   confidenceScore: number;
   explanation: string;
   goldMeaning: string;
+  whatThisMeansForGold?: string;
   checklistEffect: GoldChecklistEffect;
   tradingCaution: string;
   finalGuidance: string;
@@ -51,6 +55,7 @@ export interface GoldResearchReport extends GoldDriverAnalysis {
   chartObservation?: string;
   sourceLink?: string;
   notes?: string;
+  driverFields?: GoldDriverFields;
 }
 
 export interface NewGoldResearchReportInput extends GoldAnalysisInput, GoldDriverAnalysis {
@@ -153,12 +158,19 @@ export const GOLD_SESSION_WINDOWS = [
 
 export interface GoldBiasSummary {
   overallGoldBias: "Bullish" | "Bearish" | "Neutral" | "Wait";
+  bullishDrivers: string;
   bullishDriversCount: number;
+  bearishDrivers: string;
   bearishDriversCount: number;
+  neutralDrivers: string;
+  neutralDriversCount: number;
+  mixedDrivers: string;
   mixedDriversCount: number;
   strongestBullishDriver: string;
   strongestBearishDriver: string;
+  mainConflict: string;
   mainRisk: string;
   bestSessionToWaitFor: string;
   preTradeVerdict: GoldPreTradeVerdict;
+  personalRule: string;
 }

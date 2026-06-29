@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { calculateMetrics, type DashboardMetrics } from "@/lib/calculations";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { GoldResearchReport, NewGoldResearchReportInput } from "@/types/goldResearch";
+import type { GoldDriverFields, GoldResearchReport, NewGoldResearchReportInput } from "@/types/goldResearch";
 import {
   DEFAULT_CHECKLIST,
   DEFAULT_PLAN,
@@ -289,6 +289,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         chartObservation: input.chartObservation,
         sourceLink: input.sourceLink,
         notes: input.notes,
+        driverFields: input.driverFields,
         goldBias: input.goldBias,
         impactLevel: input.impactLevel,
         timeSensitivity: input.timeSensitivity,
@@ -496,6 +497,11 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+function normalizeGoldDriverFields(value: unknown): GoldDriverFields | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return Object.fromEntries(Object.entries(value).map(([key, fieldValue]) => [key, String(fieldValue ?? "")]));
+}
+
 function normalizeTrade(trade: Trade): Trade {
   const checklist = normalizeChecklist(trade.smcChecklist ?? trade.checklist);
   return {
@@ -634,6 +640,7 @@ function fromGoldResearchRow(row: any): GoldResearchReport {
     chartObservation: row.chart_observation ?? undefined,
     sourceLink: row.source_link ?? undefined,
     notes: row.notes ?? undefined,
+    driverFields: normalizeGoldDriverFields(row.driver_fields),
     goldBias: row.gold_bias,
     impactLevel: row.impact_level,
     timeSensitivity: row.time_sensitivity,
@@ -660,6 +667,7 @@ function toGoldResearchRow(report: GoldResearchReport) {
     chart_observation: report.chartObservation ?? null,
     source_link: report.sourceLink ?? null,
     notes: report.notes ?? null,
+    driver_fields: report.driverFields ?? null,
     gold_bias: report.goldBias,
     impact_level: report.impactLevel,
     time_sensitivity: report.timeSensitivity,

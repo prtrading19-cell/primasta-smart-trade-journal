@@ -4,10 +4,11 @@ import { GOLD_PERSONAL_RULE, type GoldChecklistResult, type GoldResearchReport }
 const APP_NAME = "PRIMASTA GOLD RESEARCH DESK";
 
 export function exportGoldResearchCsv(reports: GoldResearchReport[], filename = "primasta-gold-research.csv") {
-  const rows = reports.map((report) => ({
+  const rows: Array<Record<string, string | number>> = reports.map((report) => ({
     Date: report.reportDate,
     Driver: report.driverName,
     Headline: report.inputHeadline,
+    "Driver fields": formatDriverFields(report),
     Bias: report.goldBias,
     Impact: report.impactLevel,
     "Time sensitivity": report.timeSensitivity,
@@ -18,7 +19,7 @@ export function exportGoldResearchCsv(reports: GoldResearchReport[], filename = 
     Notes: report.notes ?? ""
   }));
   const headers = Object.keys(rows[0] ?? emptyRow());
-  const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header as keyof typeof row])).join(","))].join("\n");
+  const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(","))].join("\n");
   downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename);
 }
 
@@ -68,10 +69,16 @@ export async function exportGoldResearchPackPdf(
     body: [
       ["Overall Gold bias", summary.overallGoldBias],
       ["Bullish drivers", String(summary.bullishDriversCount)],
+      ["Bullish driver names", summary.bullishDrivers],
       ["Bearish drivers", String(summary.bearishDriversCount)],
+      ["Bearish driver names", summary.bearishDrivers],
+      ["Neutral drivers", String(summary.neutralDriversCount)],
+      ["Neutral driver names", summary.neutralDrivers],
       ["Mixed drivers", String(summary.mixedDriversCount)],
+      ["Mixed driver names", summary.mixedDrivers],
       ["Strongest bullish driver", summary.strongestBullishDriver],
       ["Strongest bearish driver", summary.strongestBearishDriver],
+      ["Main conflict", summary.mainConflict],
       ["Main risk", summary.mainRisk],
       ["Best session to wait for", summary.bestSessionToWaitFor],
       ["Pre-trade verdict", summary.preTradeVerdict],
@@ -114,6 +121,7 @@ function reportRows(report: GoldResearchReport) {
     ["Headline", report.inputHeadline || "-"],
     ["Current data/value", report.currentValue || "-"],
     ["Chart observation", report.chartObservation || "-"],
+    ["Driver fields", formatDriverFields(report) || "-"],
     ["Gold bias", report.goldBias],
     ["Impact level", report.impactLevel],
     ["Time sensitivity", report.timeSensitivity],
@@ -134,6 +142,7 @@ function emptyRow() {
     Date: "",
     Driver: "",
     Headline: "",
+    "Driver fields": "",
     Bias: "",
     Impact: "",
     "Time sensitivity": "",
@@ -143,6 +152,17 @@ function emptyRow() {
     Source: "",
     Notes: ""
   };
+}
+
+function formatDriverFields(report: GoldResearchReport) {
+  return Object.entries(report.driverFields ?? {})
+    .filter(([, value]) => String(value ?? "").trim())
+    .map(([key, value]) => `${formatDriverFieldLabel(key)}: ${value}`)
+    .join(" | ");
+}
+
+function formatDriverFieldLabel(value: string) {
+  return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function csvCell(value: unknown) {

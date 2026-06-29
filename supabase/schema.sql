@@ -168,6 +168,7 @@ create table if not exists public.gold_research_reports (
   current_value text,
   chart_observation text,
   source_link text,
+  driver_fields jsonb,
   gold_bias text not null,
   impact_level text not null,
   time_sensitivity text not null,
@@ -179,6 +180,8 @@ create table if not exists public.gold_research_reports (
   final_guidance text not null default '',
   notes text
 );
+
+alter table public.gold_research_reports add column if not exists driver_fields jsonb;
 
 create index if not exists trades_user_date_idx on public.trades(user_id, date desc);
 create index if not exists trades_user_status_idx on public.trades(user_id, status);

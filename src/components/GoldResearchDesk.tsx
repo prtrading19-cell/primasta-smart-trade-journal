@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Download, FileText, History, Save, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
-import { buildGoldBiasSummary, getGoldChecklistResult } from "@/lib/goldResearch";
+import { buildGoldBiasSummary, getGoldChecklistResult, hasMeaningfulGoldResearchInput } from "@/lib/goldResearch";
 import { exportGoldBiasSummaryPdf, exportGoldResearchCsv, exportGoldResearchPackPdf } from "@/lib/goldResearchExporters";
 import { cn } from "@/lib/format";
 import {
@@ -15,22 +15,152 @@ import {
   GOLD_SESSION_WINDOWS,
   type GoldAnalysisInput,
   type GoldDriverAnalysis,
+  type GoldDriverFields,
   type GoldDriverName,
   type GoldResearchChecklist
 } from "@/types/goldResearch";
 
+type DriverFieldType = "text" | "textarea" | "select" | "url";
+
+interface DriverFieldConfig {
+  key: string;
+  label: string;
+  type: DriverFieldType;
+  placeholder: string;
+  options?: string[];
+}
+
+interface DriverFormConfig {
+  description: string;
+  fields: DriverFieldConfig[];
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
+
+const DRIVER_FORM_CONFIG: Record<GoldDriverName, DriverFormConfig> = {
+  "DXY / US Dollar": {
+    description: "Dollar pressure, DXY direction, and chart context.",
+    fields: [
+      { key: "dxyDirection", label: "DXY current direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting Resistance", "Breaking Support", "Breaking Resistance"] },
+      { key: "dxyCurrentLevel", label: "DXY current level", type: "text", placeholder: "Example: 105.20" },
+      { key: "dxySupportResistance", label: "DXY key support/resistance", type: "text", placeholder: "Example: Resistance at 105.50, support at 104.80" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Dollar weakens as rate-cut bets rise" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the Dollar driver in a few lines" },
+      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: DXY rejecting resistance on H1" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "US Yields": {
+    description: "10Y and 2Y Treasury direction, yield levels, and news reaction.",
+    fields: [
+      { key: "tenYearYieldDirection", label: "10Y yield direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
+      { key: "twoYearYieldDirection", label: "2Y yield direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
+      { key: "tenYearYieldValue", label: "Current 10Y yield value", type: "text", placeholder: "Example: 4.47%" },
+      { key: "twoYearYieldValue", label: "Current 2Y yield value", type: "text", placeholder: "Example: 3.82%" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Treasury yields jump on higher-for-longer outlook" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the yield move and market reaction" },
+      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: 10Y pulling back from recent high" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "Real Yields": {
+    description: "Real-yield pressure and inflation-expectation direction.",
+    fields: [
+      { key: "realYieldsDirection", label: "Real yields direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
+      { key: "realYieldValue", label: "Current real yield value", type: "text", placeholder: "Example: 2.05%" },
+      { key: "inflationExpectationDirection", label: "Inflation expectation direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Stable"] },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Real yields pull back as inflation expectations rise" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the real-yield driver" },
+      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: Real yields rejecting recent high" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "Fed Tone / FOMC": {
+    description: "Fed tone, rate expectations, speakers, and key quote.",
+    fields: [
+      { key: "fedTone", label: "Fed tone", type: "select", placeholder: "Select tone", options: ["Hawkish", "Dovish", "Neutral", "Mixed"] },
+      { key: "rateExpectation", label: "Rate expectation", type: "select", placeholder: "Select expectation", options: ["Cuts Expected", "Hike Expected", "Hold Expected", "Higher For Longer"] },
+      { key: "fedSpeakerOrEvent", label: "Fed speaker or event", type: "text", placeholder: "Example: Powell speech, FOMC minutes" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Fed signals fewer cuts this year" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the Fed message" },
+      { key: "keyQuote", label: "Key quote or takeaway", type: "textarea", placeholder: "Paste the quote or your main takeaway" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "CPI / PCE": {
+    description: "Inflation surprise, actual/forecast/previous, and market reaction.",
+    fields: [
+      { key: "inflationResult", label: "Inflation result", type: "select", placeholder: "Select result", options: ["Hotter Than Expected", "Softer Than Expected", "In Line", "Mixed"] },
+      { key: "inflationType", label: "CPI/PCE type", type: "select", placeholder: "Select type", options: ["CPI", "Core CPI", "PCE", "Core PCE"] },
+      { key: "actualValue", label: "Actual value", type: "text", placeholder: "Example: 0.4% m/m" },
+      { key: "forecastValue", label: "Forecast value", type: "text", placeholder: "Example: 0.3% m/m" },
+      { key: "previousValue", label: "Previous value", type: "text", placeholder: "Example: 0.2% m/m" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: CPI comes in hotter than expected" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the inflation print and reaction" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "NFP / Jobs": {
+    description: "Payrolls, unemployment, wages, and labor-market reaction.",
+    fields: [
+      { key: "jobsResult", label: "Jobs result", type: "select", placeholder: "Select result", options: ["Stronger Than Expected", "Weaker Than Expected", "In Line", "Mixed"] },
+      { key: "nfpActual", label: "NFP actual", type: "text", placeholder: "Example: 210K" },
+      { key: "nfpForecast", label: "NFP forecast", type: "text", placeholder: "Example: 170K" },
+      { key: "unemploymentRate", label: "Unemployment rate", type: "text", placeholder: "Example: 4.1%, unemployment rising" },
+      { key: "wageGrowth", label: "Wage growth", type: "text", placeholder: "Example: wages cooling / 0.2% m/m" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Payrolls miss forecast as unemployment rises" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the jobs report and reaction" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  Geopolitics: {
+    description: "Risk level, event type, DXY reaction, and safe-haven demand.",
+    fields: [
+      { key: "geopoliticalRiskLevel", label: "Geopolitical risk level", type: "select", placeholder: "Select risk", options: ["Low", "Medium", "High", "Extreme"] },
+      { key: "eventType", label: "Event type", type: "select", placeholder: "Select event", options: ["War", "Conflict", "Sanctions", "Election Risk", "Banking Risk", "Global Uncertainty", "Other"] },
+      { key: "dxyReaction", label: "DXY reaction", type: "select", placeholder: "Select reaction", options: ["Rising", "Falling", "Stable", "Unknown"] },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Gold catches safe-haven bid as tensions rise" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the geopolitical event and market reaction" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "ETF / Central Bank Demand": {
+    description: "ETF flows, central-bank demand, and longer-term Gold demand.",
+    fields: [
+      { key: "etfFlowDirection", label: "ETF flow direction", type: "select", placeholder: "Select flow", options: ["Inflows", "Outflows", "Flat", "Unknown"] },
+      { key: "centralBankDemand", label: "Central bank demand", type: "select", placeholder: "Select demand", options: ["Strong Buying", "Weak Buying", "Selling", "Unknown"] },
+      { key: "reportPeriod", label: "Report period", type: "text", placeholder: "Example: Weekly, May 2026, Q2" },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: ETF inflows rise as central banks keep buying" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the demand report" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  },
+  "Custom News": {
+    description: "Any Gold-related news that does not fit one driver cleanly.",
+    fields: [
+      { key: "newsCategory", label: "News category", type: "select", placeholder: "Select category", options: ["Dollar", "Yields", "Fed", "Inflation", "Jobs", "Geopolitics", "Gold Demand", "Other"] },
+      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Gold reacts to mixed macro headlines" },
+      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the news and market reaction" },
+      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
+      { key: "myInterpretation", label: "My interpretation", type: "textarea", placeholder: "Example: This looks Gold-supportive only if DXY keeps falling" },
+      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
+    ]
+  }
+};
 
 export function GoldResearchDesk() {
   const { goldResearchReports, addGoldResearchReport } = useAppData();
   const [selectedDriver, setSelectedDriver] = useState<GoldDriverName>("DXY / US Dollar");
   const [reportDate, setReportDate] = useState(today());
-  const [headline, setHeadline] = useState("");
-  const [summary, setSummary] = useState("");
-  const [currentValue, setCurrentValue] = useState("");
-  const [chartObservation, setChartObservation] = useState("");
-  const [sourceLink, setSourceLink] = useState("");
-  const [notes, setNotes] = useState("");
+  const [driverFields, setDriverFields] = useState<GoldDriverFields>({});
   const [analysis, setAnalysis] = useState<GoldDriverAnalysis | null>(null);
   const [checklist, setChecklist] = useState<GoldResearchChecklist>(DEFAULT_GOLD_RESEARCH_CHECKLIST);
   const [analyzing, setAnalyzing] = useState(false);
@@ -38,6 +168,7 @@ export function GoldResearchDesk() {
   const [message, setMessage] = useState("");
   const [showSummary, setShowSummary] = useState(false);
 
+  const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const biasSummary = useMemo(() => buildGoldBiasSummary(goldResearchReports), [goldResearchReports]);
   const checklistResult = useMemo(() => getGoldChecklistResult(checklist), [checklist]);
   const todayReports = useMemo(() => goldResearchReports.filter((report) => report.reportDate === today()), [goldResearchReports]);
@@ -48,28 +179,31 @@ export function GoldResearchDesk() {
   }, [goldResearchReports]);
 
   async function analyzeDriver() {
-    setAnalyzing(true);
+    const input = buildAnalysisInput(selectedDriver, reportDate, driverFields);
     setMessage("");
 
-    try {
-      const payload: GoldAnalysisInput = {
-        driverName: selectedDriver,
-        headline,
-        summary,
-        currentValue,
-        chartObservation,
-        sourceLink,
-        notes
-      };
+    if (!reportDate) {
+      setMessage("Choose a report date before analysis.");
+      return;
+    }
 
+    if (!hasMeaningfulGoldResearchInput(input)) {
+      setMessage("Add driver information before analysis.");
+      return;
+    }
+
+    setAnalyzing(true);
+
+    try {
       const response = await fetch("/api/analyze-gold-driver", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(input)
       });
+      const result = await response.json();
 
-      if (!response.ok) throw new Error("Unable to analyze this driver.");
-      setAnalysis((await response.json()) as GoldDriverAnalysis);
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Unable to analyze this driver.");
+      setAnalysis(result as GoldDriverAnalysis);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to analyze this driver.");
     } finally {
@@ -79,19 +213,21 @@ export function GoldResearchDesk() {
 
   async function saveReport() {
     if (!analysis) return;
+    const input = buildAnalysisInput(selectedDriver, reportDate, driverFields);
+
+    if (!hasMeaningfulGoldResearchInput(input)) {
+      setMessage("Add driver information before analysis.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
 
     try {
       await addGoldResearchReport({
-        reportDate,
-        headline,
-        summary,
-        currentValue,
-        chartObservation,
-        sourceLink,
-        notes,
-        ...analysis
+        ...input,
+        ...analysis,
+        reportDate
       });
       setMessage("Gold research report saved.");
     } catch (error) {
@@ -99,6 +235,11 @@ export function GoldResearchDesk() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function updateDriverField(key: string, value: string) {
+    setDriverFields((current) => ({ ...current, [key]: value }));
+    setAnalysis(null);
   }
 
   return (
@@ -122,7 +263,9 @@ export function GoldResearchDesk() {
             type="button"
             onClick={() => {
               setSelectedDriver(driver);
+              setDriverFields({});
               setAnalysis(null);
+              setMessage("");
               setShowSummary(false);
             }}
             className={cn(
@@ -143,28 +286,18 @@ export function GoldResearchDesk() {
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold">{selectedDriver}</h2>
+            <div>
+              <h2 className="text-lg font-semibold">{selectedDriver}</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formConfig.description}</p>
+            </div>
             <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className={inputClass} />
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <Field label="News headline">
-              <input value={headline} onChange={(event) => setHeadline(event.target.value)} className={inputClass} />
-            </Field>
-            <Field label="Current data/value">
-              <input value={currentValue} onChange={(event) => setCurrentValue(event.target.value)} className={inputClass} />
-            </Field>
-            <Field label="Source link">
-              <input value={sourceLink} onChange={(event) => setSourceLink(event.target.value)} className={inputClass} />
-            </Field>
-            <Field label="My chart observation">
-              <input value={chartObservation} onChange={(event) => setChartObservation(event.target.value)} className={inputClass} />
-            </Field>
-            <Field label="News article or summary">
-              <textarea value={summary} onChange={(event) => setSummary(event.target.value)} className={`${inputClass} min-h-28`} />
-            </Field>
-            <Field label="Notes">
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} className={`${inputClass} min-h-28`} />
-            </Field>
+            {formConfig.fields.map((fieldConfig) => (
+              <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
+                <DriverInput config={fieldConfig} value={driverFields[fieldConfig.key] ?? ""} onChange={(value) => updateDriverField(fieldConfig.key, value)} />
+              </Field>
+            ))}
           </div>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={() => void analyzeDriver()} disabled={analyzing} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
@@ -241,6 +374,27 @@ export function GoldResearchDesk() {
   );
 }
 
+function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; value: string; onChange: (value: string) => void }) {
+  if (config.type === "select") {
+    return (
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        <option value="">{config.placeholder}</option>
+        {config.options?.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (config.type === "textarea") {
+    return <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={config.placeholder} className={`${inputClass} min-h-28`} />;
+  }
+
+  return <input type={config.type === "url" ? "url" : "text"} value={value} onChange={(event) => onChange(event.target.value)} placeholder={config.placeholder} className={inputClass} />;
+}
+
 function AnalysisPanel({ analysis }: { analysis: GoldDriverAnalysis }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -270,14 +424,17 @@ function SummaryPanel({ summary }: { summary: ReturnType<typeof buildGoldBiasSum
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", overallBiasClass(summary.overallGoldBias))}>{summary.overallGoldBias}</span>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
-        <ResultRow label="Bullish drivers" value={String(summary.bullishDriversCount)} />
-        <ResultRow label="Bearish drivers" value={String(summary.bearishDriversCount)} />
-        <ResultRow label="Mixed drivers" value={String(summary.mixedDriversCount)} />
+        <ResultRow label="Bullish drivers" value={`${summary.bullishDriversCount}: ${summary.bullishDrivers}`} />
+        <ResultRow label="Bearish drivers" value={`${summary.bearishDriversCount}: ${summary.bearishDrivers}`} />
+        <ResultRow label="Neutral drivers" value={`${summary.neutralDriversCount}: ${summary.neutralDrivers}`} />
+        <ResultRow label="Mixed drivers" value={`${summary.mixedDriversCount}: ${summary.mixedDrivers}`} />
         <ResultRow label="Strongest bullish driver" value={summary.strongestBullishDriver} />
         <ResultRow label="Strongest bearish driver" value={summary.strongestBearishDriver} />
+        <ResultRow label="Main conflict" value={summary.mainConflict} />
         <ResultRow label="Main risk" value={summary.mainRisk} />
         <ResultRow label="Best session to wait for" value={summary.bestSessionToWaitFor} />
         <ResultRow label="Pre-trade verdict" value={summary.preTradeVerdict} />
+        <ResultRow label="Personal Gold rule" value={summary.personalRule} />
       </div>
     </div>
   );
@@ -310,13 +467,39 @@ function ExportButton({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+    <label className={cn("block text-sm font-medium text-slate-700 dark:text-slate-200", wide ? "md:col-span-2" : "")}>
       {label}
       <div className="mt-1">{children}</div>
     </label>
   );
+}
+
+function buildAnalysisInput(driverName: GoldDriverName, reportDate: string, driverFields: GoldDriverFields): GoldAnalysisInput {
+  return {
+    driverName,
+    reportDate,
+    headline: driverFields.newsHeadline ?? "",
+    summary: driverFields.newsSummary ?? "",
+    currentValue: getCurrentValue(driverName, driverFields),
+    chartObservation: driverFields.chartObservation ?? driverFields.myInterpretation ?? driverFields.keyQuote ?? "",
+    sourceLink: driverFields.sourceLink ?? "",
+    notes: driverFields.notes ?? "",
+    driverFields
+  };
+}
+
+function getCurrentValue(driverName: GoldDriverName, fields: GoldDriverFields) {
+  if (driverName === "DXY / US Dollar") return fields.dxyCurrentLevel ?? "";
+  if (driverName === "US Yields") return [fields.tenYearYieldValue, fields.twoYearYieldValue].filter(Boolean).join(" / ");
+  if (driverName === "Real Yields") return fields.realYieldValue ?? "";
+  if (driverName === "Fed Tone / FOMC") return [fields.fedTone, fields.rateExpectation, fields.fedSpeakerOrEvent].filter(Boolean).join(" / ");
+  if (driverName === "CPI / PCE") return [fields.inflationType, fields.actualValue, fields.forecastValue, fields.previousValue].filter(Boolean).join(" / ");
+  if (driverName === "NFP / Jobs") return [fields.nfpActual, fields.nfpForecast, fields.unemploymentRate, fields.wageGrowth].filter(Boolean).join(" / ");
+  if (driverName === "Geopolitics") return [fields.geopoliticalRiskLevel, fields.eventType, fields.dxyReaction].filter(Boolean).join(" / ");
+  if (driverName === "ETF / Central Bank Demand") return [fields.etfFlowDirection, fields.centralBankDemand, fields.reportPeriod].filter(Boolean).join(" / ");
+  return fields.newsCategory ?? "";
 }
 
 function biasClass(value: string) {

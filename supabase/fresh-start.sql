@@ -111,6 +111,7 @@ create table public.gold_research_reports (
   current_value text,
   chart_observation text,
   source_link text,
+  driver_fields jsonb,
   gold_bias text not null,
   impact_level text not null,
   time_sensitivity text not null,

@@ -23,7 +23,8 @@ export function GoldResearchHistory() {
       if (driver !== "All" && report.driverName !== driver) return false;
       if (bias !== "All" && report.goldBias !== bias) return false;
       if (date && report.reportDate !== date) return false;
-      const haystack = `${report.driverName} ${report.inputHeadline} ${report.inputSummary} ${report.goldBias} ${report.explanation} ${report.notes ?? ""}`.toLowerCase();
+      const driverFieldText = Object.values(report.driverFields ?? {}).join(" ");
+      const haystack = `${report.driverName} ${report.inputHeadline} ${report.inputSummary} ${report.goldBias} ${report.explanation} ${report.sourceLink ?? ""} ${report.notes ?? ""} ${driverFieldText}`.toLowerCase();
       return haystack.includes(search.toLowerCase());
     });
   }, [bias, date, driver, goldResearchReports, search]);
@@ -71,16 +72,18 @@ export function GoldResearchHistory() {
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="table-scroll">
-            <table className="min-w-[980px] w-full text-left text-sm">
+            <table className="min-w-[1180px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Driver</th>
                   <th className="px-4 py-3">Bias</th>
+                  <th className="px-4 py-3">Headline</th>
+                  <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Impact</th>
                   <th className="px-4 py-3">Confidence</th>
                   <th className="px-4 py-3">Guidance</th>
-                  <th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">View details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -90,6 +93,16 @@ export function GoldResearchHistory() {
                     <td className="px-4 py-3 font-semibold">{report.driverName}</td>
                     <td className="px-4 py-3">
                       <span className={cn("rounded-md px-2 py-1 text-xs font-bold", biasClass(report.goldBias))}>{report.goldBias}</span>
+                    </td>
+                    <td className="max-w-[240px] px-4 py-3">{report.inputHeadline || "-"}</td>
+                    <td className="max-w-[180px] px-4 py-3">
+                      {report.sourceLink ? (
+                        <a href={report.sourceLink} target="_blank" rel="noreferrer" className="font-semibold text-slate-700 underline underline-offset-4 dark:text-slate-200">
+                          Source
+                        </a>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-4 py-3">{report.impactLevel}</td>
                     <td className="px-4 py-3">{report.confidenceScore}%</td>
@@ -114,7 +127,7 @@ export function GoldResearchHistory() {
                 ))}
                 {!filteredReports.length ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       No Gold research reports match this view.
                     </td>
                   </tr>
@@ -147,6 +160,9 @@ function ReportDetail({ report }: { report: GoldResearchReport | null }) {
         <DetailRow label="Summary" value={report.inputSummary || "-"} />
         <DetailRow label="Current data/value" value={report.currentValue || "-"} />
         <DetailRow label="Chart observation" value={report.chartObservation || "-"} />
+        {Object.entries(report.driverFields ?? {}).map(([key, value]) => (
+          <DetailRow key={key} label={formatDriverFieldLabel(key)} value={value || "-"} />
+        ))}
         <DetailRow label="Explanation" value={report.explanation} />
         <DetailRow label="What this means for Gold" value={report.goldMeaning} />
         <DetailRow label="Checklist effect" value={report.checklistEffect} />
@@ -166,6 +182,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-slate-800 dark:text-slate-100">{value}</p>
     </div>
   );
+}
+
+function formatDriverFieldLabel(value: string) {
+  return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function biasClass(value: string) {
