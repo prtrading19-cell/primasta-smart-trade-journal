@@ -128,12 +128,57 @@ create table public.gold_research_reports (
   notes text
 );
 
+create table public.lot_margin_calculations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  account_balance numeric not null default 0,
+  account_currency text not null default 'USD',
+  risk_type text not null default 'Percentage',
+  risk_percentage numeric not null default 0,
+  fixed_risk_amount numeric not null default 0,
+  symbol text not null default 'XAUUSD',
+  trade_type text not null default 'Buy',
+  entry_price numeric not null default 0,
+  stop_loss_price numeric not null default 0,
+  take_profit_price numeric,
+  leverage numeric not null default 0,
+  contract_size numeric not null default 0,
+  pip_size numeric not null default 0,
+  pip_value_per_lot numeric not null default 0,
+  lot_step numeric not null default 0,
+  min_lot numeric not null default 0,
+  max_lot numeric not null default 0,
+  current_market_price numeric,
+  conversion_rate numeric not null default 1,
+  calculated_lot_size numeric not null default 0,
+  raw_lot_size numeric not null default 0,
+  risk_amount numeric not null default 0,
+  stop_distance numeric not null default 0,
+  stop_distance_in_pips numeric,
+  risk_per_lot numeric not null default 0,
+  estimated_loss numeric not null default 0,
+  estimated_profit numeric,
+  risk_reward_ratio numeric,
+  notional_value numeric not null default 0,
+  margin_required numeric not null default 0,
+  margin_used_percentage numeric not null default 0,
+  estimated_free_balance_after_margin numeric not null default 0,
+  final_risk_status text not null default 'Invalid Trade',
+  guidance text not null default '',
+  warnings jsonb not null default '[]'::jsonb,
+  is_valid boolean not null default false,
+  notes text
+);
+
 create index trades_user_date_idx on public.trades(user_id, date desc);
 create index trades_user_status_idx on public.trades(user_id, status);
 create index trades_user_pair_idx on public.trades(user_id, pair);
 create index gold_research_reports_user_date_idx on public.gold_research_reports(user_id, report_date desc);
 create index gold_research_reports_user_driver_idx on public.gold_research_reports(user_id, driver_name);
 create index gold_research_reports_user_bias_idx on public.gold_research_reports(user_id, gold_bias);
+create index lot_margin_calculations_user_created_idx on public.lot_margin_calculations(user_id, created_at desc);
+create index lot_margin_calculations_user_symbol_idx on public.lot_margin_calculations(user_id, symbol);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -170,6 +215,7 @@ alter table public.profiles enable row level security;
 alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
 alter table public.gold_research_reports enable row level security;
+alter table public.lot_margin_calculations enable row level security;
 
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
@@ -188,6 +234,11 @@ create policy "Users can insert own gold research" on public.gold_research_repor
 create policy "Users can view own gold research" on public.gold_research_reports for select using (auth.uid() = user_id);
 create policy "Users can update own gold research" on public.gold_research_reports for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Users can delete own gold research" on public.gold_research_reports for delete using (auth.uid() = user_id);
+
+create policy "Users can insert own lot calculations" on public.lot_margin_calculations for insert with check (auth.uid() = user_id);
+create policy "Users can view own lot calculations" on public.lot_margin_calculations for select using (auth.uid() = user_id);
+create policy "Users can update own lot calculations" on public.lot_margin_calculations for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Users can delete own lot calculations" on public.lot_margin_calculations for delete using (auth.uid() = user_id);
 
 drop policy if exists "Users can view own screenshots" on storage.objects;
 create policy "Users can view own screenshots"

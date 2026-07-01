@@ -9,11 +9,12 @@ import { getEquityCurve, getMonthlyPerformance, getStrategyPerformance, getWinLo
 import { money, number, percent } from "@/lib/format";
 
 export default function DashboardPage() {
-  const { metrics, trades, dataLoading } = useAppData();
+  const { metrics, trades, lotMarginCalculations, dataLoading } = useAppData();
   const equity = getEquityCurve(trades);
   const winLoss = getWinLossChart(trades);
   const strategy = getStrategyPerformance(trades).slice(0, 6);
   const monthly = getMonthlyPerformance(trades).slice(-8);
+  const lastCalculation = lotMarginCalculations[0];
 
   return (
     <div className="space-y-6">
@@ -23,14 +24,31 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">PRIMASTA SMART TRADE JOURNAL</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Performance calculations use closed trades only. Open trades stay visible but excluded.</p>
         </div>
-        <Link href="/new-trade" className="focus-ring rounded-md bg-slate-950 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
-          Add Trade
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link href="/calculator" className="focus-ring rounded-md border border-slate-200 px-5 py-3 text-center text-sm font-semibold hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+            Calculate Lot Size
+          </Link>
+          <Link href="/new-trade" className="focus-ring rounded-md bg-slate-950 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+            Add Trade
+          </Link>
+        </div>
       </header>
 
       {dataLoading ? <p className="rounded-md bg-white p-4 text-sm text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-400">Loading trades...</p> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Lot & Margin Calculator</p>
+          <div className="mt-3 space-y-1 text-sm text-slate-500 dark:text-slate-400">
+            <p>Last symbol: <span className="font-semibold text-slate-800 dark:text-slate-100">{lastCalculation?.symbol ?? "None yet"}</span></p>
+            <p>Lot size: <span className="font-semibold text-slate-800 dark:text-slate-100">{lastCalculation ? number(lastCalculation.calculatedLotSize, 2) : "-"}</span></p>
+            <p>Risk: <span className="font-semibold text-slate-800 dark:text-slate-100">{lastCalculation ? money(lastCalculation.riskAmount) : "-"}</span></p>
+            <p>Margin: <span className="font-semibold text-slate-800 dark:text-slate-100">{lastCalculation ? money(lastCalculation.marginRequired) : "-"}</span></p>
+          </div>
+          <Link href="/calculator" className="focus-ring mt-4 inline-flex w-full justify-center rounded-md bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-slate-950">
+            Open Calculator
+          </Link>
+        </div>
         <MetricCard label="Open trades" value={metrics.openTradesCount} tone="warning" helper="Not counted in performance" />
         <MetricCard label="Closed trades" value={metrics.closedTradesCount} />
         <MetricCard label="Total trades" value={metrics.totalTrades} />

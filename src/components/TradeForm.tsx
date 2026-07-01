@@ -120,6 +120,19 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
   const strategyDescription = STRATEGY_DESCRIPTIONS[strategy] ?? "Choose the SMC setup that best describes this trade.";
 
   useEffect(() => {
+    if (initialTrade || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const nextTradeType = params.get("tradeType");
+    if (params.get("pair")) setPair(params.get("pair") ?? "XAUUSD");
+    if (nextTradeType === "Buy" || nextTradeType === "Sell") setTradeType(nextTradeType);
+    if (params.get("entryPrice")) setEntryPrice(params.get("entryPrice") ?? "");
+    if (params.get("stopLoss")) setStopLoss(params.get("stopLoss") ?? "");
+    if (params.get("takeProfit")) setTakeProfit(params.get("takeProfit") ?? "");
+    if (params.get("lotSize")) setLotSize(params.get("lotSize") ?? "");
+    if (params.get("riskAmount")) setRiskAmount(params.get("riskAmount") ?? "");
+  }, [initialTrade]);
+
+  useEffect(() => {
     setSetupGrade(calculatedSetupGrade);
     setTradingRuleStatus(calculatedTradingRuleStatus);
   }, [calculatedSetupGrade, calculatedTradingRuleStatus]);

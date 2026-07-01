@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, Download, LayoutDashboard, ListChecks, LogOut, Menu, PlusCircle, Search, UserRound, X } from "lucide-react";
+import { BarChart3, BookOpen, Calculator, Download, LayoutDashboard, ListChecks, LogOut, Menu, PlusCircle, Search, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { AuthForm } from "@/components/AuthForm";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/new-trade", label: "New Trade", icon: PlusCircle },
   { href: "/journal", label: "Journal", icon: BookOpen },
   { href: "/gold-research", label: "Gold Research", icon: Search },
+  { href: "/calculator", label: "Lot & Margin Calculator", icon: Calculator },
   { href: "/summary", label: "Summary", icon: BarChart3 },
   { href: "/export", label: "Export", icon: Download },
   { href: "/plan", label: "Trading Plan", icon: ListChecks },

@@ -5,6 +5,7 @@ import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { calculateMetrics, type DashboardMetrics } from "@/lib/calculations";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { GoldDriverFields, GoldResearchReport, NewGoldResearchReportInput } from "@/types/goldResearch";
+import type { LotMarginCalculation, NewLotMarginCalculationInput } from "@/types/lotMargin";
 import {
   DEFAULT_CHECKLIST,
   DEFAULT_PLAN,
@@ -31,6 +32,7 @@ interface AppDataContextValue {
   isCloudSync: boolean;
   trades: Trade[];
   goldResearchReports: GoldResearchReport[];
+  lotMarginCalculations: LotMarginCalculation[];
   plan: TradingPlan | null;
   metrics: DashboardMetrics;
   signIn: (email: string, password: string) => Promise<void>;
@@ -43,6 +45,8 @@ interface AppDataContextValue {
   deleteTrade: (id: string) => Promise<void>;
   addGoldResearchReport: (input: NewGoldResearchReportInput) => Promise<GoldResearchReport>;
   deleteGoldResearchReport: (id: string) => Promise<void>;
+  addLotMarginCalculation: (input: NewLotMarginCalculationInput) => Promise<LotMarginCalculation>;
+  deleteLotMarginCalculation: (id: string) => Promise<void>;
   savePlan: (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => Promise<void>;
 }
 
@@ -50,6 +54,7 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(undefined)
 
 const TRADE_STORAGE_KEY = "primasta-smart-trade-journal:trades";
 const GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:gold-research";
+const LOT_MARGIN_STORAGE_KEY = "primasta-smart-trade-journal:lot-margin";
 const PLAN_STORAGE_KEY = "primasta-smart-trade-journal:plan";
 const DEMO_USER: JournalUser = { id: "demo-user", email: "demo@primasta.local", name: "Demo Trader" };
 
@@ -62,6 +67,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [dataError, setDataError] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [goldResearchReports, setGoldResearchReports] = useState<GoldResearchReport[]>([]);
+  const [lotMarginCalculations, setLotMarginCalculations] = useState<LotMarginCalculation[]>([]);
   const [plan, setPlan] = useState<TradingPlan | null>(null);
 
   const metrics = useMemo(() => calculateMetrics(trades), [trades]);
@@ -95,9 +101,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         } else {
           setGoldResearchReports([]);
         }
+
+        const { data: calculatorRows, error: calculatorError } = await supabase
+          .from("lot_margin_calculations")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (!calculatorError) {
+          setLotMarginCalculations((calculatorRows ?? []).map(fromLotMarginRow));
+        } else {
+          setLotMarginCalculations([]);
+        }
       } else {
         setTrades(readLocalTrades());
         setGoldResearchReports(readLocalGoldResearchReports());
+        setLotMarginCalculations(readLocalLotMarginCalculations());
         setPlan(readLocalPlan() ?? createDefaultPlan(user.id));
       }
     } catch (error) {
@@ -137,6 +156,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     } else {
       setTrades([]);
       setGoldResearchReports([]);
+      setLotMarginCalculations([]);
       setPlan(null);
     }
   }, [refreshData, user]);
@@ -339,6 +359,48 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [goldResearchReports, user]
   );
 
+  const addLotMarginCalculation = useCallback(
+    async (input: NewLotMarginCalculationInput) => {
+      if (!user) throw new Error("You must be signed in to save calculations.");
+      const calculation: LotMarginCalculation = {
+        ...input,
+        id: makeId(),
+        userId: user.id,
+        createdAt: new Date().toISOString()
+      };
+
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.from("lot_margin_calculations").insert(toLotMarginRow(calculation)).select("*").single();
+        if (error) throw error;
+        const savedCalculation = fromLotMarginRow(data);
+        setLotMarginCalculations((current) => [savedCalculation, ...current]);
+        return savedCalculation;
+      }
+
+      const nextCalculations = [calculation, ...lotMarginCalculations];
+      setLotMarginCalculations(nextCalculations);
+      writeLocalLotMarginCalculations(nextCalculations);
+      return calculation;
+    },
+    [lotMarginCalculations, user]
+  );
+
+  const deleteLotMarginCalculation = useCallback(
+    async (id: string) => {
+      if (!user) throw new Error("You must be signed in to delete calculations.");
+
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from("lot_margin_calculations").delete().eq("id", id).eq("user_id", user.id);
+        if (error) throw error;
+      }
+
+      const nextCalculations = lotMarginCalculations.filter((calculation) => calculation.id !== id);
+      setLotMarginCalculations(nextCalculations);
+      if (!isSupabaseConfigured) writeLocalLotMarginCalculations(nextCalculations);
+    },
+    [lotMarginCalculations, user]
+  );
+
   const savePlan = useCallback(
     async (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => {
       if (!user) throw new Error("You must be signed in to save a trading plan.");
@@ -380,6 +442,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       isCloudSync: isSupabaseConfigured,
       trades,
       goldResearchReports,
+      lotMarginCalculations,
       plan,
       metrics,
       signIn,
@@ -392,6 +455,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       deleteTrade,
       addGoldResearchReport,
       deleteGoldResearchReport,
+      addLotMarginCalculation,
+      deleteLotMarginCalculation,
       savePlan
     }),
     [
@@ -403,6 +468,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       dataError,
       trades,
       goldResearchReports,
+      lotMarginCalculations,
       plan,
       metrics,
       signIn,
@@ -415,6 +481,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       deleteTrade,
       addGoldResearchReport,
       deleteGoldResearchReport,
+      addLotMarginCalculation,
+      deleteLotMarginCalculation,
       savePlan
     ]
   );
@@ -476,6 +544,21 @@ function readLocalGoldResearchReports() {
 function writeLocalGoldResearchReports(reports: GoldResearchReport[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(GOLD_RESEARCH_STORAGE_KEY, JSON.stringify(reports));
+  }
+}
+
+function readLocalLotMarginCalculations() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(LOT_MARGIN_STORAGE_KEY) ?? "[]") as LotMarginCalculation[];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalLotMarginCalculations(calculations: LotMarginCalculation[]) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(LOT_MARGIN_STORAGE_KEY, JSON.stringify(calculations));
   }
 }
 
@@ -729,6 +812,100 @@ function toGoldResearchRow(report: GoldResearchReport) {
     trading_caution: report.tradingCaution,
     final_guidance: report.finalGuidance
   };
+}
+
+function fromLotMarginRow(row: any): LotMarginCalculation {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    accountBalance: Number(row.account_balance ?? 0),
+    accountCurrency: row.account_currency ?? "USD",
+    riskType: row.risk_type ?? "Percentage",
+    riskPercentage: Number(row.risk_percentage ?? 0),
+    fixedRiskAmount: Number(row.fixed_risk_amount ?? 0),
+    symbol: row.symbol ?? "XAUUSD",
+    tradeType: row.trade_type ?? "Buy",
+    entryPrice: Number(row.entry_price ?? 0),
+    stopLossPrice: Number(row.stop_loss_price ?? 0),
+    takeProfitPrice: row.take_profit_price === null || row.take_profit_price === undefined ? undefined : Number(row.take_profit_price),
+    leverage: Number(row.leverage ?? 0),
+    contractSize: Number(row.contract_size ?? 0),
+    pipSize: Number(row.pip_size ?? 0),
+    pipValuePerLot: Number(row.pip_value_per_lot ?? 0),
+    lotStep: Number(row.lot_step ?? 0),
+    minLot: Number(row.min_lot ?? 0),
+    maxLot: Number(row.max_lot ?? 0),
+    currentMarketPrice: row.current_market_price === null || row.current_market_price === undefined ? undefined : Number(row.current_market_price),
+    conversionRate: Number(row.conversion_rate ?? 1),
+    notes: row.notes ?? "",
+    calculatedLotSize: Number(row.calculated_lot_size ?? 0),
+    rawLotSize: Number(row.raw_lot_size ?? row.calculated_lot_size ?? 0),
+    riskAmount: Number(row.risk_amount ?? 0),
+    stopDistance: Number(row.stop_distance ?? 0),
+    stopDistanceInPips: row.stop_distance_in_pips === null || row.stop_distance_in_pips === undefined ? null : Number(row.stop_distance_in_pips),
+    riskPerLot: Number(row.risk_per_lot ?? 0),
+    estimatedLoss: Number(row.estimated_loss ?? row.risk_amount ?? 0),
+    estimatedProfit: row.estimated_profit === null || row.estimated_profit === undefined ? null : Number(row.estimated_profit),
+    riskRewardRatio: row.risk_reward_ratio === null || row.risk_reward_ratio === undefined ? null : Number(row.risk_reward_ratio),
+    notionalValue: Number(row.notional_value ?? 0),
+    marginRequired: Number(row.margin_required ?? 0),
+    marginUsedPercentage: Number(row.margin_used_percentage ?? 0),
+    estimatedFreeBalanceAfterMargin: Number(row.estimated_free_balance_after_margin ?? 0),
+    finalRiskStatus: row.final_risk_status ?? "Invalid Trade",
+    guidance: row.guidance ?? "",
+    warnings: normalizeStringArray(row.warnings),
+    isValid: Boolean(row.is_valid ?? row.final_risk_status !== "Invalid Trade")
+  };
+}
+
+function toLotMarginRow(calculation: LotMarginCalculation) {
+  return {
+    id: calculation.id,
+    user_id: calculation.userId,
+    created_at: calculation.createdAt,
+    account_balance: calculation.accountBalance,
+    account_currency: calculation.accountCurrency,
+    risk_type: calculation.riskType,
+    risk_percentage: calculation.riskPercentage,
+    fixed_risk_amount: calculation.fixedRiskAmount,
+    symbol: calculation.symbol,
+    trade_type: calculation.tradeType,
+    entry_price: calculation.entryPrice,
+    stop_loss_price: calculation.stopLossPrice,
+    take_profit_price: calculation.takeProfitPrice ?? null,
+    leverage: calculation.leverage,
+    contract_size: calculation.contractSize,
+    pip_size: calculation.pipSize,
+    pip_value_per_lot: calculation.pipValuePerLot,
+    lot_step: calculation.lotStep,
+    min_lot: calculation.minLot,
+    max_lot: calculation.maxLot,
+    current_market_price: calculation.currentMarketPrice ?? null,
+    conversion_rate: calculation.conversionRate,
+    calculated_lot_size: calculation.calculatedLotSize,
+    raw_lot_size: calculation.rawLotSize,
+    risk_amount: calculation.riskAmount,
+    stop_distance: calculation.stopDistance,
+    stop_distance_in_pips: calculation.stopDistanceInPips,
+    risk_per_lot: calculation.riskPerLot,
+    estimated_loss: calculation.estimatedLoss,
+    estimated_profit: calculation.estimatedProfit,
+    risk_reward_ratio: calculation.riskRewardRatio,
+    notional_value: calculation.notionalValue,
+    margin_required: calculation.marginRequired,
+    margin_used_percentage: calculation.marginUsedPercentage,
+    estimated_free_balance_after_margin: calculation.estimatedFreeBalanceAfterMargin,
+    final_risk_status: calculation.finalRiskStatus,
+    guidance: calculation.guidance,
+    warnings: calculation.warnings,
+    is_valid: calculation.isValid,
+    notes: calculation.notes ?? null
+  };
+}
+
+function normalizeStringArray(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => String(item)) : [];
 }
 
 function fromPlanRow(row: any): TradingPlan {
