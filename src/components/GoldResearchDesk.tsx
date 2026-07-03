@@ -7,7 +7,7 @@ import { useAppData } from "@/context/AppDataContext";
 import { buildAutoGoldSummary, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { buildGoldBiasSummary, getGoldChecklistResult, hasMeaningfulGoldResearchInput } from "@/lib/goldResearch";
 import { exportGoldBiasSummaryPdf, exportGoldResearchCsv, exportGoldResearchPackPdf } from "@/lib/goldResearchExporters";
-import { buildManualGoldTradeSetup, calculateGoldSetupRiskReward, normalizeGoldTradeSetupResult } from "@/lib/goldTradeSetup";
+import { buildManualGoldTradeSetup, calculateGoldSetupRiskReward, enforceGoldTradeSetupRules, normalizeGoldTradeSetupResult } from "@/lib/goldTradeSetup";
 import { cn } from "@/lib/format";
 import { STRATEGIES } from "@/types/trade";
 import {
@@ -16,6 +16,7 @@ import {
   GOLD_PERSONAL_RULE,
   GOLD_RESEARCH_CHECKLIST_LABELS,
   GOLD_SESSION_WINDOWS,
+  type DailyGoldResearchReport,
   type GoldAutoDriverName,
   type GoldAutoFillResponse,
   type GoldAutoResearchSection,
@@ -345,7 +346,7 @@ const SETUP_INPUT_SECTIONS: Array<{ title: string; fields: Array<{ key: keyof Go
 ];
 
 export function GoldResearchDesk() {
-  const { goldResearchReports, addGoldResearchReport, addDailyGoldResearchReport, addGoldTradeSetup } = useAppData();
+  const { goldResearchReports, dailyGoldResearchReports, addGoldResearchReport, addDailyGoldResearchReport, addGoldTradeSetup, refreshData } = useAppData();
   const [selectedDriver, setSelectedDriver] = useState<GoldDriverName>("DXY / US Dollar");
   const [reportDate, setReportDate] = useState(today());
   const [driverFields, setDriverFields] = useState<GoldDriverFields>({});
@@ -367,6 +368,7 @@ export function GoldResearchDesk() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupMessage, setSetupMessage] = useState("");
+  const [loadedDailyResearch, setLoadedDailyResearch] = useState<DailyGoldResearchReport | null>(null);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -378,7 +380,9 @@ export function GoldResearchDesk() {
     cutoff.setDate(cutoff.getDate() - 7);
     return goldResearchReports.filter((report) => new Date(`${report.reportDate}T00:00:00`) >= cutoff);
   }, [goldResearchReports]);
-  const setupResearch = useMemo(() => buildSetupResearchSummary(autoReport, biasSummary), [autoReport, biasSummary]);
+  const latestDailyResearch = dailyGoldResearchReports[0] ?? null;
+  const activeDailyResearch = loadedDailyResearch ?? latestDailyResearch;
+  const setupResearch = useMemo(() => buildSetupResearchSummary(setupInputs.mode === "Assisted" ? activeDailyResearch : autoReport, biasSummary), [activeDailyResearch, autoReport, biasSummary, setupInputs.mode]);
   const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
   const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
 
@@ -542,12 +546,46 @@ export function GoldResearchDesk() {
     setSavedSetup(null);
   }
 
+  async function loadLatestGoldResearch() {
+    setSetupMessage("");
+    await refreshData();
+    const latest = latestDailyResearch;
+
+    if (!latest) {
+      setLoadedDailyResearch(null);
+      setSetupMessage("No saved Gold research found. Generate or save a Gold research report first.");
+      return;
+    }
+
+    setLoadedDailyResearch(latest);
+    setSetupInputs((current) => ({
+      ...current,
+      setupDate: latest.reportDate,
+      currentGoldPrice: current.currentGoldPrice || latest.goldCurrentPrice
+    }));
+    setSetupMessage(`Loaded latest saved daily Gold research from ${latest.reportDate}.`);
+  }
+
+  function getAssistedSetupBlocker() {
+    if (setupInputs.mode !== "Assisted") return "";
+    if (!activeDailyResearch) return "No saved Gold research found. Generate or save a Gold research report first.";
+    if (!setupInputs.currentGoldPrice) return "Enter current Gold/XAUUSD price before generating a setup.";
+    if (!setupInputs.buySideLiquidityLevel || !setupInputs.sellSideLiquidityLevel) return "Enter buy-side and sell-side liquidity from your chart before generating a setup.";
+    return "";
+  }
+
   async function generateGoldTradeSetup() {
     setSetupLoading(true);
     setSetupMessage("");
     setSavedSetup(null);
 
     try {
+      const assistedBlocker = getAssistedSetupBlocker();
+      if (assistedBlocker) {
+        setSetupMessage(assistedBlocker);
+        return;
+      }
+
       if (setupInputs.mode === "Manual") {
         setSetupResult(buildManualGoldTradeSetup(setupResearch, setupInputs, STRATEGIES));
         setSetupMessage("Manual setup generated. Review the result before saving.");
@@ -561,7 +599,7 @@ export function GoldResearchDesk() {
       });
       const result = await readJsonResponse(response);
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Unable to generate Gold trade setup.");
-      setSetupResult(normalizeGoldTradeSetupResult(result));
+      setSetupResult(enforceGoldTradeSetupRules(normalizeGoldTradeSetupResult(result), setupResearch, setupInputs, STRATEGIES));
       setSetupMessage("Assisted setup generated. Confirm all liquidity levels on your chart.");
     } catch (error) {
       setSetupMessage(error instanceof Error ? error.message : "Unable to generate Gold trade setup.");
@@ -716,10 +754,42 @@ export function GoldResearchDesk() {
             </div>
           </div>
 
+          {setupInputs.mode === "Assisted" ? (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+                <p>
+                  Assisted Mode uses your latest Gold Research report, the liquidity/price levels you enter from your chart, and your Smart Journal strategy list. It does not invent liquidity levels. If current price, buy-side liquidity, sell-side liquidity, support, resistance, or structure are missing, the setup verdict must be WAIT or Pending Confirmation.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <SourceCard label="Gold Research Source" value={activeDailyResearch ? `Latest saved daily Gold research - ${activeDailyResearch.reportDate}` : "Latest saved daily Gold research"} />
+                <SourceCard label="Liquidity Source" value="Manual chart input" />
+                <SourceCard label="Strategy Source" value="Smart Journal strategy list" />
+                <SourceCard label="Risk Source" value="Entry, SL, and TP fields" />
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button type="button" onClick={() => void loadLatestGoldResearch()} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                  <RefreshCw className="h-4 w-4" />
+                  Load Latest Gold Research
+                </button>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {activeDailyResearch ? `Report date used: ${activeDailyResearch.reportDate}` : "No saved daily research loaded yet."}
+                </p>
+              </div>
+              <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Liquidity levels require manual chart confirmation unless a market data/chart API is connected.</span>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-5 space-y-5">
             {SETUP_INPUT_SECTIONS.map((section) => (
               <div key={section.title}>
-                <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{section.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{section.title}</p>
+                  <SourceLabel label={getSetupSectionSource(section.title)} />
+                </div>
                 <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {section.fields.map((field) => (
                     <Field key={field.key} label={field.label}>
@@ -895,6 +965,26 @@ function InfoBox({ title, text }: { title: string; text: string }) {
   );
 }
 
+function SourceCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function SourceLabel({ label }: { label: string }) {
+  return <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{label}</span>;
+}
+
+function getSetupSectionSource(title: string) {
+  if (title === "Current price and liquidity map") return "Liquidity Source: Manual chart input";
+  if (title === "Technical structure") return "Liquidity Source: Manual chart input";
+  if (title === "Risk inputs") return "Risk Source: Entry, SL, and TP fields";
+  return "Manual input";
+}
+
 function SetupInput({
   field,
   value,
@@ -955,10 +1045,10 @@ function GoldTradeSetupResultCard({ result }: { result: GoldTradeSetupResult }) 
 }
 
 function UseSetupLink({ setup, savedSetup }: { setup: GoldTradeSetupResult; savedSetup: GoldTradeSetup | null }) {
-  if (setup.setupVerdict === "Wait") {
+  if (setup.setupVerdict === "Wait" || setup.setupVerdict === "Pending Confirmation") {
     return (
       <button type="button" disabled className="focus-ring inline-flex items-center justify-center rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold opacity-60 dark:border-slate-800">
-        Setup is WAIT. Trade entry is not allowed from this setup.
+        Setup is not confirmed. Trade entry is not allowed from this setup.
       </button>
     );
   }
@@ -1279,18 +1369,18 @@ function formatClues(clues: string[]) {
   return clues.length ? clues.join("; ") : "None detected yet";
 }
 
-function buildSetupResearchSummary(autoReport: GoldAutoFillResponse | null, manualSummary: ReturnType<typeof buildGoldBiasSummary>): GoldTradeSetupResearchSummary {
-  if (autoReport) {
+function buildSetupResearchSummary(report: DailyGoldResearchReport | GoldAutoFillResponse | null, manualSummary: ReturnType<typeof buildGoldBiasSummary>): GoldTradeSetupResearchSummary {
+  if (report) {
     return {
-      overallGoldBias: autoReport.fullSummary.overallGoldBias,
-      bullishDrivers: autoReport.fullSummary.bullishDrivers,
-      bearishDrivers: autoReport.fullSummary.bearishDrivers,
-      mixedDrivers: autoReport.fullSummary.mixedDrivers,
-      strongestBullishDriver: autoReport.fullSummary.strongestBullishDriver,
-      strongestBearishDriver: autoReport.fullSummary.strongestBearishDriver,
-      mainRiskToday: autoReport.fullSummary.mainRiskToday,
-      preTradeVerdict: autoReport.fullSummary.preTradeVerdict,
-      finalGuidance: autoReport.fullSummary.finalGuidance
+      overallGoldBias: report.fullSummary.overallGoldBias,
+      bullishDrivers: report.fullSummary.bullishDrivers,
+      bearishDrivers: report.fullSummary.bearishDrivers,
+      mixedDrivers: report.fullSummary.mixedDrivers,
+      strongestBullishDriver: report.fullSummary.strongestBullishDriver,
+      strongestBearishDriver: report.fullSummary.strongestBearishDriver,
+      mainRiskToday: report.fullSummary.mainRiskToday,
+      preTradeVerdict: report.fullSummary.preTradeVerdict,
+      finalGuidance: report.fullSummary.finalGuidance
     };
   }
 

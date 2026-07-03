@@ -26,13 +26,13 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You are PRIMASTA GOLD TRADE SETUP ASSISTANT. You are not a signal bot. Default to WAIT unless Gold research, liquidity, technical structure, strategy match, and 1:2 risk-to-reward align. Do not invent exact liquidity levels. If levels are missing, say liquidity levels require manual chart confirmation."
+              "You are PRIMASTA GOLD TRADE SETUP ASSISTANT. You are not a signal bot. Use saved Gold research as the research source, user-entered chart/liquidity fields as the only liquidity source, and the Smart Journal strategy list as the strategy source. Default to WAIT unless Gold research, user-provided liquidity, technical structure, strategy match, and 1:2 risk-to-reward align. Do not invent exact liquidity levels, support, resistance, entry, stop loss, or take profit. If chart levels are missing, say liquidity levels require manual chart confirmation."
           },
           {
             role: "user",
             content: JSON.stringify({
               instruction:
-                "Generate one compact Gold/XAUUSD trade setup assistant result. Use the supplied research, liquidity, structure, risk, and strategy list. Require technical confirmation. Return strict JSON only.",
+                "Generate one compact Gold/XAUUSD trade setup assistant result. Use the supplied saved research, manual chart/liquidity input, risk fields, and strategy list. AI may reason about alignment only. It must not invent liquidity or price levels. Require technical confirmation. Return strict JSON only.",
               data: body
             })
           }

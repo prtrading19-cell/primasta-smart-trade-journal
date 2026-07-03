@@ -103,6 +103,74 @@ export function normalizeGoldTradeSetupResult(value: unknown): GoldTradeSetupRes
   };
 }
 
+export function enforceGoldTradeSetupRules(
+  result: GoldTradeSetupResult,
+  research: GoldTradeSetupResearchSummary,
+  inputs: GoldTradeSetupInputs,
+  strategies: string[]
+): GoldTradeSetupResult {
+  const rr = calculateGoldSetupRiskReward(inputs);
+  const selectedStrategy = strategies.includes(result.selectedStrategy) ? result.selectedStrategy : matchGoldStrategy(inputs, strategies);
+  const buySideLiquidity = joinLevelReason(inputs.buySideLiquidityLevel, inputs.buySideLiquidityReason);
+  const sellSideLiquidity = joinLevelReason(inputs.sellSideLiquidityLevel, inputs.sellSideLiquidityReason);
+  const missingCurrentPrice = !inputs.currentGoldPrice;
+  const missingLiquidity = !inputs.buySideLiquidityLevel || !inputs.sellSideLiquidityLevel;
+  const missingSupportResistance = !inputs.keySupport || !inputs.keyResistance;
+  const unclearStructure = inputs.marketStructure === "Ranging" || inputs.higherTimeframeBias === "Neutral";
+  const missingChartContext = missingCurrentPrice || missingSupportResistance || unclearStructure;
+  const mixedResearch = /mixed|wait|neutral/i.test(research.overallGoldBias);
+  const rrNotReady = rr.ratio === null;
+  const rrFailed = rr.ratio !== null && !rr.passes;
+
+  let setupVerdict = result.setupVerdict;
+  let confidence = result.confidence;
+  let finalGuidance = result.finalGuidance;
+  let mainRisk = result.mainRisk;
+
+  if (rrNotReady && setupVerdict !== "Wait") {
+    setupVerdict = "Pending Confirmation";
+    confidence = "Low";
+    mainRisk = "Risk-to-reward is Not Ready because entry, stop loss, or take profit is missing.";
+    finalGuidance = "Setup idea only. Enter entry, SL, and TP, then confirm at least 1:2 RR before any trade.";
+  }
+
+  if (missingChartContext && setupVerdict !== "Wait") {
+    setupVerdict = "Pending Confirmation";
+    confidence = "Low";
+    mainRisk = missingCurrentPrice
+      ? "Current Gold/XAUUSD price requires manual chart confirmation."
+      : missingSupportResistance
+        ? "Support and resistance require manual chart confirmation."
+        : "Technical structure requires manual chart confirmation.";
+    finalGuidance = `${mainRisk} Treat this as Pending Confirmation until chart context is complete.`;
+  }
+
+  if (missingLiquidity || rrFailed || (mixedResearch && unclearStructure)) {
+    setupVerdict = "Wait";
+    confidence = "Low";
+    mainRisk = missingLiquidity
+      ? "Liquidity levels require manual chart confirmation."
+      : rrFailed
+        ? "Risk-to-reward is below 1:2."
+        : "Drivers are mixed and technical structure is unclear.";
+    finalGuidance = `${mainRisk} WAIT until research, liquidity, technical structure, strategy, and risk align.`;
+  }
+
+  return normalizeGoldTradeSetupResult({
+    ...result,
+    setupVerdict,
+    confidence,
+    currentGoldPrice: inputs.currentGoldPrice || result.currentGoldPrice,
+    overallGoldBias: research.overallGoldBias || result.overallGoldBias,
+    selectedStrategy: selectedStrategy || "No matching strategy",
+    buySideLiquidity,
+    sellSideLiquidity,
+    riskRewardRatio: rr.ratio === null ? "Not Ready" : `1:${rr.ratio.toFixed(2)}`,
+    mainRisk,
+    finalGuidance
+  });
+}
+
 export function matchGoldStrategy(inputs: GoldTradeSetupInputs, strategies: string[]) {
   const text = `${inputs.entryModel} ${inputs.sweepType} ${inputs.marketStructureShiftHappened} ${inputs.breakOfStructureHappened}`.toLowerCase();
   const allowed = strategies.filter((strategy) => !/no trade/i.test(strategy));

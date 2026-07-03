@@ -179,6 +179,16 @@ export const STRATEGIES = [
   "A+ Bullish Breaker Block Retest",
   "A+ Bearish Breaker Block Retest",
   "SH+BMS + RTO",
+  "Liquidity Sweep + Market Structure Shift",
+  "Break of Structure Retest",
+  "Fair Value Gap Retest",
+  "Order Block Retest",
+  "Support/Resistance Rejection",
+  "Trend Continuation Pullback",
+  "London/New York Overlap Momentum Setup",
+  "News Spike Wait-and-Retest Setup",
+  "Breakout and Retest",
+  "Range Liquidity Sweep Reversal",
   NO_TRADE_STRATEGY
 ];
 export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
@@ -199,6 +209,16 @@ export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
   "A+ Bullish Breaker Block Retest": "A bearish order block fails, price breaks above it, then retests it as support for bullish continuation.",
   "A+ Bearish Breaker Block Retest": "A bullish order block fails, price breaks below it, then retests it as resistance for bearish continuation.",
   "SH+BMS + RTO": "Price performs a stop hunt at a key liquidity level, confirms a break of market structure, then returns to a valid order block for entry.",
+  "Liquidity Sweep + Market Structure Shift": "Price sweeps buy-side or sell-side liquidity, then confirms direction with a market structure shift before entry.",
+  "Break of Structure Retest": "Price breaks structure, then retests the broken level before continuation.",
+  "Fair Value Gap Retest": "Price creates displacement, leaves an FVG, then returns to the imbalance for a refined entry.",
+  "Order Block Retest": "Price returns to a valid order block after displacement and structure confirmation.",
+  "Support/Resistance Rejection": "Price reacts from a confirmed support or resistance area with clear rejection and risk control.",
+  "Trend Continuation Pullback": "Price pulls back inside an established trend and resumes with confirmation.",
+  "London/New York Overlap Momentum Setup": "Momentum continuation setup during the high-liquidity London and New York overlap.",
+  "News Spike Wait-and-Retest Setup": "Wait for a news spike to settle, then trade only after retest and structure confirmation.",
+  "Breakout and Retest": "Price breaks a key level, retests it, then confirms continuation.",
+  "Range Liquidity Sweep Reversal": "Price sweeps range liquidity at one side and reverses only after confirmation.",
   [NO_TRADE_STRATEGY]: "Use this when the setup does not meet A+ requirements or the market is unclear."
 };
 export const SESSIONS: Session[] = ["Asian", "London", "New York", "London/New York overlap"];
