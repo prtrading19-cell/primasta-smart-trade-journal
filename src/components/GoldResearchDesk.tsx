@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { AlertTriangle, Download, ExternalLink, FileText, History, Pencil, RefreshCw, Save, Search, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
 import { buildAutoGoldSummary, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { buildGoldBiasSummary, getGoldChecklistResult, hasMeaningfulGoldResearchInput } from "@/lib/goldResearch";
 import { exportGoldBiasSummaryPdf, exportGoldResearchCsv, exportGoldResearchPackPdf } from "@/lib/goldResearchExporters";
+import { buildManualGoldTradeSetup, calculateGoldSetupRiskReward, normalizeGoldTradeSetupResult } from "@/lib/goldTradeSetup";
 import { cn } from "@/lib/format";
+import { STRATEGIES } from "@/types/trade";
 import {
   DEFAULT_GOLD_RESEARCH_CHECKLIST,
   GOLD_DRIVER_NAMES,
@@ -23,6 +25,13 @@ import {
   type GoldDriverName,
   type GoldResearchChecklist
 } from "@/types/goldResearch";
+import {
+  DEFAULT_GOLD_TRADE_SETUP_INPUTS,
+  type GoldTradeSetup,
+  type GoldTradeSetupInputs,
+  type GoldTradeSetupResearchSummary,
+  type GoldTradeSetupResult
+} from "@/types/goldTradeSetup";
 
 type DriverFieldType = "text" | "textarea" | "select" | "url";
 
@@ -280,8 +289,63 @@ const AUTO_SECTION_FIELDS: Record<GoldAutoDriverName, AutoSectionFieldConfig[]> 
   ]
 };
 
+const SETUP_SELECT_OPTIONS: Partial<Record<keyof GoldTradeSetupInputs, string[]>> = {
+  mode: ["Manual", "Assisted"],
+  currentPriceLocation: ["Near support", "Near resistance", "In range", "At liquidity sweep", "After breakout", "Unknown"],
+  higherTimeframeBias: ["Bullish", "Bearish", "Neutral"],
+  marketStructure: ["Bullish", "Bearish", "Ranging"],
+  liquiditySweepHappened: ["Yes", "No", "Not yet"],
+  sweepType: ["Buy-side sweep", "Sell-side sweep", "None"],
+  marketStructureShiftHappened: ["Yes", "No", "Not yet"],
+  breakOfStructureHappened: ["Yes", "No", "Not yet"],
+  entryModel: ["Sweep + MSS", "BOS Retest", "FVG Retest", "Order Block Retest", "Liquidity Grab", "Breakout Retest", "Other"],
+  setupTimeframe: ["H4", "H1", "M15", "M5"],
+  entryTimeframe: ["M15", "M5", "M1"]
+};
+
+const SETUP_INPUT_SECTIONS: Array<{ title: string; fields: Array<{ key: keyof GoldTradeSetupInputs; label: string; type?: "text" | "number" | "select" }> }> = [
+  {
+    title: "Current price and liquidity map",
+    fields: [
+      { key: "currentGoldPrice", label: "Current Gold/XAUUSD price", type: "number" },
+      { key: "buySideLiquidityLevel", label: "Buy-side liquidity level", type: "text" },
+      { key: "buySideLiquidityReason", label: "Buy-side liquidity reason", type: "text" },
+      { key: "sellSideLiquidityLevel", label: "Sell-side liquidity level", type: "text" },
+      { key: "sellSideLiquidityReason", label: "Sell-side liquidity reason", type: "text" },
+      { key: "keySupport", label: "Key support", type: "text" },
+      { key: "keyResistance", label: "Key resistance", type: "text" },
+      { key: "premiumDiscountArea", label: "Premium/discount area", type: "text" },
+      { key: "currentPriceLocation", label: "Current price location", type: "select" }
+    ]
+  },
+  {
+    title: "Technical structure",
+    fields: [
+      { key: "higherTimeframeBias", label: "Higher timeframe bias", type: "select" },
+      { key: "marketStructure", label: "Market structure", type: "select" },
+      { key: "liquiditySweepHappened", label: "Has liquidity sweep happened?", type: "select" },
+      { key: "sweepType", label: "Sweep type", type: "select" },
+      { key: "marketStructureShiftHappened", label: "Has MSS happened?", type: "select" },
+      { key: "breakOfStructureHappened", label: "Has BOS happened?", type: "select" },
+      { key: "entryModel", label: "Entry model", type: "select" },
+      { key: "setupTimeframe", label: "Setup timeframe", type: "select" },
+      { key: "entryTimeframe", label: "Entry timeframe", type: "select" }
+    ]
+  },
+  {
+    title: "Risk inputs",
+    fields: [
+      { key: "possibleEntryPrice", label: "Possible entry price", type: "number" },
+      { key: "stopLossPrice", label: "Stop loss price", type: "number" },
+      { key: "takeProfit1", label: "Take profit 1", type: "number" },
+      { key: "takeProfit2", label: "Take profit 2", type: "number" },
+      { key: "minimumRiskReward", label: "Minimum RR required", type: "number" }
+    ]
+  }
+];
+
 export function GoldResearchDesk() {
-  const { goldResearchReports, addGoldResearchReport, addDailyGoldResearchReport } = useAppData();
+  const { goldResearchReports, addGoldResearchReport, addDailyGoldResearchReport, addGoldTradeSetup } = useAppData();
   const [selectedDriver, setSelectedDriver] = useState<GoldDriverName>("DXY / US Dollar");
   const [reportDate, setReportDate] = useState(today());
   const [driverFields, setDriverFields] = useState<GoldDriverFields>({});
@@ -297,6 +361,12 @@ export function GoldResearchDesk() {
   const [autoMessage, setAutoMessage] = useState("");
   const [editingAutoDriver, setEditingAutoDriver] = useState<GoldAutoDriverName | null>(null);
   const [showAutoSummary, setShowAutoSummary] = useState(false);
+  const [setupInputs, setSetupInputs] = useState<GoldTradeSetupInputs>({ ...DEFAULT_GOLD_TRADE_SETUP_INPUTS, setupDate: today() });
+  const [setupResult, setSetupResult] = useState<GoldTradeSetupResult | null>(null);
+  const [savedSetup, setSavedSetup] = useState<GoldTradeSetup | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupSaving, setSetupSaving] = useState(false);
+  const [setupMessage, setSetupMessage] = useState("");
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -308,6 +378,14 @@ export function GoldResearchDesk() {
     cutoff.setDate(cutoff.getDate() - 7);
     return goldResearchReports.filter((report) => new Date(`${report.reportDate}T00:00:00`) >= cutoff);
   }, [goldResearchReports]);
+  const setupResearch = useMemo(() => buildSetupResearchSummary(autoReport, biasSummary), [autoReport, biasSummary]);
+  const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
+  const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
+
+  useEffect(() => {
+    if (!autoReport?.goldCurrentPrice) return;
+    setSetupInputs((current) => ({ ...current, setupDate: autoReport.date, currentGoldPrice: current.currentGoldPrice || autoReport.goldCurrentPrice }));
+  }, [autoReport]);
 
   async function autoFillGoldResearch() {
     setAutoLoading(true);
@@ -459,6 +537,65 @@ export function GoldResearchDesk() {
     setAnalysis(null);
   }
 
+  function updateSetupInput(key: keyof GoldTradeSetupInputs, value: string) {
+    setSetupInputs((current) => ({ ...current, [key]: value }));
+    setSavedSetup(null);
+  }
+
+  async function generateGoldTradeSetup() {
+    setSetupLoading(true);
+    setSetupMessage("");
+    setSavedSetup(null);
+
+    try {
+      if (setupInputs.mode === "Manual") {
+        setSetupResult(buildManualGoldTradeSetup(setupResearch, setupInputs, STRATEGIES));
+        setSetupMessage("Manual setup generated. Review the result before saving.");
+        return;
+      }
+
+      const response = await fetch("/api/gold-research/generate-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ research: setupResearch, inputs: setupInputs, strategies: STRATEGIES, riskReward: setupRiskReward })
+      });
+      const result = await readJsonResponse(response);
+      if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Unable to generate Gold trade setup.");
+      setSetupResult(normalizeGoldTradeSetupResult(result));
+      setSetupMessage("Assisted setup generated. Confirm all liquidity levels on your chart.");
+    } catch (error) {
+      setSetupMessage(error instanceof Error ? error.message : "Unable to generate Gold trade setup.");
+    } finally {
+      setSetupLoading(false);
+    }
+  }
+
+  async function saveGoldTradeSetup() {
+    if (!setupResult) return;
+    setSetupSaving(true);
+    setSetupMessage("");
+
+    try {
+      const setup = await addGoldTradeSetup({
+        ...setupResult,
+        researchReportId: undefined,
+        setupDate: setupInputs.setupDate || today(),
+        status: "Planned"
+      });
+      setSavedSetup(setup);
+      setSetupMessage("Gold trade setup saved.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unable to save Gold trade setup.";
+      setSetupMessage(
+        errorMessage.includes("gold_trade_setups")
+          ? `${errorMessage}. Run supabase/gold-trade-setups.sql in Supabase SQL Editor, then try again.`
+          : errorMessage
+      );
+    } finally {
+      setSetupSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -532,6 +669,86 @@ export function GoldResearchDesk() {
           </div>
         ) : null}
       </section>
+
+      {showSetupAssistant ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Gold Trade Setup Assistant</p>
+              <h2 className="text-xl font-bold tracking-tight">GOLD TRADE SETUP ASSISTANT</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Build a structured Buy, Sell, Pending Confirmation, or WAIT setup from research, liquidity, structure, strategy, and risk.</p>
+            </div>
+            <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(setupResearch.overallGoldBias))}>{setupResearch.overallGoldBias || "Mixed-Wait"}</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <InfoBox title="Buy-side liquidity" text="Liquidity resting above highs where buy stops and breakout orders may sit." />
+            <InfoBox title="Sell-side liquidity" text="Liquidity resting below lows where sell stops and stop losses may sit." />
+            <InfoBox title="Gold liquidity rule" text="Gold often sweeps liquidity before the real move. Wait for confirmation after the sweep." />
+          </div>
+
+          <div className="mt-4 grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100 md:grid-cols-2">
+            {[
+              "This is not a guaranteed signal.",
+              "Only enter after technical confirmation.",
+              "Do not trade if risk-to-reward is below 1:2.",
+              "Do not trade if liquidity levels are not confirmed on chart.",
+              "Do not trade directly before major news."
+            ].map((warning) => (
+              <div key={warning} className="flex gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <Field label="Setup mode">
+              <SetupInput field={{ key: "mode", label: "Setup mode", type: "select" }} value={setupInputs.mode} onChange={(value) => updateSetupInput("mode", value)} />
+            </Field>
+            <Field label="Setup date">
+              <input type="date" value={setupInputs.setupDate} onChange={(event) => updateSetupInput("setupDate", event.target.value)} className={inputClass} />
+            </Field>
+            <div className={cn("rounded-md border px-4 py-3", setupRiskReward.passes ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200")}>
+              <p className="text-xs font-semibold uppercase">Risk-to-reward</p>
+              <p className="mt-1 text-lg font-bold">{setupRiskReward.ratio === null ? "Not ready" : `1:${setupRiskReward.ratio.toFixed(2)}`}</p>
+              <p className="mt-1 text-xs">{setupRiskReward.passes ? "Passes trading plan" : "Needs at least 1:2 and valid SL/TP"}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-5">
+            {SETUP_INPUT_SECTIONS.map((section) => (
+              <div key={section.title}>
+                <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{section.title}</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {section.fields.map((field) => (
+                    <Field key={field.key} label={field.label}>
+                      <SetupInput field={field} value={setupInputs[field.key]} onChange={(value) => updateSetupInput(field.key, value)} />
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:bg-slate-950 dark:text-slate-200">{GOLD_PERSONAL_RULE}</p>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <button type="button" onClick={() => void generateGoldTradeSetup()} disabled={setupLoading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+              {setupLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {setupLoading ? "Generating..." : "Generate Gold Trade Setup"}
+            </button>
+            <button type="button" onClick={() => void saveGoldTradeSetup()} disabled={!setupResult || setupSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-slate-800">
+              <Save className="h-4 w-4" />
+              {setupSaving ? "Saving..." : "Save Trade Setup"}
+            </button>
+            {setupResult ? <UseSetupLink setup={setupResult} savedSetup={savedSetup} /> : null}
+          </div>
+
+          {setupMessage ? <p className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{setupMessage}</p> : null}
+          {setupResult ? <GoldTradeSetupResultCard result={setupResult} /> : null}
+        </section>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {GOLD_DRIVER_NAMES.map((driver) => (
@@ -666,6 +883,102 @@ export function GoldResearchDesk() {
         </div>
       </section>
     </div>
+  );
+}
+
+function InfoBox({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-950">
+      <p className="font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">{text}</p>
+    </div>
+  );
+}
+
+function SetupInput({
+  field,
+  value,
+  onChange
+}: {
+  field: { key: keyof GoldTradeSetupInputs; label: string; type?: "text" | "number" | "select" };
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (field.type === "select") {
+    return (
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        {(SETUP_SELECT_OPTIONS[field.key] ?? []).map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return <input type={field.type === "number" ? "number" : "text"} step="any" value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
+}
+
+function GoldTradeSetupResultCard({ result }: { result: GoldTradeSetupResult }) {
+  return (
+    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Setup Verdict</p>
+          <h3 className="text-2xl font-bold tracking-tight">{result.setupVerdict}</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(result.setupVerdict))}>{result.setupVerdict}</span>
+          <span className="rounded-md bg-slate-200 px-3 py-1 text-xs font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-100">{result.confidence} confidence</span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
+        <ResultRow label="Current Gold Price" value={result.currentGoldPrice} />
+        <ResultRow label="Overall Gold Bias" value={result.overallGoldBias} />
+        <ResultRow label="Selected Strategy" value={result.selectedStrategy} />
+        <ResultRow label="Strategy Reason" value={result.strategyReason} />
+        <ResultRow label="Buy-side Liquidity" value={result.buySideLiquidity} />
+        <ResultRow label="Sell-side Liquidity" value={result.sellSideLiquidity} />
+        <ResultRow label="Liquidity Target" value={result.liquidityTarget} />
+        <ResultRow label="Entry Area" value={result.entryArea} />
+        <ResultRow label="Stop Loss Area" value={result.stopLossArea} />
+        <ResultRow label="Take Profit Area" value={result.takeProfitArea} />
+        <ResultRow label="Risk-to-Reward" value={result.riskRewardRatio} />
+        <ResultRow label="Invalidation Level" value={result.invalidationLevel} />
+        <ResultRow label="Confirmation Needed" value={result.confirmationNeeded} />
+        <ResultRow label="Main Risk" value={result.mainRisk} />
+        <ResultRow label="Final Guidance" value={result.finalGuidance} />
+      </div>
+    </div>
+  );
+}
+
+function UseSetupLink({ setup, savedSetup }: { setup: GoldTradeSetupResult; savedSetup: GoldTradeSetup | null }) {
+  if (setup.setupVerdict === "Wait") {
+    return (
+      <button type="button" disabled className="focus-ring inline-flex items-center justify-center rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold opacity-60 dark:border-slate-800">
+        Setup is WAIT. Trade entry is not allowed from this setup.
+      </button>
+    );
+  }
+
+  const params = new URLSearchParams({
+    pair: "XAUUSD",
+    tradeType: inferTradeType(setup),
+    strategy: setup.selectedStrategy,
+    entryReason: `${setup.setupVerdict}: ${setup.strategyReason} ${setup.finalGuidance}`,
+    entryPrice: extractFirstNumber(setup.entryArea),
+    stopLoss: extractFirstNumber(setup.stopLossArea),
+    takeProfit: extractFirstNumber(setup.takeProfitArea)
+  });
+
+  if (savedSetup?.id) params.set("goldTradeSetupId", savedSetup.id);
+
+  return (
+    <Link href={`/new-trade?${params.toString()}`} className="focus-ring inline-flex items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+      Use Setup in New Trade
+    </Link>
   );
 }
 
@@ -964,6 +1277,47 @@ function getCurrentValue(driverName: GoldDriverName, fields: GoldDriverFields) {
 
 function formatClues(clues: string[]) {
   return clues.length ? clues.join("; ") : "None detected yet";
+}
+
+function buildSetupResearchSummary(autoReport: GoldAutoFillResponse | null, manualSummary: ReturnType<typeof buildGoldBiasSummary>): GoldTradeSetupResearchSummary {
+  if (autoReport) {
+    return {
+      overallGoldBias: autoReport.fullSummary.overallGoldBias,
+      bullishDrivers: autoReport.fullSummary.bullishDrivers,
+      bearishDrivers: autoReport.fullSummary.bearishDrivers,
+      mixedDrivers: autoReport.fullSummary.mixedDrivers,
+      strongestBullishDriver: autoReport.fullSummary.strongestBullishDriver,
+      strongestBearishDriver: autoReport.fullSummary.strongestBearishDriver,
+      mainRiskToday: autoReport.fullSummary.mainRiskToday,
+      preTradeVerdict: autoReport.fullSummary.preTradeVerdict,
+      finalGuidance: autoReport.fullSummary.finalGuidance
+    };
+  }
+
+  return {
+    overallGoldBias: manualSummary.overallGoldBias,
+    bullishDrivers: splitDriverList(manualSummary.bullishDrivers),
+    bearishDrivers: splitDriverList(manualSummary.bearishDrivers),
+    mixedDrivers: splitDriverList(manualSummary.mixedDrivers),
+    strongestBullishDriver: manualSummary.strongestBullishDriver,
+    strongestBearishDriver: manualSummary.strongestBearishDriver,
+    mainRiskToday: manualSummary.mainRisk,
+    preTradeVerdict: manualSummary.preTradeVerdict,
+    finalGuidance: manualSummary.mainConflict
+  };
+}
+
+function splitDriverList(value: string) {
+  return value && value !== "None" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function inferTradeType(setup: GoldTradeSetupResult) {
+  if (setup.setupVerdict === "Sell Setup" || /bearish|sell/i.test(`${setup.overallGoldBias} ${setup.finalGuidance}`)) return "Sell";
+  return "Buy";
+}
+
+function extractFirstNumber(value: string) {
+  return value.match(/\d+(?:\.\d+)?/)?.[0] ?? "";
 }
 
 function isUrl(value: string) {

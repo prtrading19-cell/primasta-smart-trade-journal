@@ -12,6 +12,7 @@ import type {
   NewDailyGoldResearchReportInput,
   NewGoldResearchReportInput
 } from "@/types/goldResearch";
+import type { GoldTradeSetup, NewGoldTradeSetupInput } from "@/types/goldTradeSetup";
 import type { LotMarginCalculation, NewLotMarginCalculationInput } from "@/types/lotMargin";
 import {
   DEFAULT_CHECKLIST,
@@ -40,6 +41,7 @@ interface AppDataContextValue {
   trades: Trade[];
   goldResearchReports: GoldResearchReport[];
   dailyGoldResearchReports: DailyGoldResearchReport[];
+  goldTradeSetups: GoldTradeSetup[];
   lotMarginCalculations: LotMarginCalculation[];
   plan: TradingPlan | null;
   metrics: DashboardMetrics;
@@ -54,6 +56,7 @@ interface AppDataContextValue {
   addGoldResearchReport: (input: NewGoldResearchReportInput) => Promise<GoldResearchReport>;
   deleteGoldResearchReport: (id: string) => Promise<void>;
   addDailyGoldResearchReport: (input: NewDailyGoldResearchReportInput) => Promise<DailyGoldResearchReport>;
+  addGoldTradeSetup: (input: NewGoldTradeSetupInput) => Promise<GoldTradeSetup>;
   addLotMarginCalculation: (input: NewLotMarginCalculationInput) => Promise<LotMarginCalculation>;
   deleteLotMarginCalculation: (id: string) => Promise<void>;
   savePlan: (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -64,6 +67,7 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(undefined)
 const TRADE_STORAGE_KEY = "primasta-smart-trade-journal:trades";
 const GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:gold-research";
 const DAILY_GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:daily-gold-research";
+const GOLD_TRADE_SETUP_STORAGE_KEY = "primasta-smart-trade-journal:gold-trade-setups";
 const LOT_MARGIN_STORAGE_KEY = "primasta-smart-trade-journal:lot-margin";
 const PLAN_STORAGE_KEY = "primasta-smart-trade-journal:plan";
 const DEMO_USER: JournalUser = { id: "demo-user", email: "demo@primasta.local", name: "Demo Trader" };
@@ -78,6 +82,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [goldResearchReports, setGoldResearchReports] = useState<GoldResearchReport[]>([]);
   const [dailyGoldResearchReports, setDailyGoldResearchReports] = useState<DailyGoldResearchReport[]>([]);
+  const [goldTradeSetups, setGoldTradeSetups] = useState<GoldTradeSetup[]>([]);
   const [lotMarginCalculations, setLotMarginCalculations] = useState<LotMarginCalculation[]>([]);
   const [plan, setPlan] = useState<TradingPlan | null>(null);
 
@@ -125,6 +130,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           setDailyGoldResearchReports([]);
         }
 
+        const { data: setupRows, error: setupError } = await supabase
+          .from("gold_trade_setups")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (!setupError) {
+          setGoldTradeSetups((setupRows ?? []).map(fromGoldTradeSetupRow));
+        } else {
+          setGoldTradeSetups([]);
+        }
+
         const { data: calculatorRows, error: calculatorError } = await supabase
           .from("lot_margin_calculations")
           .select("*")
@@ -140,6 +157,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setTrades(readLocalTrades());
         setGoldResearchReports(readLocalGoldResearchReports());
         setDailyGoldResearchReports(readLocalDailyGoldResearchReports());
+        setGoldTradeSetups(readLocalGoldTradeSetups());
         setLotMarginCalculations(readLocalLotMarginCalculations());
         setPlan(readLocalPlan() ?? createDefaultPlan(user.id));
       }
@@ -181,6 +199,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       setTrades([]);
       setGoldResearchReports([]);
       setDailyGoldResearchReports([]);
+      setGoldTradeSetups([]);
       setLotMarginCalculations([]);
       setPlan(null);
     }
@@ -423,6 +442,32 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [dailyGoldResearchReports, user]
   );
 
+  const addGoldTradeSetup = useCallback(
+    async (input: NewGoldTradeSetupInput) => {
+      if (!user) throw new Error("You must be signed in to save Gold trade setups.");
+      const setup: GoldTradeSetup = {
+        ...input,
+        id: makeId(),
+        userId: user.id,
+        createdAt: new Date().toISOString()
+      };
+
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.from("gold_trade_setups").insert(toGoldTradeSetupRow(setup)).select("*").single();
+        if (error) throw error;
+        const savedSetup = fromGoldTradeSetupRow(data);
+        setGoldTradeSetups((current) => [savedSetup, ...current]);
+        return savedSetup;
+      }
+
+      const nextSetups = [setup, ...goldTradeSetups];
+      setGoldTradeSetups(nextSetups);
+      writeLocalGoldTradeSetups(nextSetups);
+      return setup;
+    },
+    [goldTradeSetups, user]
+  );
+
   const addLotMarginCalculation = useCallback(
     async (input: NewLotMarginCalculationInput) => {
       if (!user) throw new Error("You must be signed in to save calculations.");
@@ -507,6 +552,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       trades,
       goldResearchReports,
       dailyGoldResearchReports,
+      goldTradeSetups,
       lotMarginCalculations,
       plan,
       metrics,
@@ -521,6 +567,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       addGoldResearchReport,
       deleteGoldResearchReport,
       addDailyGoldResearchReport,
+      addGoldTradeSetup,
       addLotMarginCalculation,
       deleteLotMarginCalculation,
       savePlan
@@ -535,6 +582,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       trades,
       goldResearchReports,
       dailyGoldResearchReports,
+      goldTradeSetups,
       lotMarginCalculations,
       plan,
       metrics,
@@ -549,6 +597,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       addGoldResearchReport,
       deleteGoldResearchReport,
       addDailyGoldResearchReport,
+      addGoldTradeSetup,
       addLotMarginCalculation,
       deleteLotMarginCalculation,
       savePlan
@@ -628,6 +677,21 @@ function readLocalDailyGoldResearchReports() {
 function writeLocalDailyGoldResearchReports(reports: DailyGoldResearchReport[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(DAILY_GOLD_RESEARCH_STORAGE_KEY, JSON.stringify(reports));
+  }
+}
+
+function readLocalGoldTradeSetups() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(GOLD_TRADE_SETUP_STORAGE_KEY) ?? "[]") as GoldTradeSetup[];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalGoldTradeSetups(setups: GoldTradeSetup[]) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(GOLD_TRADE_SETUP_STORAGE_KEY, JSON.stringify(setups));
   }
 }
 
@@ -774,6 +838,7 @@ function fromTradeRow(row: any): Trade {
     tradingRuleStatus: row.trading_rule_status ?? undefined,
     aPlusScore: row.a_plus_score === null || row.a_plus_score === undefined ? countChecklistScore(checklist) : Number(row.a_plus_score),
     goldResearchReportId: row.gold_research_report_id ?? undefined,
+    goldTradeSetupId: row.gold_trade_setup_id ?? undefined,
     emotionBefore: row.emotion_before,
     screenshotBefore: row.screenshot_before ?? undefined,
     status: row.status,
@@ -829,7 +894,8 @@ function toTradeRow(trade: Trade) {
     screenshot_after: trade.screenshotAfter ?? null,
     created_at: trade.createdAt,
     updated_at: trade.updatedAt,
-    ...(trade.goldResearchReportId ? { gold_research_report_id: trade.goldResearchReportId } : {})
+    ...(trade.goldResearchReportId ? { gold_research_report_id: trade.goldResearchReportId } : {}),
+    ...(trade.goldTradeSetupId ? { gold_trade_setup_id: trade.goldTradeSetupId } : {})
   };
 }
 
@@ -947,6 +1013,62 @@ function normalizeDailyGoldResearchReport(report: DailyGoldResearchReport): Dail
     preTradeVerdict: normalized.fullSummary.preTradeVerdict,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt
+  };
+}
+
+function fromGoldTradeSetupRow(row: any): GoldTradeSetup {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    researchReportId: row.research_report_id ?? undefined,
+    setupDate: row.setup_date,
+    currentGoldPrice: row.current_gold_price ?? "",
+    overallGoldBias: row.overall_gold_bias ?? "",
+    setupVerdict: row.setup_verdict ?? "Wait",
+    confidence: row.confidence ?? "Low",
+    selectedStrategy: row.selected_strategy ?? "",
+    strategyReason: row.strategy_reason ?? "",
+    buySideLiquidity: row.buy_side_liquidity ?? "",
+    sellSideLiquidity: row.sell_side_liquidity ?? "",
+    liquidityTarget: row.liquidity_target ?? "",
+    entryArea: row.entry_area ?? "",
+    stopLossArea: row.stop_loss_area ?? "",
+    takeProfitArea: row.take_profit_area ?? "",
+    riskRewardRatio: row.risk_reward_ratio ?? "",
+    invalidationLevel: row.invalidation_level ?? "",
+    confirmationNeeded: row.confirmation_needed ?? "",
+    mainRisk: row.main_risk ?? "",
+    finalGuidance: row.final_guidance ?? "",
+    status: row.status ?? "Planned"
+  };
+}
+
+function toGoldTradeSetupRow(setup: GoldTradeSetup) {
+  return {
+    id: setup.id,
+    user_id: setup.userId,
+    created_at: setup.createdAt,
+    research_report_id: setup.researchReportId ?? null,
+    setup_date: setup.setupDate,
+    current_gold_price: setup.currentGoldPrice,
+    overall_gold_bias: setup.overallGoldBias,
+    setup_verdict: setup.setupVerdict,
+    confidence: setup.confidence,
+    selected_strategy: setup.selectedStrategy,
+    strategy_reason: setup.strategyReason,
+    buy_side_liquidity: setup.buySideLiquidity,
+    sell_side_liquidity: setup.sellSideLiquidity,
+    liquidity_target: setup.liquidityTarget,
+    entry_area: setup.entryArea,
+    stop_loss_area: setup.stopLossArea,
+    take_profit_area: setup.takeProfitArea,
+    risk_reward_ratio: setup.riskRewardRatio,
+    invalidation_level: setup.invalidationLevel,
+    confirmation_needed: setup.confirmationNeeded,
+    main_risk: setup.mainRisk,
+    final_guidance: setup.finalGuidance,
+    status: setup.status
   };
 }
 

@@ -47,7 +47,7 @@ interface TradeFormProps {
 }
 
 export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, onCancel }: TradeFormProps) {
-  const { goldResearchReports } = useAppData();
+  const { goldResearchReports, goldTradeSetups } = useAppData();
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [date, setDate] = useState(initialTrade?.date ?? today);
   const [pair, setPair] = useState(initialTrade?.pair ?? "XAUUSD");
@@ -70,6 +70,7 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
   const [newsRisk, setNewsRisk] = useState<NewsRisk>(initialTrade?.newsRisk ?? "No major news");
   const [tradingRuleStatus, setTradingRuleStatus] = useState<TradingRuleStatus>(initialTrade?.tradingRuleStatus ?? "Failed");
   const [goldResearchReportId, setGoldResearchReportId] = useState(initialTrade?.goldResearchReportId ?? "");
+  const [goldTradeSetupId, setGoldTradeSetupId] = useState(initialTrade?.goldTradeSetupId ?? "");
   const [emotionBefore, setEmotionBefore] = useState<Emotion>(initialTrade?.emotionBefore ?? "Calm");
   const [screenshotBefore, setScreenshotBefore] = useState(initialTrade?.screenshotBefore ?? "");
   const [closedNow, setClosedNow] = useState(initialTrade?.status === "Closed");
@@ -130,6 +131,10 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
     if (params.get("takeProfit")) setTakeProfit(params.get("takeProfit") ?? "");
     if (params.get("lotSize")) setLotSize(params.get("lotSize") ?? "");
     if (params.get("riskAmount")) setRiskAmount(params.get("riskAmount") ?? "");
+    if (params.get("strategy")) setStrategy(params.get("strategy") ?? STRATEGIES[0]);
+    if (params.get("entryReason")) setEntryReason(params.get("entryReason") ?? "");
+    if (params.get("goldResearchReportId")) setGoldResearchReportId(params.get("goldResearchReportId") ?? "");
+    if (params.get("goldTradeSetupId")) setGoldTradeSetupId(params.get("goldTradeSetupId") ?? "");
   }, [initialTrade]);
 
   useEffect(() => {
@@ -177,6 +182,7 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
       tradingRuleStatus: calculatedTradingRuleStatus,
       aPlusScore,
       goldResearchReportId: goldResearchReportId || undefined,
+      goldTradeSetupId: goldTradeSetupId || undefined,
       emotionBefore,
       screenshotBefore: screenshotBefore.trim() || undefined,
       status: closedNow && !isNoTradeObservation ? "Closed" : "Open"
@@ -225,6 +231,7 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
     setNewsRisk("No major news");
     setTradingRuleStatus("Failed");
     setGoldResearchReportId("");
+    setGoldTradeSetupId("");
     setEmotionBefore("Calm");
     setScreenshotBefore("");
     setClosedNow(false);
@@ -415,16 +422,29 @@ export function TradeForm({ initialTrade, submitLabel = "Save trade", onSubmit, 
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <Field label="Attach Gold Research Report">
-          <select value={goldResearchReportId} onChange={(event) => setGoldResearchReportId(event.target.value)} className={inputClass}>
-            <option value="">No research report attached</option>
-            {goldResearchReports.map((report) => (
-              <option key={report.id} value={report.id}>
-                {report.reportDate} - {report.driverName} - {report.goldBias}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Attach Gold Research Report">
+            <select value={goldResearchReportId} onChange={(event) => setGoldResearchReportId(event.target.value)} className={inputClass}>
+              <option value="">No research report attached</option>
+              {goldResearchReports.map((report) => (
+                <option key={report.id} value={report.id}>
+                  {report.reportDate} - {report.driverName} - {report.goldBias}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Attach Gold Trade Setup">
+            <select value={goldTradeSetupId} onChange={(event) => setGoldTradeSetupId(event.target.value)} className={inputClass}>
+              <option value="">No trade setup attached</option>
+              {goldTradeSetups.map((setup) => (
+                <option key={setup.id} value={setup.id}>
+                  {setup.setupDate} - {setup.setupVerdict} - {setup.selectedStrategy}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
       </section>
 
       {!isNoTradeObservation ? (

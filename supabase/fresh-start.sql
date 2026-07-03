@@ -55,6 +55,7 @@ create table public.trades (
   trading_rule_status text,
   a_plus_score integer,
   gold_research_report_id uuid,
+  gold_trade_setup_id uuid,
   emotion_before text not null check (emotion_before in ('Calm', 'Confident', 'Fearful', 'Greedy', 'Impatient', 'Revenge')),
   screenshot_before text,
   status text not null default 'Open' check (status in ('Open', 'Closed')),
@@ -141,6 +142,32 @@ create table public.daily_gold_research_reports (
   updated_at timestamptz not null default now()
 );
 
+create table public.gold_trade_setups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  research_report_id uuid references public.gold_research_reports(id) on delete set null,
+  setup_date date not null default current_date,
+  current_gold_price text,
+  overall_gold_bias text,
+  setup_verdict text not null default 'Wait',
+  confidence text not null default 'Low',
+  selected_strategy text,
+  strategy_reason text,
+  buy_side_liquidity text,
+  sell_side_liquidity text,
+  liquidity_target text,
+  entry_area text,
+  stop_loss_area text,
+  take_profit_area text,
+  risk_reward_ratio text,
+  invalidation_level text,
+  confirmation_needed text,
+  main_risk text,
+  final_guidance text,
+  status text not null default 'Planned'
+);
+
 create table public.lot_margin_calculations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -193,6 +220,9 @@ create index gold_research_reports_user_bias_idx on public.gold_research_reports
 create unique index daily_gold_research_reports_user_date_uidx on public.daily_gold_research_reports(user_id, report_date);
 create index daily_gold_research_reports_user_created_idx on public.daily_gold_research_reports(user_id, created_at desc);
 create index daily_gold_research_reports_user_bias_idx on public.daily_gold_research_reports(user_id, overall_gold_bias);
+create index gold_trade_setups_user_created_idx on public.gold_trade_setups(user_id, created_at desc);
+create index gold_trade_setups_user_date_idx on public.gold_trade_setups(user_id, setup_date desc);
+create index gold_trade_setups_user_status_idx on public.gold_trade_setups(user_id, status);
 create index lot_margin_calculations_user_created_idx on public.lot_margin_calculations(user_id, created_at desc);
 create index lot_margin_calculations_user_symbol_idx on public.lot_margin_calculations(user_id, symbol);
 
@@ -233,6 +263,7 @@ alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
 alter table public.gold_research_reports enable row level security;
 alter table public.daily_gold_research_reports enable row level security;
+alter table public.gold_trade_setups enable row level security;
 alter table public.lot_margin_calculations enable row level security;
 
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
@@ -257,6 +288,11 @@ create policy "Users can insert own daily gold research" on public.daily_gold_re
 create policy "Users can view own daily gold research" on public.daily_gold_research_reports for select using (auth.uid() = user_id);
 create policy "Users can update own daily gold research" on public.daily_gold_research_reports for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Users can delete own daily gold research" on public.daily_gold_research_reports for delete using (auth.uid() = user_id);
+
+create policy "Users can insert own gold trade setups" on public.gold_trade_setups for insert with check (auth.uid() = user_id);
+create policy "Users can view own gold trade setups" on public.gold_trade_setups for select using (auth.uid() = user_id);
+create policy "Users can update own gold trade setups" on public.gold_trade_setups for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Users can delete own gold trade setups" on public.gold_trade_setups for delete using (auth.uid() = user_id);
 
 create policy "Users can insert own lot calculations" on public.lot_margin_calculations for insert with check (auth.uid() = user_id);
 create policy "Users can view own lot calculations" on public.lot_margin_calculations for select using (auth.uid() = user_id);

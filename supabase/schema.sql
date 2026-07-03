@@ -125,6 +125,7 @@ alter table public.trades add column if not exists news_risk text;
 alter table public.trades add column if not exists trading_rule_status text;
 alter table public.trades add column if not exists a_plus_score integer;
 alter table public.trades add column if not exists gold_research_report_id uuid;
+alter table public.trades add column if not exists gold_trade_setup_id uuid;
 alter table public.trades add column if not exists emotion_before text default 'Calm';
 alter table public.trades add column if not exists screenshot_before text;
 alter table public.trades add column if not exists status text default 'Open';
@@ -204,6 +205,32 @@ create table if not exists public.daily_gold_research_reports (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.gold_trade_setups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  research_report_id uuid references public.gold_research_reports(id) on delete set null,
+  setup_date date not null default current_date,
+  current_gold_price text,
+  overall_gold_bias text,
+  setup_verdict text not null default 'Wait',
+  confidence text not null default 'Low',
+  selected_strategy text,
+  strategy_reason text,
+  buy_side_liquidity text,
+  sell_side_liquidity text,
+  liquidity_target text,
+  entry_area text,
+  stop_loss_area text,
+  take_profit_area text,
+  risk_reward_ratio text,
+  invalidation_level text,
+  confirmation_needed text,
+  main_risk text,
+  final_guidance text,
+  status text not null default 'Planned'
+);
+
 create index if not exists trades_user_date_idx on public.trades(user_id, date desc);
 create index if not exists trades_user_status_idx on public.trades(user_id, status);
 create index if not exists trades_user_pair_idx on public.trades(user_id, pair);
@@ -214,6 +241,9 @@ create index if not exists gold_research_reports_user_bias_idx on public.gold_re
 create unique index if not exists daily_gold_research_reports_user_date_uidx on public.daily_gold_research_reports(user_id, report_date);
 create index if not exists daily_gold_research_reports_user_created_idx on public.daily_gold_research_reports(user_id, created_at desc);
 create index if not exists daily_gold_research_reports_user_bias_idx on public.daily_gold_research_reports(user_id, overall_gold_bias);
+create index if not exists gold_trade_setups_user_created_idx on public.gold_trade_setups(user_id, created_at desc);
+create index if not exists gold_trade_setups_user_date_idx on public.gold_trade_setups(user_id, setup_date desc);
+create index if not exists gold_trade_setups_user_status_idx on public.gold_trade_setups(user_id, status);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -260,6 +290,7 @@ alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
 alter table public.gold_research_reports enable row level security;
 alter table public.daily_gold_research_reports enable row level security;
+alter table public.gold_trade_setups enable row level security;
 
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
@@ -354,6 +385,27 @@ with check (auth.uid() = user_id);
 drop policy if exists "Users can delete own daily gold research" on public.daily_gold_research_reports;
 create policy "Users can delete own daily gold research"
 on public.daily_gold_research_reports for delete
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own gold trade setups" on public.gold_trade_setups;
+create policy "Users can insert own gold trade setups"
+on public.gold_trade_setups for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can view own gold trade setups" on public.gold_trade_setups;
+create policy "Users can view own gold trade setups"
+on public.gold_trade_setups for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own gold trade setups" on public.gold_trade_setups;
+create policy "Users can update own gold trade setups"
+on public.gold_trade_setups for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own gold trade setups" on public.gold_trade_setups;
+create policy "Users can delete own gold trade setups"
+on public.gold_trade_setups for delete
 using (auth.uid() = user_id);
 
 create table if not exists public.lot_margin_calculations (

@@ -89,6 +89,7 @@ export interface Trade {
   tradingRuleStatus?: TradingRuleStatus;
   aPlusScore?: number;
   goldResearchReportId?: string;
+  goldTradeSetupId?: string;
   emotionBefore: Emotion;
   screenshotBefore?: string;
   status: TradeStatus;
