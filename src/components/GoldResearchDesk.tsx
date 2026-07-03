@@ -49,7 +49,47 @@ interface DriverFormConfig {
   fields: DriverFieldConfig[];
 }
 
+interface XauusdMarketData {
+  status: "success" | "error";
+  symbol: string;
+  currentPrice: string;
+  lastUpdated: string;
+  dailyHigh: string;
+  dailyLow: string;
+  previousDayHigh: string;
+  previousDayLow: string;
+  recentSwingHigh: string;
+  recentSwingLow: string;
+  suggestedBuySideLiquidity: string;
+  suggestedSellSideLiquidity: string;
+  suggestedSupport: string;
+  suggestedResistance: string;
+  currentPriceLocation: string;
+  source: string;
+  message: string;
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
+
+const EMPTY_MARKET_DATA: XauusdMarketData = {
+  status: "error",
+  symbol: "",
+  currentPrice: "",
+  lastUpdated: "",
+  dailyHigh: "",
+  dailyLow: "",
+  previousDayHigh: "",
+  previousDayLow: "",
+  recentSwingHigh: "",
+  recentSwingLow: "",
+  suggestedBuySideLiquidity: "",
+  suggestedSellSideLiquidity: "",
+  suggestedSupport: "",
+  suggestedResistance: "",
+  currentPriceLocation: "Unknown",
+  source: "Twelve Data",
+  message: ""
+};
 
 const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
 
@@ -369,6 +409,11 @@ export function GoldResearchDesk() {
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupMessage, setSetupMessage] = useState("");
   const [loadedDailyResearch, setLoadedDailyResearch] = useState<DailyGoldResearchReport | null>(null);
+  const [marketData, setMarketData] = useState<XauusdMarketData | null>(null);
+  const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const [marketDataMessage, setMarketDataMessage] = useState("");
+  const [levelsFromMarketData, setLevelsFromMarketData] = useState(false);
+  const [liquidityLevelsConfirmed, setLiquidityLevelsConfirmed] = useState(false);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -544,6 +589,50 @@ export function GoldResearchDesk() {
   function updateSetupInput(key: keyof GoldTradeSetupInputs, value: string) {
     setSetupInputs((current) => ({ ...current, [key]: value }));
     setSavedSetup(null);
+    if (isLiquidityLevelField(key)) {
+      setLiquidityLevelsConfirmed(false);
+      setSetupResult(null);
+    }
+  }
+
+  async function fetchGoldMarketData() {
+    setMarketDataLoading(true);
+    setMarketDataMessage("");
+    setSetupMessage("");
+
+    try {
+      const response = await fetch("/api/market-data/xauusd", { cache: "no-store" });
+      const result = await readJsonResponse(response);
+      const normalized = normalizeMarketDataResponse(result);
+
+      if (!response.ok || normalized.status !== "success") {
+        throw new Error(getMarketDataErrorMessage(result));
+      }
+
+      setMarketData(normalized);
+      setMarketDataMessage(normalized.message || "Gold market data fetched from Twelve Data.");
+      setLevelsFromMarketData(true);
+      setLiquidityLevelsConfirmed(false);
+      setSavedSetup(null);
+      setSetupResult(null);
+      setSetupInputs((current) => ({
+        ...current,
+        currentGoldPrice: normalized.currentPrice || current.currentGoldPrice,
+        buySideLiquidityLevel: normalized.suggestedBuySideLiquidity || current.buySideLiquidityLevel,
+        buySideLiquidityReason: "Suggested from previous/recent high via market data",
+        sellSideLiquidityLevel: normalized.suggestedSellSideLiquidity || current.sellSideLiquidityLevel,
+        sellSideLiquidityReason: "Suggested from previous/recent low via market data",
+        keySupport: normalized.suggestedSupport || current.keySupport,
+        keyResistance: normalized.suggestedResistance || current.keyResistance,
+        currentPriceLocation: normalizePriceLocation(normalized.currentPriceLocation) || current.currentPriceLocation
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not fetch XAUUSD data from Twelve Data.";
+      setMarketData({ ...EMPTY_MARKET_DATA, message });
+      setMarketDataMessage(message);
+    } finally {
+      setMarketDataLoading(false);
+    }
   }
 
   async function loadLatestGoldResearch() {
@@ -586,8 +675,10 @@ export function GoldResearchDesk() {
         return;
       }
 
+      const setupRuleOptions = { levelsFromMarketData, liquidityLevelsConfirmed };
+
       if (setupInputs.mode === "Manual") {
-        setSetupResult(buildManualGoldTradeSetup(setupResearch, setupInputs, STRATEGIES));
+        setSetupResult(enforceGoldTradeSetupRules(buildManualGoldTradeSetup(setupResearch, setupInputs, STRATEGIES), setupResearch, setupInputs, STRATEGIES, setupRuleOptions));
         setSetupMessage("Manual setup generated. Review the result before saving.");
         return;
       }
@@ -595,11 +686,11 @@ export function GoldResearchDesk() {
       const response = await fetch("/api/gold-research/generate-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ research: setupResearch, inputs: setupInputs, strategies: STRATEGIES, riskReward: setupRiskReward })
+        body: JSON.stringify({ research: setupResearch, inputs: setupInputs, strategies: STRATEGIES, riskReward: setupRiskReward, marketData: setupRuleOptions })
       });
       const result = await readJsonResponse(response);
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Unable to generate Gold trade setup.");
-      setSetupResult(enforceGoldTradeSetupRules(normalizeGoldTradeSetupResult(result), setupResearch, setupInputs, STRATEGIES));
+      setSetupResult(enforceGoldTradeSetupRules(normalizeGoldTradeSetupResult(result), setupResearch, setupInputs, STRATEGIES, setupRuleOptions));
       setSetupMessage("Assisted setup generated. Confirm all liquidity levels on your chart.");
     } catch (error) {
       setSetupMessage(error instanceof Error ? error.message : "Unable to generate Gold trade setup.");
@@ -782,6 +873,20 @@ export function GoldResearchDesk() {
               </div>
             </div>
           ) : null}
+
+          <MarketDataSourcePanel
+            data={marketData}
+            loading={marketDataLoading}
+            message={marketDataMessage}
+            confirmed={liquidityLevelsConfirmed}
+            levelsFromMarketData={levelsFromMarketData}
+            onFetch={() => void fetchGoldMarketData()}
+            onConfirmChange={(checked) => {
+              setLiquidityLevelsConfirmed(checked);
+              setSetupResult(null);
+              setSavedSetup(null);
+            }}
+          />
 
           <div className="mt-5 space-y-5">
             {SETUP_INPUT_SECTIONS.map((section) => (
@@ -985,6 +1090,94 @@ function getSetupSectionSource(title: string) {
   return "Manual input";
 }
 
+function MarketDataSourcePanel({
+  data,
+  loading,
+  message,
+  confirmed,
+  levelsFromMarketData,
+  onFetch,
+  onConfirmChange
+}: {
+  data: XauusdMarketData | null;
+  loading: boolean;
+  message: string;
+  confirmed: boolean;
+  levelsFromMarketData: boolean;
+  onFetch: () => void;
+  onConfirmChange: (checked: boolean) => void;
+}) {
+  const display = data ?? EMPTY_MARKET_DATA;
+  const connected = display.status === "success";
+
+  return (
+    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Market Data Source</p>
+          <h3 className="mt-1 text-base font-semibold">Twelve Data XAUUSD levels</h3>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
+        </div>
+        <button type="button" onClick={onFetch} disabled={loading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+          {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          {loading ? "Fetching Gold data..." : "Fetch Gold Market Data"}
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MarketDataMetric label="Provider" value="Twelve Data" />
+        <MarketDataMetric label="Status" value={connected ? "Connected" : "Not connected"} tone={connected ? "success" : "neutral"} />
+        <MarketDataMetric label="Last updated" value={display.lastUpdated || "Not fetched"} />
+        <MarketDataMetric label="Current Gold price" value={display.currentPrice || "Not fetched"} />
+        <MarketDataMetric label="Price location" value={display.currentPriceLocation || "Unknown"} tag={connected ? "Suggested from market data" : ""} />
+        <MarketDataMetric label="Suggested buy-side liquidity" value={display.suggestedBuySideLiquidity || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
+        <MarketDataMetric label="Suggested sell-side liquidity" value={display.suggestedSellSideLiquidity || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
+        <MarketDataMetric label="Suggested support" value={display.suggestedSupport || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
+        <MarketDataMetric label="Suggested resistance" value={display.suggestedResistance || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
+      </div>
+
+      {message ? <p className="mt-3 rounded-md bg-white px-4 py-3 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{message}</p> : null}
+
+      <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Market data liquidity levels are suggestions. Confirm levels on your broker or TradingView chart before trading.</span>
+      </div>
+
+      <label className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+        <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmChange(event.target.checked)} className="mt-1 h-4 w-4 rounded border-slate-300" />
+        <span>
+          I confirm these liquidity levels on my chart.
+          {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
+        </span>
+      </label>
+
+      <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+          <p className="text-sm font-semibold">TradingView confirmation chart</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Use this chart to confirm the suggested liquidity levels before entering a trade.</p>
+        </div>
+        <iframe
+          title="TradingView OANDA XAUUSD chart"
+          src="https://s.tradingview.com/widgetembed/?symbol=OANDA%3AXAUUSD&interval=60&hidesidetoolbar=1&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&theme=light&style=1&timezone=Africa%2FJohannesburg&withdateranges=1&hideideas=1&locale=en"
+          className="h-[420px] w-full border-0"
+          loading="lazy"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  );
+}
+
+function MarketDataMetric({ label, value, tag, tone = "neutral" }: { label: string; value: string; tag?: string; tone?: "success" | "neutral" }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
+      <p className={cn("mt-1 font-semibold", tone === "success" ? "text-emerald-700 dark:text-emerald-300" : "text-slate-900 dark:text-slate-100")}>{value}</p>
+      {tag ? <p className="mt-2 text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">{tag}</p> : null}
+    </div>
+  );
+}
+
 function SetupInput({
   field,
   value,
@@ -1088,6 +1281,57 @@ async function readJsonResponse(response: Response): Promise<Record<string, unkn
   } catch {
     return {};
   }
+}
+
+function normalizeMarketDataResponse(value: Record<string, unknown>): XauusdMarketData {
+  return {
+    status: value.status === "success" ? "success" : "error",
+    symbol: marketDataString(value.symbol),
+    currentPrice: marketDataString(value.currentPrice),
+    lastUpdated: marketDataString(value.lastUpdated),
+    dailyHigh: marketDataString(value.dailyHigh),
+    dailyLow: marketDataString(value.dailyLow),
+    previousDayHigh: marketDataString(value.previousDayHigh),
+    previousDayLow: marketDataString(value.previousDayLow),
+    recentSwingHigh: marketDataString(value.recentSwingHigh),
+    recentSwingLow: marketDataString(value.recentSwingLow),
+    suggestedBuySideLiquidity: marketDataString(value.suggestedBuySideLiquidity),
+    suggestedSellSideLiquidity: marketDataString(value.suggestedSellSideLiquidity),
+    suggestedSupport: marketDataString(value.suggestedSupport),
+    suggestedResistance: marketDataString(value.suggestedResistance),
+    currentPriceLocation: normalizePriceLocation(marketDataString(value.currentPriceLocation)) || "Unknown",
+    source: marketDataString(value.source) || "Twelve Data",
+    message: marketDataString(value.message)
+  };
+}
+
+function getMarketDataErrorMessage(result: Record<string, unknown>) {
+  const message = marketDataString(result.message);
+  if (/not configured|api key/i.test(message)) return "Twelve Data API key is not configured. Add TWELVE_DATA_API_KEY in Vercel Environment Variables and redeploy.";
+  if (/rate limit|credits|quota/i.test(message)) return "Free market data rate limit reached. Try again later.";
+  if (/could not fetch|symbol|xauusd/i.test(message)) return "Could not fetch XAUUSD data from Twelve Data.";
+  return message || "Could not fetch XAUUSD data from Twelve Data.";
+}
+
+function marketDataString(value: unknown) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value).trim() : "";
+}
+
+function normalizePriceLocation(value: string) {
+  const allowed = ["Near support", "Near resistance", "In range", "At liquidity sweep", "After breakout", "Unknown"];
+  return allowed.includes(value) ? value : "";
+}
+
+function isLiquidityLevelField(key: keyof GoldTradeSetupInputs) {
+  return (
+    key === "currentGoldPrice" ||
+    key === "buySideLiquidityLevel" ||
+    key === "buySideLiquidityReason" ||
+    key === "sellSideLiquidityLevel" ||
+    key === "sellSideLiquidityReason" ||
+    key === "keySupport" ||
+    key === "keyResistance"
+  );
 }
 
 function getAutoFillErrorMessage(result: Record<string, unknown>) {

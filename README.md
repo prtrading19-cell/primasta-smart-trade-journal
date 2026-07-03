@@ -75,6 +75,7 @@ Then edit `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+TWELVE_DATA_API_KEY=your-twelve-data-api-key
 ```
 
 6. Start the app:
@@ -116,6 +117,7 @@ The SQL creates a private `trade-screenshots` bucket with a 5 MB image limit. Fi
 ```env
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
+TWELVE_DATA_API_KEY
 ```
 
 4. Use the default build settings:

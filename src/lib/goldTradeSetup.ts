@@ -107,7 +107,8 @@ export function enforceGoldTradeSetupRules(
   result: GoldTradeSetupResult,
   research: GoldTradeSetupResearchSummary,
   inputs: GoldTradeSetupInputs,
-  strategies: string[]
+  strategies: string[],
+  options: { levelsFromMarketData?: boolean; liquidityLevelsConfirmed?: boolean } = {}
 ): GoldTradeSetupResult {
   const rr = calculateGoldSetupRiskReward(inputs);
   const selectedStrategy = strategies.includes(result.selectedStrategy) ? result.selectedStrategy : matchGoldStrategy(inputs, strategies);
@@ -121,15 +122,26 @@ export function enforceGoldTradeSetupRules(
   const mixedResearch = /mixed|wait|neutral/i.test(research.overallGoldBias);
   const rrNotReady = rr.ratio === null;
   const rrFailed = rr.ratio !== null && !rr.passes;
+  const unconfirmedMarketLevels = Boolean(options.levelsFromMarketData && !options.liquidityLevelsConfirmed);
 
   let setupVerdict = result.setupVerdict;
   let confidence = result.confidence;
+  let confirmationNeeded = result.confirmationNeeded;
   let finalGuidance = result.finalGuidance;
   let mainRisk = result.mainRisk;
+
+  if (unconfirmedMarketLevels && setupVerdict !== "Wait") {
+    setupVerdict = "Pending Confirmation";
+    confidence = "Low";
+    confirmationNeeded = "Confirm suggested liquidity, support, and resistance on your broker or TradingView chart.";
+    mainRisk = "Liquidity levels are suggested from market data and are not chart-confirmed yet.";
+    finalGuidance = "Pending confirmation. Tick the liquidity confirmation box only after checking the suggested levels on your chart.";
+  }
 
   if (rrNotReady && setupVerdict !== "Wait") {
     setupVerdict = "Pending Confirmation";
     confidence = "Low";
+    confirmationNeeded = "Enter entry, stop loss, and take profit before this can become a trade setup.";
     mainRisk = "Risk-to-reward is Not Ready because entry, stop loss, or take profit is missing.";
     finalGuidance = "Setup idea only. Enter entry, SL, and TP, then confirm at least 1:2 RR before any trade.";
   }
@@ -137,6 +149,7 @@ export function enforceGoldTradeSetupRules(
   if (missingChartContext && setupVerdict !== "Wait") {
     setupVerdict = "Pending Confirmation";
     confidence = "Low";
+    confirmationNeeded = "Complete current price, support, resistance, and structure confirmation.";
     mainRisk = missingCurrentPrice
       ? "Current Gold/XAUUSD price requires manual chart confirmation."
       : missingSupportResistance
@@ -153,6 +166,11 @@ export function enforceGoldTradeSetupRules(
       : rrFailed
         ? "Risk-to-reward is below 1:2."
         : "Drivers are mixed and technical structure is unclear.";
+    confirmationNeeded = missingLiquidity
+      ? "Enter and confirm buy-side and sell-side liquidity on your chart."
+      : rrFailed
+        ? "Improve risk-to-reward to at least 1:2 before considering any trade."
+        : "Wait for clearer technical structure and driver alignment.";
     finalGuidance = `${mainRisk} WAIT until research, liquidity, technical structure, strategy, and risk align.`;
   }
 
@@ -165,6 +183,7 @@ export function enforceGoldTradeSetupRules(
     selectedStrategy: selectedStrategy || "No matching strategy",
     buySideLiquidity,
     sellSideLiquidity,
+    confirmationNeeded,
     riskRewardRatio: rr.ratio === null ? "Not Ready" : `1:${rr.ratio.toFixed(2)}`,
     mainRisk,
     finalGuidance
