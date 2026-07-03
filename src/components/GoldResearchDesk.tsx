@@ -319,9 +319,9 @@ export function GoldResearchDesk() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: reportDate || today() })
       });
-      const result = await response.json();
+      const result = await readJsonResponse(response);
 
-      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Unable to auto-fill Gold research.");
+      if (!response.ok) throw new Error(getAutoFillErrorMessage(result));
 
       const normalized = normalizeAutoFillResponse(result);
       setAutoReport(normalized);
@@ -330,7 +330,7 @@ export function GoldResearchDesk() {
       setEditingAutoDriver(null);
       setAutoMessage(normalized.warning ?? "Auto-fill complete. Review and edit the research before saving.");
     } catch (error) {
-      setAutoMessage(error instanceof Error ? error.message : "Unable to auto-fill Gold research.");
+      setAutoMessage(error instanceof Error ? error.message : "Could not verify fresh sources. Try again later.");
     } finally {
       setAutoLoading(false);
     }
@@ -676,6 +676,26 @@ function AutoMeta({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
+}
+
+async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  try {
+    const value = await response.json();
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function getAutoFillErrorMessage(result: Record<string, unknown>) {
+  const code = typeof result.code === "string" ? result.code : "";
+  const error = typeof result.error === "string" ? result.error : "";
+
+  if (code === "missing_api_key" || /api key/i.test(error)) return "OpenAI API key is missing in Vercel.";
+  if (code === "billing_or_quota" || /billing|quota|credit/i.test(error)) return "OpenAI billing or credits issue. Check OpenAI usage/billing.";
+  if (code === "json_parse_error" || /format|json|parse/i.test(error)) return "AI response format error. Please retry or check server logs.";
+  if (code === "web_search_failed" || /source|search|verify/i.test(error)) return "Could not verify fresh sources. Try again later.";
+  return error || "Could not verify fresh sources. Try again later.";
 }
 
 function AutoFullSummaryPanel({ report }: { report: GoldAutoFillResponse }) {
