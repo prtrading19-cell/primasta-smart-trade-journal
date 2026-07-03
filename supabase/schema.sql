@@ -191,6 +191,19 @@ alter table public.gold_research_reports add column if not exists news_summary t
 alter table public.gold_research_reports add column if not exists driver_specific_data jsonb;
 alter table public.gold_research_reports add column if not exists analysis_result jsonb;
 
+create table if not exists public.daily_gold_research_reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  report_date date not null default current_date,
+  gold_current_price text,
+  sections_json jsonb not null default '[]'::jsonb,
+  full_summary_json jsonb not null default '{}'::jsonb,
+  overall_gold_bias text not null default 'Mixed-Wait',
+  pre_trade_verdict text not null default 'Wait',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists trades_user_date_idx on public.trades(user_id, date desc);
 create index if not exists trades_user_status_idx on public.trades(user_id, status);
 create index if not exists trades_user_pair_idx on public.trades(user_id, pair);
@@ -198,6 +211,9 @@ create unique index if not exists trading_plans_user_id_unique_idx on public.tra
 create index if not exists gold_research_reports_user_date_idx on public.gold_research_reports(user_id, report_date desc);
 create index if not exists gold_research_reports_user_driver_idx on public.gold_research_reports(user_id, driver_name);
 create index if not exists gold_research_reports_user_bias_idx on public.gold_research_reports(user_id, gold_bias);
+create unique index if not exists daily_gold_research_reports_user_date_uidx on public.daily_gold_research_reports(user_id, report_date);
+create index if not exists daily_gold_research_reports_user_created_idx on public.daily_gold_research_reports(user_id, created_at desc);
+create index if not exists daily_gold_research_reports_user_bias_idx on public.daily_gold_research_reports(user_id, overall_gold_bias);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -215,6 +231,9 @@ create trigger trading_plans_set_updated_at before update on public.trading_plan
 
 drop trigger if exists gold_research_reports_set_updated_at on public.gold_research_reports;
 create trigger gold_research_reports_set_updated_at before update on public.gold_research_reports for each row execute function public.set_updated_at();
+
+drop trigger if exists daily_gold_research_reports_set_updated_at on public.daily_gold_research_reports;
+create trigger daily_gold_research_reports_set_updated_at before update on public.daily_gold_research_reports for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -240,6 +259,7 @@ alter table public.profiles enable row level security;
 alter table public.trades enable row level security;
 alter table public.trading_plans enable row level security;
 alter table public.gold_research_reports enable row level security;
+alter table public.daily_gold_research_reports enable row level security;
 
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
@@ -313,6 +333,27 @@ with check (auth.uid() = user_id);
 drop policy if exists "Users can delete own gold research" on public.gold_research_reports;
 create policy "Users can delete own gold research"
 on public.gold_research_reports for delete
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own daily gold research" on public.daily_gold_research_reports;
+create policy "Users can insert own daily gold research"
+on public.daily_gold_research_reports for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can view own daily gold research" on public.daily_gold_research_reports;
+create policy "Users can view own daily gold research"
+on public.daily_gold_research_reports for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own daily gold research" on public.daily_gold_research_reports;
+create policy "Users can update own daily gold research"
+on public.daily_gold_research_reports for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own daily gold research" on public.daily_gold_research_reports;
+create policy "Users can delete own daily gold research"
+on public.daily_gold_research_reports for delete
 using (auth.uid() = user_id);
 
 create table if not exists public.lot_margin_calculations (

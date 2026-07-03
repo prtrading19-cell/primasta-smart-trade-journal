@@ -3,8 +3,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { calculateMetrics, type DashboardMetrics } from "@/lib/calculations";
+import { normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { GoldDriverFields, GoldResearchReport, NewGoldResearchReportInput } from "@/types/goldResearch";
+import type {
+  DailyGoldResearchReport,
+  GoldDriverFields,
+  GoldResearchReport,
+  NewDailyGoldResearchReportInput,
+  NewGoldResearchReportInput
+} from "@/types/goldResearch";
 import type { LotMarginCalculation, NewLotMarginCalculationInput } from "@/types/lotMargin";
 import {
   DEFAULT_CHECKLIST,
@@ -32,6 +39,7 @@ interface AppDataContextValue {
   isCloudSync: boolean;
   trades: Trade[];
   goldResearchReports: GoldResearchReport[];
+  dailyGoldResearchReports: DailyGoldResearchReport[];
   lotMarginCalculations: LotMarginCalculation[];
   plan: TradingPlan | null;
   metrics: DashboardMetrics;
@@ -45,6 +53,7 @@ interface AppDataContextValue {
   deleteTrade: (id: string) => Promise<void>;
   addGoldResearchReport: (input: NewGoldResearchReportInput) => Promise<GoldResearchReport>;
   deleteGoldResearchReport: (id: string) => Promise<void>;
+  addDailyGoldResearchReport: (input: NewDailyGoldResearchReportInput) => Promise<DailyGoldResearchReport>;
   addLotMarginCalculation: (input: NewLotMarginCalculationInput) => Promise<LotMarginCalculation>;
   deleteLotMarginCalculation: (id: string) => Promise<void>;
   savePlan: (input: Omit<TradingPlan, "id" | "userId" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -54,6 +63,7 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(undefined)
 
 const TRADE_STORAGE_KEY = "primasta-smart-trade-journal:trades";
 const GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:gold-research";
+const DAILY_GOLD_RESEARCH_STORAGE_KEY = "primasta-smart-trade-journal:daily-gold-research";
 const LOT_MARGIN_STORAGE_KEY = "primasta-smart-trade-journal:lot-margin";
 const PLAN_STORAGE_KEY = "primasta-smart-trade-journal:plan";
 const DEMO_USER: JournalUser = { id: "demo-user", email: "demo@primasta.local", name: "Demo Trader" };
@@ -67,6 +77,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [dataError, setDataError] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [goldResearchReports, setGoldResearchReports] = useState<GoldResearchReport[]>([]);
+  const [dailyGoldResearchReports, setDailyGoldResearchReports] = useState<DailyGoldResearchReport[]>([]);
   const [lotMarginCalculations, setLotMarginCalculations] = useState<LotMarginCalculation[]>([]);
   const [plan, setPlan] = useState<TradingPlan | null>(null);
 
@@ -102,6 +113,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           setGoldResearchReports([]);
         }
 
+        const { data: dailyResearchRows, error: dailyResearchError } = await supabase
+          .from("daily_gold_research_reports")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("report_date", { ascending: false });
+
+        if (!dailyResearchError) {
+          setDailyGoldResearchReports((dailyResearchRows ?? []).map(fromDailyGoldResearchRow));
+        } else {
+          setDailyGoldResearchReports([]);
+        }
+
         const { data: calculatorRows, error: calculatorError } = await supabase
           .from("lot_margin_calculations")
           .select("*")
@@ -116,6 +139,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       } else {
         setTrades(readLocalTrades());
         setGoldResearchReports(readLocalGoldResearchReports());
+        setDailyGoldResearchReports(readLocalDailyGoldResearchReports());
         setLotMarginCalculations(readLocalLotMarginCalculations());
         setPlan(readLocalPlan() ?? createDefaultPlan(user.id));
       }
@@ -156,6 +180,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     } else {
       setTrades([]);
       setGoldResearchReports([]);
+      setDailyGoldResearchReports([]);
       setLotMarginCalculations([]);
       setPlan(null);
     }
@@ -359,6 +384,45 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [goldResearchReports, user]
   );
 
+  const addDailyGoldResearchReport = useCallback(
+    async (input: NewDailyGoldResearchReportInput) => {
+      if (!user) throw new Error("You must be signed in to save daily Gold research.");
+      const now = new Date().toISOString();
+      const report: DailyGoldResearchReport = {
+        id: makeId(),
+        userId: user.id,
+        createdAt: now,
+        updatedAt: now,
+        reportDate: input.reportDate,
+        goldCurrentPrice: input.goldCurrentPrice,
+        sections: input.sections,
+        fullSummary: input.fullSummary,
+        overallGoldBias: input.overallGoldBias,
+        preTradeVerdict: input.preTradeVerdict
+      };
+
+      if (isSupabaseConfigured && supabase) {
+        const { id: _id, created_at: _createdAt, ...upsertRow } = toDailyGoldResearchRow(report);
+        const { data, error } = await supabase
+          .from("daily_gold_research_reports")
+          .upsert(upsertRow, { onConflict: "user_id,report_date" })
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        const savedReport = fromDailyGoldResearchRow(data);
+        setDailyGoldResearchReports((current) => [savedReport, ...current.filter((item) => item.reportDate !== savedReport.reportDate)]);
+        return savedReport;
+      }
+
+      const nextReports = [report, ...dailyGoldResearchReports.filter((item) => item.reportDate !== report.reportDate)];
+      setDailyGoldResearchReports(nextReports);
+      writeLocalDailyGoldResearchReports(nextReports);
+      return report;
+    },
+    [dailyGoldResearchReports, user]
+  );
+
   const addLotMarginCalculation = useCallback(
     async (input: NewLotMarginCalculationInput) => {
       if (!user) throw new Error("You must be signed in to save calculations.");
@@ -442,6 +506,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       isCloudSync: isSupabaseConfigured,
       trades,
       goldResearchReports,
+      dailyGoldResearchReports,
       lotMarginCalculations,
       plan,
       metrics,
@@ -455,6 +520,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       deleteTrade,
       addGoldResearchReport,
       deleteGoldResearchReport,
+      addDailyGoldResearchReport,
       addLotMarginCalculation,
       deleteLotMarginCalculation,
       savePlan
@@ -468,6 +534,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       dataError,
       trades,
       goldResearchReports,
+      dailyGoldResearchReports,
       lotMarginCalculations,
       plan,
       metrics,
@@ -481,6 +548,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       deleteTrade,
       addGoldResearchReport,
       deleteGoldResearchReport,
+      addDailyGoldResearchReport,
       addLotMarginCalculation,
       deleteLotMarginCalculation,
       savePlan
@@ -544,6 +612,22 @@ function readLocalGoldResearchReports() {
 function writeLocalGoldResearchReports(reports: GoldResearchReport[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(GOLD_RESEARCH_STORAGE_KEY, JSON.stringify(reports));
+  }
+}
+
+function readLocalDailyGoldResearchReports() {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DAILY_GOLD_RESEARCH_STORAGE_KEY) ?? "[]") as DailyGoldResearchReport[];
+    return value.map((report) => normalizeDailyGoldResearchReport(report));
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalDailyGoldResearchReports(reports: DailyGoldResearchReport[]) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(DAILY_GOLD_RESEARCH_STORAGE_KEY, JSON.stringify(reports));
   }
 }
 
@@ -811,6 +895,58 @@ function toGoldResearchRow(report: GoldResearchReport) {
     checklist_effect: report.checklistEffect,
     trading_caution: report.tradingCaution,
     final_guidance: report.finalGuidance
+  };
+}
+
+function fromDailyGoldResearchRow(row: any): DailyGoldResearchReport {
+  return normalizeDailyGoldResearchReport({
+    id: row.id,
+    userId: row.user_id,
+    reportDate: row.report_date,
+    goldCurrentPrice: row.gold_current_price ?? "",
+    sections: row.sections_json ?? [],
+    fullSummary: row.full_summary_json ?? {},
+    overallGoldBias: row.overall_gold_bias ?? "Mixed-Wait",
+    preTradeVerdict: row.pre_trade_verdict ?? "Wait",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
+
+function toDailyGoldResearchRow(report: DailyGoldResearchReport) {
+  return {
+    id: report.id,
+    user_id: report.userId,
+    report_date: report.reportDate,
+    gold_current_price: report.goldCurrentPrice,
+    sections_json: report.sections,
+    full_summary_json: report.fullSummary,
+    overall_gold_bias: report.overallGoldBias,
+    pre_trade_verdict: report.preTradeVerdict,
+    created_at: report.createdAt,
+    updated_at: report.updatedAt
+  };
+}
+
+function normalizeDailyGoldResearchReport(report: DailyGoldResearchReport): DailyGoldResearchReport {
+  const normalized = normalizeAutoFillResponse({
+    date: report.reportDate,
+    goldCurrentPrice: report.goldCurrentPrice,
+    sections: report.sections,
+    fullSummary: report.fullSummary
+  });
+
+  return {
+    id: report.id,
+    userId: report.userId,
+    reportDate: normalized.date,
+    goldCurrentPrice: normalized.goldCurrentPrice,
+    sections: normalized.sections,
+    fullSummary: normalized.fullSummary,
+    overallGoldBias: normalized.fullSummary.overallGoldBias,
+    preTradeVerdict: normalized.fullSummary.preTradeVerdict,
+    createdAt: report.createdAt,
+    updatedAt: report.updatedAt
   };
 }
 

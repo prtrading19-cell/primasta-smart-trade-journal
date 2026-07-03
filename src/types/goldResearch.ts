@@ -192,3 +192,97 @@ export interface GoldBiasSummaryDriver {
   confidenceScore: number;
   finalGuidance: string;
 }
+
+export type GoldAutoDriverName =
+  | "DXY / US Dollar Check"
+  | "US Yields Check"
+  | "Real Yields Check"
+  | "Fed Tone / FOMC Check"
+  | "CPI / PCE Inflation Check"
+  | "NFP / Jobs Check"
+  | "Geopolitics / Risk Sentiment Check"
+  | "ETF / Central Bank Demand Check"
+  | "Gold Technical Structure Check";
+
+export type GoldAutoImpact = "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed-Wait";
+export type GoldAutoOverallBias = "Bullish" | "Bearish" | "Neutral" | "Mixed-Wait";
+export type GoldAutoPreTradeVerdict = "Trade Allowed" | "Wait" | "Avoid Before News" | "Manage Existing Trade Only";
+
+export interface GoldAutoResearchSection {
+  driver: GoldAutoDriverName;
+  currentDataValue: string;
+  direction: string;
+  tenYearYieldDirection: string;
+  twoYearYieldDirection: string;
+  realYieldsDirection: string;
+  fedTone: string;
+  rateExpectation: string;
+  latestInflationData: string;
+  inflationResult: string;
+  latestJobsData: string;
+  jobsResult: string;
+  unemploymentRate: string;
+  wageGrowth: string;
+  riskLevel: string;
+  dxyReaction: string;
+  etfFlowDirection: string;
+  centralBankDemand: string;
+  higherTimeframeBias: string;
+  keySupport: string;
+  keyResistance: string;
+  liquidityArea: string;
+  marketStructure: string;
+  setupPresent: string;
+  setupType: string;
+  newsHeadline: string;
+  newsSummary: string;
+  chartObservation: string;
+  sourceLink: string;
+  goldImpact: GoldAutoImpact;
+  goldTechnicalVerdict: string;
+  reason: string;
+}
+
+export interface GoldAutoFullSummary {
+  overallGoldBias: GoldAutoOverallBias;
+  bullishDrivers: string[];
+  bearishDrivers: string[];
+  mixedDrivers: string[];
+  strongestBullishDriver: string;
+  strongestBearishDriver: string;
+  mainRiskToday: string;
+  bestSessionToTrade: string;
+  preTradeVerdict: GoldAutoPreTradeVerdict;
+  finalGuidance: string;
+  personalRule: string;
+}
+
+export interface GoldAutoFillResponse {
+  date: string;
+  goldCurrentPrice: string;
+  sections: GoldAutoResearchSection[];
+  fullSummary: GoldAutoFullSummary;
+  warning?: string;
+}
+
+export interface DailyGoldResearchReport {
+  id: string;
+  userId: string;
+  reportDate: string;
+  goldCurrentPrice: string;
+  sections: GoldAutoResearchSection[];
+  fullSummary: GoldAutoFullSummary;
+  overallGoldBias: GoldAutoOverallBias;
+  preTradeVerdict: GoldAutoPreTradeVerdict;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewDailyGoldResearchReportInput {
+  reportDate: string;
+  goldCurrentPrice: string;
+  sections: GoldAutoResearchSection[];
+  fullSummary: GoldAutoFullSummary;
+  overallGoldBias: GoldAutoOverallBias;
+  preTradeVerdict: GoldAutoPreTradeVerdict;
+}

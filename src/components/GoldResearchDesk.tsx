@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Download, FileText, History, Save, Search } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, FileText, History, Pencil, RefreshCw, Save, Search, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
+import { buildAutoGoldSummary, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { buildGoldBiasSummary, getGoldChecklistResult, hasMeaningfulGoldResearchInput } from "@/lib/goldResearch";
 import { exportGoldBiasSummaryPdf, exportGoldResearchCsv, exportGoldResearchPackPdf } from "@/lib/goldResearchExporters";
 import { cn } from "@/lib/format";
@@ -13,6 +14,9 @@ import {
   GOLD_PERSONAL_RULE,
   GOLD_RESEARCH_CHECKLIST_LABELS,
   GOLD_SESSION_WINDOWS,
+  type GoldAutoDriverName,
+  type GoldAutoFillResponse,
+  type GoldAutoResearchSection,
   type GoldAnalysisInput,
   type GoldDriverAnalysis,
   type GoldDriverFields,
@@ -166,8 +170,118 @@ const DRIVER_FORM_CONFIG: Record<GoldDriverName, DriverFormConfig> = {
   }
 };
 
+type AutoFieldType = "text" | "textarea" | "url" | "select";
+
+interface AutoSectionFieldConfig {
+  key: keyof GoldAutoResearchSection;
+  label: string;
+  type?: AutoFieldType;
+  options?: string[];
+}
+
+const AUTO_IMPACT_OPTIONS = ["Bullish Gold", "Bearish Gold", "Neutral", "Mixed-Wait"];
+
+const AUTO_SECTION_FIELDS: Record<GoldAutoDriverName, AutoSectionFieldConfig[]> = {
+  "DXY / US Dollar Check": [
+    { key: "currentDataValue", label: "Current Data/Value" },
+    { key: "direction", label: "Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Rejecting Resistance", "Breaking Support", "Breaking Resistance", "Data not verified"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "US Yields Check": [
+    { key: "currentDataValue", label: "Current Data/Value" },
+    { key: "tenYearYieldDirection", label: "10Y Yield Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
+    { key: "twoYearYieldDirection", label: "2Y Yield Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "Real Yields Check": [
+    { key: "currentDataValue", label: "Current Data/Value" },
+    { key: "realYieldsDirection", label: "Real Yields Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "Fed Tone / FOMC Check": [
+    { key: "fedTone", label: "Fed Tone", type: "select", options: ["Hawkish", "Dovish", "Neutral", "Mixed", "Data not verified"] },
+    { key: "rateExpectation", label: "Rate Expectation", type: "select", options: ["Cuts Expected", "Hold Expected", "Hike Expected", "Higher For Longer", "Mixed", "Data not verified"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "CPI / PCE Inflation Check": [
+    { key: "latestInflationData", label: "Latest Inflation Data" },
+    { key: "inflationResult", label: "Inflation Result", type: "select", options: ["Hotter Than Expected", "Softer Than Expected", "In Line", "Mixed", "Data not verified"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "NFP / Jobs Check": [
+    { key: "latestJobsData", label: "Latest Jobs Data" },
+    { key: "jobsResult", label: "Jobs Result", type: "select", options: ["Stronger Than Expected", "Weaker Than Expected", "In Line", "Mixed", "Data not verified"] },
+    { key: "unemploymentRate", label: "Unemployment Rate" },
+    { key: "wageGrowth", label: "Wage Growth" },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "Geopolitics / Risk Sentiment Check": [
+    { key: "riskLevel", label: "Risk Level", type: "select", options: ["Low", "Medium", "High", "Extreme", "Data not verified"] },
+    { key: "dxyReaction", label: "DXY Reaction", type: "select", options: ["Rising", "Falling", "Stable", "Unknown"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "ETF / Central Bank Demand Check": [
+    { key: "etfFlowDirection", label: "ETF Flow Direction", type: "select", options: ["Inflows", "Outflows", "Flat", "Unknown"] },
+    { key: "centralBankDemand", label: "Central Bank Demand", type: "select", options: ["Strong Buying", "Weak Buying", "Selling", "Unknown"] },
+    { key: "newsHeadline", label: "News Headline" },
+    { key: "newsSummary", label: "News Summary", type: "textarea" },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ],
+  "Gold Technical Structure Check": [
+    { key: "higherTimeframeBias", label: "Higher Timeframe Bias", type: "select", options: ["Bullish", "Bearish", "Neutral", "Data not verified"] },
+    { key: "keySupport", label: "Key Support" },
+    { key: "keyResistance", label: "Key Resistance" },
+    { key: "liquidityArea", label: "Liquidity Area" },
+    { key: "marketStructure", label: "Market Structure", type: "select", options: ["Bullish", "Bearish", "Ranging", "Data not verified"] },
+    { key: "setupPresent", label: "Setup Present", type: "select", options: ["Yes", "No", "Unclear"] },
+    { key: "setupType", label: "Setup Type", type: "select", options: ["Liquidity Sweep", "BOS", "MSS", "FVG", "OB", "Retest", "Other", "None"] },
+    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
+    { key: "sourceLink", label: "Source Link", type: "url" },
+    { key: "goldTechnicalVerdict", label: "Gold Technical Verdict", type: "select", options: ["Buy Setup", "Sell Setup", "Wait"] },
+    { key: "reason", label: "Reason", type: "textarea" }
+  ]
+};
+
 export function GoldResearchDesk() {
-  const { goldResearchReports, addGoldResearchReport } = useAppData();
+  const { goldResearchReports, addGoldResearchReport, addDailyGoldResearchReport } = useAppData();
   const [selectedDriver, setSelectedDriver] = useState<GoldDriverName>("DXY / US Dollar");
   const [reportDate, setReportDate] = useState(today());
   const [driverFields, setDriverFields] = useState<GoldDriverFields>({});
@@ -177,6 +291,12 @@ export function GoldResearchDesk() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [showSummary, setShowSummary] = useState(false);
+  const [autoReport, setAutoReport] = useState<GoldAutoFillResponse | null>(null);
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoMessage, setAutoMessage] = useState("");
+  const [editingAutoDriver, setEditingAutoDriver] = useState<GoldAutoDriverName | null>(null);
+  const [showAutoSummary, setShowAutoSummary] = useState(false);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -188,6 +308,92 @@ export function GoldResearchDesk() {
     cutoff.setDate(cutoff.getDate() - 7);
     return goldResearchReports.filter((report) => new Date(`${report.reportDate}T00:00:00`) >= cutoff);
   }, [goldResearchReports]);
+
+  async function autoFillGoldResearch() {
+    setAutoLoading(true);
+    setAutoMessage("Researching current Gold drivers...");
+
+    try {
+      const response = await fetch("/api/gold-research/auto-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: reportDate || today() })
+      });
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Unable to auto-fill Gold research.");
+
+      const normalized = normalizeAutoFillResponse(result);
+      setAutoReport(normalized);
+      setReportDate(normalized.date);
+      setShowAutoSummary(true);
+      setEditingAutoDriver(null);
+      setAutoMessage(normalized.warning ?? "Auto-fill complete. Review and edit the research before saving.");
+    } catch (error) {
+      setAutoMessage(error instanceof Error ? error.message : "Unable to auto-fill Gold research.");
+    } finally {
+      setAutoLoading(false);
+    }
+  }
+
+  function updateAutoSectionField(driver: GoldAutoDriverName, key: keyof GoldAutoResearchSection, value: string) {
+    setAutoReport((current) => {
+      if (!current) return current;
+      const sections = current.sections.map((section) => (section.driver === driver ? { ...section, [key]: value } : section));
+      return {
+        ...current,
+        sections,
+        fullSummary: buildAutoGoldSummary(sections)
+      };
+    });
+  }
+
+  function generateAutoSummary() {
+    if (!autoReport) {
+      setAutoMessage("Auto-fill the Gold data first, then generate the full summary.");
+      return;
+    }
+
+    setAutoReport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        fullSummary: buildAutoGoldSummary(current.sections)
+      };
+    });
+    setShowAutoSummary(true);
+    setAutoMessage("Full Gold bias summary generated from the current 9 sections.");
+  }
+
+  async function saveDailyGoldResearch() {
+    if (!autoReport) return;
+    setAutoSaving(true);
+    setAutoMessage("");
+
+    try {
+      const fullSummary = buildAutoGoldSummary(autoReport.sections);
+      await addDailyGoldResearchReport({
+        reportDate: autoReport.date,
+        goldCurrentPrice: autoReport.goldCurrentPrice,
+        sections: autoReport.sections,
+        fullSummary,
+        overallGoldBias: fullSummary.overallGoldBias,
+        preTradeVerdict: fullSummary.preTradeVerdict
+      });
+      setAutoReport((current) => (current ? { ...current, fullSummary } : current));
+      setShowAutoSummary(true);
+      setAutoMessage("Daily Gold research saved to Supabase.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unable to save daily Gold research.";
+      setAutoMessage(
+        errorMessage.includes("daily_gold_research_reports")
+          ? `${errorMessage}. Run supabase/daily-gold-research-reports.sql in Supabase SQL Editor, then try saving again.`
+          : errorMessage
+      );
+    } finally {
+      setAutoSaving(false);
+    }
+  }
 
   async function analyzeDriver() {
     const input = buildAnalysisInput(selectedDriver, reportDate, driverFields);
@@ -266,6 +472,66 @@ export function GoldResearchDesk() {
           History
         </Link>
       </header>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">AI Gold Auto-Fill</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pull current Gold/XAUUSD drivers into the 9-point pre-trade checklist, then review and save.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void autoFillGoldResearch()}
+            disabled={autoLoading}
+            className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"
+          >
+            {autoLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {autoLoading ? "Researching current Gold drivers..." : "Auto-Fill Today's Gold Data"}
+          </button>
+        </div>
+
+        <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>AI research can make mistakes. Confirm major data, prices, and news before trading.</p>
+        </div>
+
+        {autoMessage ? <p className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{autoMessage}</p> : null}
+
+        {autoReport ? (
+          <div className="mt-5 space-y-5">
+            <div className="grid gap-3 md:grid-cols-3">
+              <AutoMeta label="Report date" value={autoReport.date} />
+              <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "Data not verified."} />
+              <AutoMeta label="Overall bias" value={autoReport.fullSummary.overallGoldBias} />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={generateAutoSummary} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <FileText className="h-4 w-4" />
+                Generate Full Gold Bias Summary
+              </button>
+              <button type="button" onClick={() => void saveDailyGoldResearch()} disabled={autoSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-slate-800">
+                <Save className="h-4 w-4" />
+                {autoSaving ? "Saving..." : "Save Daily Gold Research"}
+              </button>
+            </div>
+
+            {showAutoSummary ? <AutoFullSummaryPanel report={autoReport} /> : null}
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              {autoReport.sections.map((section) => (
+                <AutoSectionCard
+                  key={section.driver}
+                  section={section}
+                  editing={editingAutoDriver === section.driver}
+                  onEdit={() => setEditingAutoDriver((current) => (current === section.driver ? null : section.driver))}
+                  onChange={(key, value) => updateAutoSectionField(section.driver, key, value)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {GOLD_DRIVER_NAMES.map((driver) => (
@@ -401,6 +667,138 @@ export function GoldResearchDesk() {
       </section>
     </div>
   );
+}
+
+function AutoMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-slate-50 px-4 py-3 text-sm dark:bg-slate-950">
+      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function AutoFullSummaryPanel({ report }: { report: GoldAutoFillResponse }) {
+  const summary = report.fullSummary;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-semibold">Full Gold Bias Summary</h3>
+        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.overallGoldBias))}>{summary.overallGoldBias}</span>
+        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.preTradeVerdict))}>{summary.preTradeVerdict}</span>
+      </div>
+      <div className="mt-4 grid gap-2 text-sm">
+        <ResultRow label="Bullish drivers" value={summary.bullishDrivers.length ? summary.bullishDrivers.join("; ") : "None"} />
+        <ResultRow label="Bearish drivers" value={summary.bearishDrivers.length ? summary.bearishDrivers.join("; ") : "None"} />
+        <ResultRow label="Mixed drivers" value={summary.mixedDrivers.length ? summary.mixedDrivers.join("; ") : "None"} />
+        <ResultRow label="Strongest bullish driver" value={summary.strongestBullishDriver} />
+        <ResultRow label="Strongest bearish driver" value={summary.strongestBearishDriver} />
+        <ResultRow label="Main risk today" value={summary.mainRiskToday} />
+        <ResultRow label="Best session to trade" value={summary.bestSessionToTrade} />
+        <ResultRow label="Final guidance" value={summary.finalGuidance} />
+        <ResultRow label="Personal rule" value={summary.personalRule} />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {report.sections.map((section) => (
+          <div key={section.driver} className="rounded-md border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+            <p className="font-semibold">{section.driver}</p>
+            <div className="mt-3 grid gap-2">
+              <ResultRow label="News Headline" value={section.newsHeadline || "Data not verified."} />
+              <ResultRow label="News Summary" value={section.newsSummary || "Data not verified."} />
+              <ResultRow label="Chart Observation" value={section.chartObservation || "Data not verified."} />
+              <ResultRow label="Gold Bias" value={section.goldImpact} />
+              <ResultRow label="Impact" value={section.goldImpact} />
+              <ResultRow label="Confidence" value={section.sourceLink && section.sourceLink !== "Not found" ? "Source linked" : "Data not verified"} />
+              <ResultRow label="Final Guidance" value={section.reason || "Wait for technical confirmation."} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AutoSectionCard({
+  section,
+  editing,
+  onEdit,
+  onChange
+}: {
+  section: GoldAutoResearchSection;
+  editing: boolean;
+  onEdit: () => void;
+  onChange: (key: keyof GoldAutoResearchSection, value: string) => void;
+}) {
+  const fields = AUTO_SECTION_FIELDS[section.driver];
+  const badgeValue = section.driver === "Gold Technical Structure Check" ? section.goldTechnicalVerdict || section.goldImpact : section.goldImpact;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-950 dark:text-slate-50">{section.driver}</h3>
+          <span className={cn("mt-2 inline-flex rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(badgeValue))}>{badgeValue || "Mixed-Wait"}</span>
+        </div>
+        <button type="button" onClick={onEdit} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-800">
+          <Pencil className="h-4 w-4" />
+          {editing ? "Done" : "Edit"}
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {fields.map((field) => (
+          <div key={String(field.key)} className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950">
+            <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{field.label}</p>
+            <div className="mt-1">
+              {editing ? (
+                <AutoFieldInput config={field} value={String(section[field.key] ?? "")} onChange={(value) => onChange(field.key, value)} />
+              ) : (
+                <AutoFieldValue label={field.label} value={String(section[field.key] ?? "")} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AutoFieldInput({ config, value, onChange }: { config: AutoSectionFieldConfig; value: string; onChange: (value: string) => void }) {
+  if (config.type === "select") {
+    const options = config.options ?? [];
+    return (
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        <option value="">Select value</option>
+        {value && !options.includes(value) ? <option value={value}>{value}</option> : null}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (config.type === "textarea") {
+    return <textarea value={value} onChange={(event) => onChange(event.target.value)} className={`${inputClass} min-h-24`} />;
+  }
+
+  return <input type={config.type === "url" ? "url" : "text"} value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
+}
+
+function AutoFieldValue({ label, value }: { label: string; value: string }) {
+  if (label === "Source Link" && isUrl(value)) {
+    return (
+      <a href={value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all font-medium text-slate-950 underline underline-offset-4 dark:text-slate-100">
+        {value}
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      </a>
+    );
+  }
+
+  return <p className="whitespace-pre-wrap break-words text-sm text-slate-800 dark:text-slate-100">{value || "Data not verified."}</p>;
 }
 
 function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; value: string; onChange: (value: string) => void }) {
@@ -546,6 +944,22 @@ function getCurrentValue(driverName: GoldDriverName, fields: GoldDriverFields) {
 
 function formatClues(clues: string[]) {
   return clues.length ? clues.join("; ") : "None detected yet";
+}
+
+function isUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function autoBadgeClass(value: string) {
+  if (value === "Bullish" || value === "Bullish Gold" || value === "Buy Setup" || value === "Trade Allowed") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
+  if (value === "Bearish" || value === "Bearish Gold" || value === "Sell Setup") return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
+  if (value === "Mixed-Wait" || value === "Wait" || value === "Avoid Before News") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
 }
 
 function biasClass(value: string) {
