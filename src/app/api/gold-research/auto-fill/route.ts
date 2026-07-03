@@ -6,7 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = "gpt-4.1-mini";
+// Change this later only if you want to manually use a different OpenAI model.
+const DEFAULT_MODEL = "gpt-4o-mini";
 
 const SYSTEM_INSTRUCTION =
   "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Always include source links. If data is not verified, say so. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
@@ -63,6 +64,7 @@ async function requestStructuredReport(apiKey: string, reportDate: string, mode:
     },
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+      max_output_tokens: 3000,
       tools: [{ type: "web_search" }],
       tool_choice: "auto",
       input: [
