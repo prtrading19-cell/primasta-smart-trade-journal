@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 .dark {
@@ -16,13 +16,13 @@
 
 body {
   min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #05070A;
+  color: #F8FAFC;
 }
 
 .dark body {
-  background: #020617;
-  color: #e2e8f0;
+  background: #05070A;
+  color: #F8FAFC;
 }
 
 button,
@@ -38,5 +38,34 @@ textarea {
 }
 
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 dark:focus:ring-slate-200 dark:focus:ring-offset-slate-950;
+  @apply focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-surface-base;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F172A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+::selection {
+  background: rgba(212, 175, 55, 0.3);
+  color: #F8FAFC;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }

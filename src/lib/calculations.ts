@@ -125,9 +125,9 @@ export function getEquityCurve(trades: Trade[]) {
 export function getWinLossChart(trades: Trade[]) {
   const metrics = calculateMetrics(trades);
   return [
-    { name: "Wins", value: metrics.wins, fill: "#16a34a" },
-    { name: "Losses", value: metrics.losses, fill: "#dc2626" },
-    { name: "Break-even", value: metrics.breakEvens, fill: "#f59e0b" }
+    { name: "Wins", value: metrics.wins, fill: "#16C784" },
+    { name: "Losses", value: metrics.losses, fill: "#EA3943" },
+    { name: "Break-even", value: metrics.breakEvens, fill: "#D4AF37" }
   ];
 }
 
