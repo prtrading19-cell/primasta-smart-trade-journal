@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Download, ExternalLink, FileText, History, Pencil, RefreshCw, Save, Search, Sparkles } from "lucide-react";
+import { Activity, AlertTriangle, BrainCircuit, Database, Download, ExternalLink, FileText, Gauge, History, Layers3, Pencil, RefreshCw, Save, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
 import { buildAutoGoldSummary, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
@@ -430,6 +430,11 @@ export function GoldResearchDesk() {
   const setupResearch = useMemo(() => buildSetupResearchSummary(setupInputs.mode === "Assisted" ? activeDailyResearch : autoReport, biasSummary), [activeDailyResearch, autoReport, biasSummary, setupInputs.mode]);
   const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
   const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
+  const marketDataConnected = marketData?.status === "success";
+  const terminalGoldPrice = marketData?.currentPrice || autoReport?.goldCurrentPrice || setupInputs.currentGoldPrice || "Awaiting feed";
+  const terminalLastUpdated = marketData?.lastUpdated || autoReport?.date || activeDailyResearch?.reportDate || "Not synced";
+  const terminalReportDate = activeDailyResearch?.reportDate || autoReport?.date || reportDate;
+  const autoImpactCounts = useMemo(() => getAutoImpactCounts(autoReport), [autoReport]);
 
   useEffect(() => {
     if (!autoReport?.goldCurrentPrice) return;
@@ -727,23 +732,32 @@ export function GoldResearchDesk() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Gold Research</p>
-          <h1 className="text-2xl font-bold tracking-tight">PRIMASTA GOLD RESEARCH DESK</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Are Gold drivers, liquidity, structure, risk, and psychology aligned, or should you wait?</p>
-        </div>
-        <Link href="/gold-research/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">
-          <History className="h-4 w-4" />
-          History
-        </Link>
-      </header>
+      <GoldTerminalHeader
+        currentPrice={terminalGoldPrice}
+        overallBias={setupResearch.overallGoldBias || "Mixed-Wait"}
+        reportDate={terminalReportDate}
+        lastUpdated={terminalLastUpdated}
+        marketDataConnected={marketDataConnected}
+        checklistResult={checklistResult.result}
+        bullishCount={autoImpactCounts.bullish}
+        bearishCount={autoImpactCounts.bearish}
+        mixedCount={autoImpactCounts.mixed}
+      />
+
+      <ResearchEngineStatus
+        marketDataConnected={marketDataConnected}
+        hasAutoReport={Boolean(autoReport)}
+        liquidityConfirmed={liquidityLevelsConfirmed}
+        setupResult={setupResult}
+        riskRewardPasses={setupRiskReward.passes}
+      />
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">AI Gold Auto-Fill</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pull current Gold/XAUUSD drivers into the 9-point pre-trade checklist, then review and save.</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">AI Research Layer</p>
+            <h2 className="mt-1 text-lg font-semibold">Gold driver auto-fill and source review</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pull current Gold/XAUUSD drivers into the 9-point pre-trade checklist, then review, edit, and save the research pack.</p>
           </div>
           <button
             type="button"
@@ -799,16 +813,38 @@ export function GoldResearchDesk() {
         ) : null}
       </section>
 
+      <GoldDriverHeatmap
+        report={autoReport}
+        selectedDriver={selectedDriver}
+        onSelect={(driver) => {
+          setSelectedDriver(driver);
+          setDriverFields({});
+          setAnalysis(null);
+          setMessage("");
+          setShowSummary(false);
+        }}
+      />
+
       {showSetupAssistant ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5 text-stone-50 shadow-soft">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Gold Trade Setup Assistant</p>
-              <h2 className="text-xl font-bold tracking-tight">GOLD TRADE SETUP ASSISTANT</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Build a structured Buy, Sell, Pending Confirmation, or WAIT setup from research, liquidity, structure, strategy, and risk.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Execution Readiness Layer</p>
+              <h2 className="mt-1 text-xl font-bold tracking-tight text-white">GOLD TRADE SETUP ASSISTANT</h2>
+              <p className="mt-1 text-sm text-stone-400">Build a structured Buy, Sell, Pending Confirmation, or WAIT setup from research, liquidity, structure, strategy, and risk.</p>
             </div>
             <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(setupResearch.overallGoldBias))}>{setupResearch.overallGoldBias || "Mixed-Wait"}</span>
           </div>
+
+          <SetupDecisionPanel
+            result={setupResult}
+            research={setupResearch}
+            riskReward={setupRiskReward}
+            liquidityConfirmed={liquidityLevelsConfirmed}
+            levelsFromMarketData={levelsFromMarketData}
+            marketDataConnected={marketDataConnected}
+            inputs={setupInputs}
+          />
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <InfoBox title="Buy-side liquidity" text="Liquidity resting above highs where buy stops and breakout orders may sit." />
@@ -847,7 +883,7 @@ export function GoldResearchDesk() {
 
           {setupInputs.mode === "Assisted" ? (
             <div className="mt-4 space-y-3">
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+              <div className="rounded-md border border-stone-800 bg-stone-950 p-4 text-sm text-stone-200">
                 <p>
                   Assisted Mode uses your latest Gold Research report, the liquidity/price levels you enter from your chart, and your Smart Journal strategy list. It does not invent liquidity levels. If current price, buy-side liquidity, sell-side liquidity, support, resistance, or structure are missing, the setup verdict must be WAIT or Pending Confirmation.
                 </p>
@@ -859,11 +895,11 @@ export function GoldResearchDesk() {
                 <SourceCard label="Risk Source" value="Entry, SL, and TP fields" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <button type="button" onClick={() => void loadLatestGoldResearch()} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                <button type="button" onClick={() => void loadLatestGoldResearch()} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-3 text-sm font-semibold text-stone-100 hover:bg-stone-900">
                   <RefreshCw className="h-4 w-4" />
                   Load Latest Gold Research
                 </button>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-stone-400">
                   {activeDailyResearch ? `Report date used: ${activeDailyResearch.reportDate}` : "No saved daily research loaded yet."}
                 </p>
               </div>
@@ -906,50 +942,59 @@ export function GoldResearchDesk() {
             ))}
           </div>
 
-          <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:bg-slate-950 dark:text-slate-200">{GOLD_PERSONAL_RULE}</p>
+          <p className="mt-4 rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm font-medium text-stone-200">{GOLD_PERSONAL_RULE}</p>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={() => void generateGoldTradeSetup()} disabled={setupLoading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
               {setupLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {setupLoading ? "Generating..." : "Generate Gold Trade Setup"}
             </button>
-            <button type="button" onClick={() => void saveGoldTradeSetup()} disabled={!setupResult || setupSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-slate-800">
+            <button type="button" onClick={() => void saveGoldTradeSetup()} disabled={!setupResult || setupSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-stone-700 px-5 py-3 text-sm font-semibold text-stone-100 disabled:opacity-60">
               <Save className="h-4 w-4" />
               {setupSaving ? "Saving..." : "Save Trade Setup"}
             </button>
             {setupResult ? <UseSetupLink setup={setupResult} savedSetup={savedSetup} /> : null}
           </div>
 
-          {setupMessage ? <p className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{setupMessage}</p> : null}
+          {setupMessage ? <p className="mt-3 rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm text-stone-300">{setupMessage}</p> : null}
           {setupResult ? <GoldTradeSetupResultCard result={setupResult} /> : null}
         </section>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {GOLD_DRIVER_NAMES.map((driver) => (
-          <button
-            key={driver}
-            type="button"
-            onClick={() => {
-              setSelectedDriver(driver);
-              setDriverFields({});
-              setAnalysis(null);
-              setMessage("");
-              setShowSummary(false);
-            }}
-            className={cn(
-              "rounded-lg border px-4 py-3 text-left text-sm font-semibold transition",
-              selectedDriver === driver
-                ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
-                : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
-            )}
-          >
-            Analyze {driver}
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Manual Driver Lab</p>
+            <h2 className="mt-1 text-lg font-semibold">Open a specific Gold driver</h2>
+          </div>
+          <button type="button" onClick={() => setShowSummary(true)} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <FileText className="h-4 w-4" />
+            Generate Full Gold Bias Summary
           </button>
-        ))}
-        <button type="button" onClick={() => setShowSummary(true)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-          Generate Full Gold Bias Summary
-        </button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {GOLD_DRIVER_NAMES.map((driver) => (
+            <button
+              key={driver}
+              type="button"
+              onClick={() => {
+                setSelectedDriver(driver);
+                setDriverFields({});
+                setAnalysis(null);
+                setMessage("");
+                setShowSummary(false);
+              }}
+              className={cn(
+                "rounded-md border px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5",
+                selectedDriver === driver
+                  ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                  : "border-slate-200 bg-slate-50 hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+              )}
+            >
+              {driver}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -1061,26 +1106,224 @@ export function GoldResearchDesk() {
   );
 }
 
+function GoldTerminalHeader({
+  currentPrice,
+  overallBias,
+  reportDate,
+  lastUpdated,
+  marketDataConnected,
+  checklistResult,
+  bullishCount,
+  bearishCount,
+  mixedCount
+}: {
+  currentPrice: string;
+  overallBias: string;
+  reportDate: string;
+  lastUpdated: string;
+  marketDataConnected: boolean;
+  checklistResult: string;
+  bullishCount: number;
+  bearishCount: number;
+  mixedCount: number;
+}) {
+  return (
+    <header className="overflow-hidden rounded-lg border border-stone-800 bg-[#0a0907] p-5 text-white shadow-soft">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">PRIMASTA Research Engine</p>
+          <h1 className="mt-2 max-w-4xl text-3xl font-bold tracking-tight text-white md:text-4xl">Gold Institutional Command Center</h1>
+          <p className="mt-2 max-w-3xl text-sm text-stone-400">Macro drivers, market data, chart confirmation, setup readiness, and risk control in one professional XAUUSD research workflow.</p>
+        </div>
+        <Link href="/gold-research/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-amber-400/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/15">
+          <History className="h-4 w-4" />
+          History
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? "Twelve Data connected" : "Awaiting market feed"} tone={marketDataConnected ? "success" : "warning"} />
+        <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
+        <TerminalMetric icon={<Layers3 className="h-4 w-4" />} label="Driver Stack" value={`${bullishCount}B / ${bearishCount}S / ${mixedCount}M`} detail="Bullish, bearish, mixed" tone="neutral" />
+        <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Checklist" value={checklistResult} detail="Pre-trade readiness" tone={checklistResult === "Aligned" ? "success" : checklistResult === "Wait" ? "warning" : "neutral"} />
+        <TerminalMetric icon={<Database className="h-4 w-4" />} label="Last Sync" value={lastUpdated} detail="Research and market data" tone="neutral" />
+      </div>
+    </header>
+  );
+}
+
+function TerminalMetric({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: "success" | "warning" | "danger" | "neutral" }) {
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-950/80 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">{label}</p>
+        <span className={cn("flex h-8 w-8 items-center justify-center rounded-md", terminalToneClass(tone))}>{icon}</span>
+      </div>
+      <p className="mt-3 text-xl font-bold tracking-tight text-white">{value || "-"}</p>
+      <p className="mt-1 text-xs text-stone-500">{detail}</p>
+    </div>
+  );
+}
+
+function ResearchEngineStatus({
+  marketDataConnected,
+  hasAutoReport,
+  liquidityConfirmed,
+  setupResult,
+  riskRewardPasses
+}: {
+  marketDataConnected: boolean;
+  hasAutoReport: boolean;
+  liquidityConfirmed: boolean;
+  setupResult: GoldTradeSetupResult | null;
+  riskRewardPasses: boolean;
+}) {
+  const layers = [
+    { icon: Database, label: "Market Data Layer", status: marketDataConnected ? "Connected" : "Not connected", tone: marketDataConnected ? "success" : "warning" },
+    { icon: BrainCircuit, label: "AI Analysis Layer", status: hasAutoReport ? "Research loaded" : "Awaiting auto-fill", tone: hasAutoReport ? "success" : "neutral" },
+    { icon: ShieldCheck, label: "Chart Confirmation Layer", status: liquidityConfirmed ? "Confirmed" : "Needs confirmation", tone: liquidityConfirmed ? "success" : "warning" },
+    { icon: Gauge, label: "Execution Readiness", status: setupResult?.setupVerdict ?? (riskRewardPasses ? "Risk ready" : "Risk not ready"), tone: setupResult?.setupVerdict === "Buy Setup" || setupResult?.setupVerdict === "Sell Setup" ? "success" : setupResult?.setupVerdict === "Wait" ? "danger" : riskRewardPasses ? "neutral" : "warning" }
+  ] as const;
+
+  return (
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {layers.map((layer) => {
+        const Icon = layer.icon;
+        return (
+          <div key={layer.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center gap-3">
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-md", terminalToneClass(layer.tone))}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{layer.label}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{layer.status}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function GoldDriverHeatmap({ report, selectedDriver, onSelect }: { report: GoldAutoFillResponse | null; selectedDriver: GoldDriverName; onSelect: (driver: GoldDriverName) => void }) {
+  const items = report?.sections.length
+    ? report.sections.map((section) => ({
+        label: section.driver.replace(" Check", ""),
+        driver: getDriverFromAutoDriver(section.driver),
+        impact: section.goldImpact,
+        summary: section.reason || section.newsHeadline || "Research loaded"
+      }))
+    : GOLD_DRIVER_NAMES.map((driver) => ({
+        label: driver,
+        driver,
+        impact: "Awaiting data",
+        summary: "Run Auto-Fill or enter research manually"
+      }));
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Macro Driver Heatmap</p>
+          <h2 className="mt-1 text-lg font-semibold">Gold driver impact stack</h2>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Click a driver to open its research form.</p>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {items.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => onSelect(item.driver)}
+            className={cn(
+              "focus-ring min-h-28 rounded-md border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md",
+              selectedDriver === item.driver ? "border-slate-950 ring-2 ring-slate-950/10 dark:border-white dark:ring-white/10" : "border-slate-200 dark:border-slate-800",
+              heatmapToneClass(item.impact)
+            )}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.12em] opacity-70">{item.impact}</p>
+            <p className="mt-2 text-sm font-semibold">{item.label}</p>
+            <p className="mt-2 line-clamp-2 text-xs opacity-75">{item.summary}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SetupDecisionPanel({
+  result,
+  research,
+  riskReward,
+  liquidityConfirmed,
+  levelsFromMarketData,
+  marketDataConnected,
+  inputs
+}: {
+  result: GoldTradeSetupResult | null;
+  research: GoldTradeSetupResearchSummary;
+  riskReward: ReturnType<typeof calculateGoldSetupRiskReward>;
+  liquidityConfirmed: boolean;
+  levelsFromMarketData: boolean;
+  marketDataConnected: boolean;
+  inputs: GoldTradeSetupInputs;
+}) {
+  const liquidityReady = Boolean(inputs.buySideLiquidityLevel && inputs.sellSideLiquidityLevel && (!levelsFromMarketData || liquidityConfirmed));
+  const structureReady = inputs.marketStructure !== "Ranging" && (inputs.marketStructureShiftHappened === "Yes" || inputs.breakOfStructureHappened === "Yes");
+  const verdict = result?.setupVerdict ?? (liquidityReady && riskReward.passes && structureReady ? "Ready to Analyze" : "Pending Confirmation");
+
+  const decisions = [
+    { label: "Setup Verdict", value: verdict, tone: verdict === "Buy Setup" || verdict === "Sell Setup" ? "success" : verdict === "Wait" ? "danger" : "warning" },
+    { label: "Bias Alignment", value: research.overallGoldBias || "Mixed-Wait", tone: biasTone(research.overallGoldBias) },
+    { label: "Liquidity Confirmation", value: liquidityReady ? "Confirmed" : levelsFromMarketData ? "Suggested only" : "Manual check needed", tone: liquidityReady ? "success" : "warning" },
+    { label: "Risk-to-Reward", value: riskReward.ratio === null ? "Not ready" : `1:${riskReward.ratio.toFixed(2)}`, tone: riskReward.passes ? "success" : "warning" },
+    { label: "Market Data", value: marketDataConnected ? "Connected" : "Not connected", tone: marketDataConnected ? "success" : "neutral" },
+    { label: "Structure", value: structureReady ? "MSS/BOS ready" : inputs.marketStructure, tone: structureReady ? "success" : "warning" }
+  ] as const;
+
+  return (
+    <div className="mt-5 rounded-lg border border-stone-800 bg-stone-950 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Decision Matrix</p>
+          <h3 className="mt-1 text-lg font-semibold text-white">Execution readiness summary</h3>
+        </div>
+        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(verdict))}>{verdict}</span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        {decisions.map((item) => (
+          <div key={item.label} className="rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">{item.label}</p>
+            <p className={cn("mt-2 text-sm font-semibold", decisionToneClass(item.tone))}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function InfoBox({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-950">
-      <p className="font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-      <p className="mt-1 text-slate-600 dark:text-slate-300">{text}</p>
+    <div className="rounded-md border border-stone-800 bg-stone-950 p-4 text-sm">
+      <p className="font-semibold text-white">{title}</p>
+      <p className="mt-1 text-stone-400">{text}</p>
     </div>
   );
 }
 
 function SourceCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">{value}</p>
+    <div className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="mt-1 font-medium text-stone-100">{value}</p>
     </div>
   );
 }
 
 function SourceLabel({ label }: { label: string }) {
-  return <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{label}</span>;
+  return <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[11px] font-bold uppercase text-amber-200">{label}</span>;
 }
 
 function getSetupSectionSource(title: string) {
@@ -1111,12 +1354,12 @@ function MarketDataSourcePanel({
   const connected = display.status === "success";
 
   return (
-    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+    <div className="mt-5 rounded-lg border border-stone-800 bg-stone-950 p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Market Data Source</p>
-          <h3 className="mt-1 text-base font-semibold">Twelve Data XAUUSD levels</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Market Data Source</p>
+          <h3 className="mt-1 text-base font-semibold text-white">Twelve Data XAUUSD levels</h3>
+          <p className="mt-1 text-sm text-stone-400">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
         </div>
         <button type="button" onClick={onFetch} disabled={loading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
           {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -1136,25 +1379,25 @@ function MarketDataSourcePanel({
         <MarketDataMetric label="Suggested resistance" value={display.suggestedResistance || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
       </div>
 
-      {message ? <p className="mt-3 rounded-md bg-white px-4 py-3 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{message}</p> : null}
+      {message ? <p className="mt-3 rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm text-stone-200">{message}</p> : null}
 
       <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>Market data liquidity levels are suggestions. Confirm levels on your broker or TradingView chart before trading.</span>
       </div>
 
-      <label className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+      <label className="mt-4 flex items-start gap-3 rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm font-medium text-stone-200">
         <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmChange(event.target.checked)} className="mt-1 h-4 w-4 rounded border-slate-300" />
         <span>
           I confirm these liquidity levels on my chart.
-          {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
+          {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-stone-500">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
         </span>
       </label>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-          <p className="text-sm font-semibold">TradingView confirmation chart</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Use this chart to confirm the suggested liquidity levels before entering a trade.</p>
+      <div className="mt-5 overflow-hidden rounded-lg border border-stone-800 bg-[#0d0c09]">
+        <div className="flex flex-col gap-1 border-b border-stone-800 px-4 py-3">
+          <p className="text-sm font-semibold text-white">TradingView confirmation chart</p>
+          <p className="text-xs text-stone-500">Use this chart to confirm the suggested liquidity levels before entering a trade.</p>
         </div>
         <iframe
           title="TradingView OANDA XAUUSD chart"
@@ -1170,10 +1413,10 @@ function MarketDataSourcePanel({
 
 function MarketDataMetric({ label, value, tag, tone = "neutral" }: { label: string; value: string; tag?: string; tone?: "success" | "neutral" }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
-      <p className={cn("mt-1 font-semibold", tone === "success" ? "text-emerald-700 dark:text-emerald-300" : "text-slate-900 dark:text-slate-100")}>{value}</p>
-      {tag ? <p className="mt-2 text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">{tag}</p> : null}
+    <div className="rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className={cn("mt-1 font-semibold", tone === "success" ? "text-emerald-300" : "text-stone-100")}>{value}</p>
+      {tag ? <p className="mt-2 text-[11px] font-bold uppercase text-amber-300/80">{tag}</p> : null}
     </div>
   );
 }
@@ -1576,7 +1819,7 @@ function ExportButton({ label, onClick }: { label: string; onClick: () => void }
 
 function Field({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <label className={cn("block text-sm font-medium text-slate-700 dark:text-slate-200", wide ? "md:col-span-2" : "")}>
+    <label className={cn("block text-sm font-medium", wide ? "md:col-span-2" : "")}>
       {label}
       <div className="mt-1">{children}</div>
     </label>
@@ -1645,6 +1888,28 @@ function splitDriverList(value: string) {
   return value && value !== "None" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
 }
 
+function getAutoImpactCounts(report: GoldAutoFillResponse | null) {
+  const counts = { bullish: 0, bearish: 0, mixed: 0 };
+  report?.sections.forEach((section) => {
+    if (section.goldImpact === "Bullish Gold") counts.bullish += 1;
+    else if (section.goldImpact === "Bearish Gold") counts.bearish += 1;
+    else counts.mixed += 1;
+  });
+  return counts;
+}
+
+function getDriverFromAutoDriver(driver: GoldAutoDriverName): GoldDriverName {
+  if (driver === "DXY / US Dollar Check") return "DXY / US Dollar";
+  if (driver === "US Yields Check") return "US Yields";
+  if (driver === "Real Yields Check") return "Real Yields";
+  if (driver === "Fed Tone / FOMC Check") return "Fed Tone / FOMC";
+  if (driver === "CPI / PCE Inflation Check") return "CPI / PCE";
+  if (driver === "NFP / Jobs Check") return "NFP / Jobs";
+  if (driver === "Geopolitics / Risk Sentiment Check") return "Geopolitics";
+  if (driver === "ETF / Central Bank Demand Check") return "ETF / Central Bank Demand";
+  return "Custom News";
+}
+
 function inferTradeType(setup: GoldTradeSetupResult) {
   if (setup.setupVerdict === "Sell Setup" || /bearish|sell/i.test(`${setup.overallGoldBias} ${setup.finalGuidance}`)) return "Sell";
   return "Buy";
@@ -1668,6 +1933,34 @@ function autoBadgeClass(value: string) {
   if (value === "Bearish" || value === "Bearish Gold" || value === "Sell Setup") return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
   if (value === "Mixed-Wait" || value === "Wait" || value === "Avoid Before News") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
   return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+}
+
+function biasTone(value: string): "success" | "warning" | "danger" | "neutral" {
+  if (/bullish/i.test(value)) return "success";
+  if (/bearish/i.test(value)) return "danger";
+  if (/mixed|wait|neutral/i.test(value)) return "warning";
+  return "neutral";
+}
+
+function terminalToneClass(tone: "success" | "warning" | "danger" | "neutral") {
+  if (tone === "success") return "bg-emerald-400/10 text-emerald-300";
+  if (tone === "danger") return "bg-red-400/10 text-red-300";
+  if (tone === "warning") return "bg-amber-300/10 text-amber-300";
+  return "bg-stone-800 text-stone-300";
+}
+
+function decisionToneClass(tone: "success" | "warning" | "danger" | "neutral") {
+  if (tone === "success") return "text-emerald-300";
+  if (tone === "danger") return "text-red-300";
+  if (tone === "warning") return "text-amber-300";
+  return "text-stone-200";
+}
+
+function heatmapToneClass(impact: string) {
+  if (impact === "Bullish Gold") return "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100";
+  if (impact === "Bearish Gold") return "bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-100";
+  if (impact === "Mixed-Wait") return "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100";
+  return "bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100";
 }
 
 function biasClass(value: string) {
