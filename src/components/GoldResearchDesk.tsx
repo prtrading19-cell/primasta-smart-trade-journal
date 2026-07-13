@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Activity, AlertTriangle, BrainCircuit, Database, Download, ExternalLink, FileText, Gauge, History, Layers3, Pencil, RefreshCw, Save, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
-import { buildAutoGoldSummary, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
+import { buildAutoGoldSummary, createEmptyAutoFillResponse, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { buildGoldBiasSummary, getGoldChecklistResult, hasMeaningfulGoldResearchInput } from "@/lib/goldResearch";
 import { exportGoldBiasSummaryPdf, exportGoldResearchCsv, exportGoldResearchPackPdf } from "@/lib/goldResearchExporters";
 import { buildManualGoldTradeSetup, calculateGoldSetupRiskReward, enforceGoldTradeSetupRules, normalizeGoldTradeSetupResult } from "@/lib/goldTradeSetup";
@@ -414,6 +414,7 @@ export function GoldResearchDesk() {
   const [marketDataMessage, setMarketDataMessage] = useState("");
   const [levelsFromMarketData, setLevelsFromMarketData] = useState(false);
   const [liquidityLevelsConfirmed, setLiquidityLevelsConfirmed] = useState(false);
+  const [sections, setSections] = useState<GoldAutoResearchSection[]>(createEmptyAutoFillResponse().sections);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -457,6 +458,7 @@ export function GoldResearchDesk() {
 
       const normalized = normalizeAutoFillResponse(result);
       setAutoReport(normalized);
+      setSections(normalized.sections);
       setReportDate(normalized.date);
       setShowAutoSummary(true);
       setEditingAutoDriver(null);
@@ -469,50 +471,50 @@ export function GoldResearchDesk() {
   }
 
   function updateAutoSectionField(driver: GoldAutoDriverName, key: keyof GoldAutoResearchSection, value: string) {
+    setSections((current) => current.map((section) => (section.driver === driver ? { ...section, [key]: value } : section)));
     setAutoReport((current) => {
       if (!current) return current;
-      const sections = current.sections.map((section) => (section.driver === driver ? { ...section, [key]: value } : section));
+      const updatedSections = sections.map((section) => (section.driver === driver ? { ...section, [key]: value } : section));
       return {
         ...current,
-        sections,
-        fullSummary: buildAutoGoldSummary(sections)
+        sections: updatedSections,
+        fullSummary: buildAutoGoldSummary(updatedSections)
       };
     });
   }
 
   function generateAutoSummary() {
-    if (!autoReport) {
-      setAutoMessage("Auto-fill the Gold data first, then generate the full summary.");
-      return;
-    }
-
-    setAutoReport((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        fullSummary: buildAutoGoldSummary(current.sections)
-      };
-    });
+    const summary = buildAutoGoldSummary(sections);
+    setAutoReport((current) => ({
+      date: current?.date || reportDate || today(),
+      goldCurrentPrice: current?.goldCurrentPrice || "",
+      sections,
+      fullSummary: summary
+    }));
     setShowAutoSummary(true);
     setAutoMessage("Full Gold bias summary generated from the current 9 sections.");
   }
 
   async function saveDailyGoldResearch() {
-    if (!autoReport) return;
     setAutoSaving(true);
     setAutoMessage("");
 
     try {
-      const fullSummary = buildAutoGoldSummary(autoReport.sections);
+      const fullSummary = buildAutoGoldSummary(sections);
       await addDailyGoldResearchReport({
-        reportDate: autoReport.date,
-        goldCurrentPrice: autoReport.goldCurrentPrice,
-        sections: autoReport.sections,
+        reportDate: autoReport?.date || reportDate || today(),
+        goldCurrentPrice: autoReport?.goldCurrentPrice || "",
+        sections,
         fullSummary,
         overallGoldBias: fullSummary.overallGoldBias,
         preTradeVerdict: fullSummary.preTradeVerdict
       });
-      setAutoReport((current) => (current ? { ...current, fullSummary } : current));
+      setAutoReport((current) => ({
+        date: current?.date || reportDate || today(),
+        goldCurrentPrice: current?.goldCurrentPrice || "",
+        sections,
+        fullSummary
+      }));
       setShowAutoSummary(true);
       setAutoMessage("Daily Gold research saved to Supabase.");
     } catch (error) {
@@ -752,65 +754,63 @@ export function GoldResearchDesk() {
         riskRewardPasses={setupRiskReward.passes}
       />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">AI Research Layer</p>
-            <h2 className="mt-1 text-lg font-semibold">Gold driver auto-fill and source review</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pull current Gold/XAUUSD drivers into the 9-point pre-trade checklist, then review, edit, and save the research pack.</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">AI Research Layer</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">9-Point Gold Pre-Trade Checklist</h2>
+            <p className="mt-1 text-sm text-text-secondary">Each Gold driver is reviewed with live data, news, chart observation, and impact assessment. Edit any field directly, then generate the full bias summary.</p>
           </div>
           <button
             type="button"
             onClick={() => void autoFillGoldResearch()}
             disabled={autoLoading}
-            className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950"
+            className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-5 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60"
           >
             {autoLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {autoLoading ? "Researching current Gold drivers..." : "Auto-Fill Today's Gold Data"}
           </button>
         </div>
 
-        <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+        <div className="mt-4 flex gap-2 rounded-md border border-gold/20 bg-gold/5 px-4 py-3 text-sm text-gold">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>AI research can make mistakes. Confirm major data, prices, and news before trading.</p>
         </div>
 
-        {autoMessage ? <p className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{autoMessage}</p> : null}
+        {autoMessage ? <p className="mt-3 rounded-md bg-surface-panel px-4 py-3 text-sm text-text-secondary">{autoMessage}</p> : null}
 
         {autoReport ? (
-          <div className="mt-5 space-y-5">
-            <div className="grid gap-3 md:grid-cols-3">
-              <AutoMeta label="Report date" value={autoReport.date} />
-              <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "Data not verified."} />
-              <AutoMeta label="Overall bias" value={autoReport.fullSummary.overallGoldBias} />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={generateAutoSummary} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                <FileText className="h-4 w-4" />
-                Generate Full Gold Bias Summary
-              </button>
-              <button type="button" onClick={() => void saveDailyGoldResearch()} disabled={autoSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-slate-800">
-                <Save className="h-4 w-4" />
-                {autoSaving ? "Saving..." : "Save Daily Gold Research"}
-              </button>
-            </div>
-
-            {showAutoSummary ? <AutoFullSummaryPanel report={autoReport} /> : null}
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              {autoReport.sections.map((section) => (
-                <AutoSectionCard
-                  key={section.driver}
-                  section={section}
-                  editing={editingAutoDriver === section.driver}
-                  onEdit={() => setEditingAutoDriver((current) => (current === section.driver ? null : section.driver))}
-                  onChange={(key, value) => updateAutoSectionField(section.driver, key, value)}
-                />
-              ))}
-            </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <AutoMeta label="Report date" value={autoReport.date} />
+            <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "Data not verified."} />
+            <AutoMeta label="Overall bias" value={autoReport.fullSummary.overallGoldBias} />
           </div>
         ) : null}
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <button type="button" onClick={generateAutoSummary} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-profit/30 bg-profit/10 px-5 py-3 text-sm font-semibold text-profit hover:bg-profit/20">
+            <FileText className="h-4 w-4" />
+            Generate Full Gold Bias Summary
+          </button>
+          <button type="button" onClick={() => void saveDailyGoldResearch()} disabled={autoSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-border-subtle bg-surface-panel px-5 py-3 text-sm font-semibold text-text-primary disabled:opacity-60 hover:bg-surface-elevated">
+            <Save className="h-4 w-4" />
+            {autoSaving ? "Saving..." : "Save Daily Gold Research"}
+          </button>
+        </div>
+
+        {showAutoSummary && autoReport ? <AutoFullSummaryPanel report={autoReport} /> : null}
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {sections.map((section) => (
+            <AutoSectionCard
+              key={section.driver}
+              section={section}
+              editing={editingAutoDriver === section.driver}
+              onEdit={() => setEditingAutoDriver((current) => (current === section.driver ? null : section.driver))}
+              onChange={(key, value) => updateAutoSectionField(section.driver, key, value)}
+            />
+          ))}
+        </div>
       </section>
 
       <GoldDriverHeatmap
@@ -928,7 +928,7 @@ export function GoldResearchDesk() {
             {SETUP_INPUT_SECTIONS.map((section) => (
               <div key={section.title}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{section.title}</p>
+                   <p className="text-xs font-bold uppercase text-text-muted">{section.title}</p>
                   <SourceLabel label={getSetupSectionSource(section.title)} />
                 </div>
                 <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -945,7 +945,7 @@ export function GoldResearchDesk() {
           <p className="mt-4 rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm font-medium text-stone-200">{GOLD_PERSONAL_RULE}</p>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={() => void generateGoldTradeSetup()} disabled={setupLoading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+            <button type="button" onClick={() => void generateGoldTradeSetup()} disabled={setupLoading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-5 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60">
               {setupLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {setupLoading ? "Generating..." : "Generate Gold Trade Setup"}
             </button>
@@ -961,13 +961,13 @@ export function GoldResearchDesk() {
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Manual Driver Lab</p>
-            <h2 className="mt-1 text-lg font-semibold">Open a specific Gold driver</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Manual Driver Lab</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">Open a specific Gold driver</h2>
           </div>
-          <button type="button" onClick={() => setShowSummary(true)} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <button type="button" onClick={() => setShowSummary(true)} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-profit/30 bg-profit/10 px-4 py-3 text-sm font-semibold text-profit hover:bg-profit/20">
             <FileText className="h-4 w-4" />
             Generate Full Gold Bias Summary
           </button>
@@ -987,8 +987,8 @@ export function GoldResearchDesk() {
               className={cn(
                 "rounded-md border px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5",
                 selectedDriver === driver
-                  ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
-                  : "border-slate-200 bg-slate-50 hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+                  ? "border-gold bg-gold/10 text-gold"
+                  : "border-border-subtle bg-surface-panel hover:bg-surface-elevated text-text-primary"
               )}
             >
               {driver}
@@ -998,18 +998,18 @@ export function GoldResearchDesk() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">{selectedDriver}</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formConfig.description}</p>
+              <h2 className="text-lg font-semibold text-text-primary">{selectedDriver}</h2>
+              <p className="mt-1 text-sm text-text-secondary">{formConfig.description}</p>
             </div>
             <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className={inputClass} />
           </div>
           <div className="mt-4 space-y-5">
             {driverSpecificFields.length ? (
               <div>
-                <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Driver-specific data</p>
+                <p className="text-xs font-bold uppercase text-text-muted">Driver-specific data</p>
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   {driverSpecificFields.map((fieldConfig) => (
                     <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
@@ -1021,7 +1021,7 @@ export function GoldResearchDesk() {
             ) : null}
 
             <div>
-              <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Main research inputs</p>
+              <p className="text-xs font-bold uppercase text-text-muted">Main research inputs</p>
               <div className="mt-3 grid gap-4 md:grid-cols-2">
                 {CORE_RESEARCH_FIELDS.map((fieldConfig) => (
                   <Field key={fieldConfig.key} label={fieldConfig.label} wide={fieldConfig.type === "textarea"}>
@@ -1032,16 +1032,16 @@ export function GoldResearchDesk() {
             </div>
           </div>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={() => void analyzeDriver()} disabled={analyzing} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+            <button type="button" onClick={() => void analyzeDriver()} disabled={analyzing} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-5 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60">
               <Search className="h-4 w-4" />
               {analyzing ? "Analyzing..." : "Analyze Driver"}
             </button>
-            <button type="button" onClick={() => void saveReport()} disabled={!analysis || saving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-slate-800">
+            <button type="button" onClick={() => void saveReport()} disabled={!analysis || saving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-border-subtle bg-surface-panel px-5 py-3 text-sm font-semibold text-text-primary disabled:opacity-60 hover:bg-surface-elevated">
               <Save className="h-4 w-4" />
               {saving ? "Saving..." : "Save Report"}
             </button>
           </div>
-          {message ? <p className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{message}</p> : null}
+          {message ? <p className="mt-3 rounded-md bg-surface-panel px-4 py-3 text-sm text-text-secondary">{message}</p> : null}
         </div>
 
         <div className="space-y-4">
@@ -1051,21 +1051,21 @@ export function GoldResearchDesk() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Gold Pre-Trade Checklist</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Gold Pre-Trade Checklist</h2>
             <span className={cn("rounded-md px-3 py-1 text-xs font-bold", checklistBadgeClass(checklistResult.result))}>
               {checklistResult.result} {checklistResult.score}/{checklistResult.total}
             </span>
           </div>
           <div className="mt-4 grid gap-2">
             {Object.entries(GOLD_RESEARCH_CHECKLIST_LABELS).map(([key, label]) => (
-              <label key={key} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <label key={key} className="flex items-start gap-2 text-sm text-text-primary">
                 <input
                   type="checkbox"
                   checked={checklist[key as keyof GoldResearchChecklist]}
                   onChange={(event) => setChecklist((current) => ({ ...current, [key]: event.target.checked }))}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950"
+                  className="mt-1 h-4 w-4 rounded border-border text-gold"
                 />
                 {label}
               </label>
@@ -1073,26 +1073,26 @@ export function GoldResearchDesk() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-lg font-semibold">Gold Trading Windows in SAST</h2>
+        <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
+          <h2 className="text-lg font-semibold text-text-primary">Gold Trading Windows in SAST</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {GOLD_SESSION_WINDOWS.map((window) => (
-              <div key={window.time} className="rounded-md border border-slate-200 p-4 text-sm dark:border-slate-800">
-                <p className="font-semibold">{window.time}</p>
-                <p className="mt-1 font-medium">{window.name}</p>
-                <p className="mt-2 text-slate-500 dark:text-slate-400">{window.note}</p>
-                <p className="mt-2 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{window.rule}</p>
+              <div key={window.time} className="rounded-md border border-border-subtle bg-surface-panel p-4 text-sm">
+                <p className="font-semibold text-text-primary">{window.time}</p>
+                <p className="mt-1 font-medium text-gold">{window.name}</p>
+                <p className="mt-2 text-text-secondary">{window.note}</p>
+                <p className="mt-2 text-xs font-semibold uppercase text-text-muted">{window.rule}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Research Exports</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{GOLD_PERSONAL_RULE}</p>
+            <h2 className="text-lg font-semibold text-text-primary">Research Exports</h2>
+            <p className="mt-1 text-sm text-text-secondary">{GOLD_PERSONAL_RULE}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <ExportButton onClick={() => void exportGoldResearchPackPdf(todayReports, checklistResult.result, `primasta-gold-research-today-${today()}.pdf`, "Today's Gold Research")} label="Today PDF" />
@@ -1190,14 +1190,14 @@ function ResearchEngineStatus({
       {layers.map((layer) => {
         const Icon = layer.icon;
         return (
-          <div key={layer.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div key={layer.label} className="rounded-lg border border-border-subtle bg-surface-card p-4 shadow-soft">
             <div className="flex items-center gap-3">
               <span className={cn("flex h-10 w-10 items-center justify-center rounded-md", terminalToneClass(layer.tone))}>
                 <Icon className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{layer.label}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{layer.status}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-text-muted">{layer.label}</p>
+                <p className="mt-1 text-sm font-semibold text-text-primary">{layer.status}</p>
               </div>
             </div>
           </div>
@@ -1223,13 +1223,13 @@ function GoldDriverHeatmap({ report, selectedDriver, onSelect }: { report: GoldA
       }));
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Macro Driver Heatmap</p>
-          <h2 className="mt-1 text-lg font-semibold">Gold driver impact stack</h2>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Macro Driver Heatmap</p>
+          <h2 className="mt-1 text-lg font-semibold text-text-primary">Gold driver impact stack</h2>
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Click a driver to open its research form.</p>
+        <p className="text-sm text-text-secondary">Click a driver to open its research form.</p>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
         {items.map((item) => (
@@ -1239,7 +1239,7 @@ function GoldDriverHeatmap({ report, selectedDriver, onSelect }: { report: GoldA
             onClick={() => onSelect(item.driver)}
             className={cn(
               "focus-ring min-h-28 rounded-md border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md",
-              selectedDriver === item.driver ? "border-slate-950 ring-2 ring-slate-950/10 dark:border-white dark:ring-white/10" : "border-slate-200 dark:border-slate-800",
+              selectedDriver === item.driver ? "border-gold ring-2 ring-gold/10" : "border-border-subtle",
               heatmapToneClass(item.impact)
             )}
           >
@@ -1361,7 +1361,7 @@ function MarketDataSourcePanel({
           <h3 className="mt-1 text-base font-semibold text-white">Twelve Data XAUUSD levels</h3>
           <p className="mt-1 text-sm text-stone-400">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
         </div>
-        <button type="button" onClick={onFetch} disabled={loading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+        <button type="button" onClick={onFetch} disabled={loading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-4 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60">
           {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           {loading ? "Fetching Gold data..." : "Fetch Gold Market Data"}
         </button>
@@ -1387,7 +1387,7 @@ function MarketDataSourcePanel({
       </div>
 
       <label className="mt-4 flex items-start gap-3 rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm font-medium text-stone-200">
-        <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmChange(event.target.checked)} className="mt-1 h-4 w-4 rounded border-slate-300" />
+        <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmChange(event.target.checked)} className="mt-1 h-4 w-4 rounded border-border text-gold" />
         <span>
           I confirm these liquidity levels on my chart.
           {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-stone-500">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
@@ -1447,15 +1447,15 @@ function SetupInput({
 
 function GoldTradeSetupResultCard({ result }: { result: GoldTradeSetupResult }) {
   return (
-    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+    <div className="mt-5 rounded-lg border border-border-subtle bg-surface-panel p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Setup Verdict</p>
-          <h3 className="text-2xl font-bold tracking-tight">{result.setupVerdict}</h3>
+          <p className="text-sm font-medium text-text-muted">Setup Verdict</p>
+          <h3 className="text-2xl font-bold tracking-tight text-text-primary">{result.setupVerdict}</h3>
         </div>
         <div className="flex flex-wrap gap-2">
           <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(result.setupVerdict))}>{result.setupVerdict}</span>
-          <span className="rounded-md bg-slate-200 px-3 py-1 text-xs font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-100">{result.confidence} confidence</span>
+          <span className="rounded-md bg-surface-elevated px-3 py-1 text-xs font-bold text-text-secondary">{result.confidence} confidence</span>
         </div>
       </div>
 
@@ -1483,7 +1483,7 @@ function GoldTradeSetupResultCard({ result }: { result: GoldTradeSetupResult }) 
 function UseSetupLink({ setup, savedSetup }: { setup: GoldTradeSetupResult; savedSetup: GoldTradeSetup | null }) {
   if (setup.setupVerdict === "Wait" || setup.setupVerdict === "Pending Confirmation") {
     return (
-      <button type="button" disabled className="focus-ring inline-flex items-center justify-center rounded-md border border-slate-200 px-5 py-3 text-sm font-semibold opacity-60 dark:border-slate-800">
+      <button type="button" disabled className="focus-ring inline-flex items-center justify-center rounded-md border border-border-subtle bg-surface-panel px-5 py-3 text-sm font-semibold text-text-muted opacity-60">
         Setup is not confirmed. Trade entry is not allowed from this setup.
       </button>
     );
@@ -1510,9 +1510,9 @@ function UseSetupLink({ setup, savedSetup }: { setup: GoldTradeSetupResult; save
 
 function AutoMeta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-50 px-4 py-3 text-sm dark:bg-slate-950">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+    <div className="rounded-md bg-surface-panel px-4 py-3 text-sm">
+      <p className="text-xs font-semibold uppercase text-text-muted">{label}</p>
+      <p className="mt-1 font-semibold text-text-primary">{value}</p>
     </div>
   );
 }
@@ -1592,9 +1592,9 @@ function AutoFullSummaryPanel({ report }: { report: GoldAutoFillResponse }) {
   const summary = report.fullSummary;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
+    <div className="mt-5 rounded-lg border border-profit/30 bg-profit/5 p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold">Full Gold Bias Summary</h3>
+        <h3 className="text-base font-semibold text-text-primary">Full Gold Bias Summary</h3>
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.overallGoldBias))}>{summary.overallGoldBias}</span>
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.preTradeVerdict))}>{summary.preTradeVerdict}</span>
       </div>
@@ -1608,23 +1608,6 @@ function AutoFullSummaryPanel({ report }: { report: GoldAutoFillResponse }) {
         <ResultRow label="Best session to trade" value={summary.bestSessionToTrade} />
         <ResultRow label="Final guidance" value={summary.finalGuidance} />
         <ResultRow label="Personal rule" value={summary.personalRule} />
-      </div>
-
-      <div className="mt-5 space-y-3">
-        {report.sections.map((section) => (
-          <div key={section.driver} className="rounded-md border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-            <p className="font-semibold">{section.driver}</p>
-            <div className="mt-3 grid gap-2">
-              <ResultRow label="News Headline" value={section.newsHeadline || "Data not verified."} />
-              <ResultRow label="News Summary" value={section.newsSummary || "Data not verified."} />
-              <ResultRow label="Chart Observation" value={section.chartObservation || "Data not verified."} />
-              <ResultRow label="Gold Bias" value={section.goldImpact} />
-              <ResultRow label="Impact" value={section.goldImpact} />
-              <ResultRow label="Confidence" value={section.sourceLink && section.sourceLink !== "Not found" ? "Source linked" : "Data not verified"} />
-              <ResultRow label="Final Guidance" value={section.reason || "Wait for technical confirmation."} />
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -1645,13 +1628,13 @@ function AutoSectionCard({
   const badgeValue = section.driver === "Gold Technical Structure Check" ? section.goldTechnicalVerdict || section.goldImpact : section.goldImpact;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-slate-950 dark:text-slate-50">{section.driver}</h3>
+          <h3 className="text-base font-semibold text-text-primary">{section.driver}</h3>
           <span className={cn("mt-2 inline-flex rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(badgeValue))}>{badgeValue || "Mixed-Wait"}</span>
         </div>
-        <button type="button" onClick={onEdit} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-800">
+        <button type="button" onClick={onEdit} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-border-subtle bg-surface-panel px-3 py-2 text-sm font-semibold text-text-primary hover:bg-surface-elevated">
           <Pencil className="h-4 w-4" />
           {editing ? "Done" : "Edit"}
         </button>
@@ -1659,8 +1642,8 @@ function AutoSectionCard({
 
       <div className="mt-4 grid gap-3">
         {fields.map((field) => (
-          <div key={String(field.key)} className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950">
-            <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{field.label}</p>
+          <div key={String(field.key)} className="rounded-md bg-surface-panel px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-text-muted">{field.label}</p>
             <div className="mt-1">
               {editing ? (
                 <AutoFieldInput config={field} value={String(section[field.key] ?? "")} onChange={(value) => onChange(field.key, value)} />
@@ -1701,14 +1684,14 @@ function AutoFieldInput({ config, value, onChange }: { config: AutoSectionFieldC
 function AutoFieldValue({ label, value }: { label: string; value: string }) {
   if (label === "Source Link" && isUrl(value)) {
     return (
-      <a href={value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all font-medium text-slate-950 underline underline-offset-4 dark:text-slate-100">
+      <a href={value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all font-medium text-gold underline underline-offset-4">
         {value}
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
       </a>
     );
   }
 
-  return <p className="whitespace-pre-wrap break-words text-sm text-slate-800 dark:text-slate-100">{value || "Data not verified."}</p>;
+  return <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{value || "Data not verified."}</p>;
 }
 
 function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; value: string; onChange: (value: string) => void }) {
@@ -1734,11 +1717,11 @@ function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; v
 
 function AnalysisPanel({ analysis }: { analysis: GoldDriverAnalysis }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold">{analysis.driverName}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">{analysis.driverName}</h2>
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", biasClass(analysis.goldBias))}>{analysis.goldBias}</span>
-        <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{analysis.confidenceScore}%</span>
+        <span className="rounded-md bg-surface-elevated px-3 py-1 text-xs font-bold text-text-secondary">{analysis.confidenceScore}%</span>
       </div>
       <div className="mt-4 grid gap-3 text-sm">
         <ResultRow label="Impact" value={analysis.impactLevel} />
@@ -1761,9 +1744,9 @@ function AnalysisPanel({ analysis }: { analysis: GoldDriverAnalysis }) {
 
 function SummaryPanel({ summary }: { summary: ReturnType<typeof buildGoldBiasSummary> }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold">Full Gold Bias Summary</h2>
+        <h2 className="text-lg font-semibold text-text-primary">Full Gold Bias Summary</h2>
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", overallBiasClass(summary.overallGoldBias))}>{summary.overallGoldBias}</span>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
@@ -1792,25 +1775,25 @@ function SummaryPanel({ summary }: { summary: ReturnType<typeof buildGoldBiasSum
 
 function EmptyPanel() {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <FileText className="mx-auto h-8 w-8 text-slate-400" />
-      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Choose a driver, add research notes, then analyze.</p>
+    <div className="rounded-lg border border-border-subtle bg-surface-card p-8 text-center shadow-soft">
+      <FileText className="mx-auto h-8 w-8 text-text-muted" />
+      <p className="mt-3 text-sm text-text-secondary">Choose a driver, add research notes, then analyze.</p>
     </div>
   );
 }
 
 function ResultRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-slate-800 dark:text-slate-100">{value}</p>
+    <div className="rounded-md bg-surface-panel px-4 py-3">
+      <p className="text-xs font-semibold uppercase text-text-muted">{label}</p>
+      <p className="mt-1 text-text-primary">{value}</p>
     </div>
   );
 }
 
 function ExportButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="focus-ring inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+    <button type="button" onClick={onClick} className="focus-ring inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-panel px-3 py-2 text-sm font-semibold text-text-primary hover:bg-surface-elevated">
       <Download className="h-4 w-4" />
       {label}
     </button>
@@ -1819,7 +1802,7 @@ function ExportButton({ label, onClick }: { label: string; onClick: () => void }
 
 function Field({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <label className={cn("block text-sm font-medium", wide ? "md:col-span-2" : "")}>
+    <label className={cn("block text-sm font-medium text-text-primary", wide ? "md:col-span-2" : "")}>
       {label}
       <div className="mt-1">{children}</div>
     </label>
@@ -1929,10 +1912,10 @@ function isUrl(value: string) {
 }
 
 function autoBadgeClass(value: string) {
-  if (value === "Bullish" || value === "Bullish Gold" || value === "Buy Setup" || value === "Trade Allowed") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
-  if (value === "Bearish" || value === "Bearish Gold" || value === "Sell Setup") return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
-  if (value === "Mixed-Wait" || value === "Wait" || value === "Avoid Before News") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+  if (value === "Bullish" || value === "Bullish Gold" || value === "Buy Setup" || value === "Trade Allowed") return "bg-profit/15 text-profit";
+  if (value === "Bearish" || value === "Bearish Gold" || value === "Sell Setup") return "bg-loss/15 text-loss";
+  if (value === "Mixed-Wait" || value === "Wait" || value === "Avoid Before News") return "bg-gold/15 text-gold";
+  return "bg-surface-elevated text-text-secondary";
 }
 
 function biasTone(value: string): "success" | "warning" | "danger" | "neutral" {
@@ -1957,31 +1940,31 @@ function decisionToneClass(tone: "success" | "warning" | "danger" | "neutral") {
 }
 
 function heatmapToneClass(impact: string) {
-  if (impact === "Bullish Gold") return "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100";
-  if (impact === "Bearish Gold") return "bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-100";
-  if (impact === "Mixed-Wait") return "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100";
-  return "bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100";
+  if (impact === "Bullish Gold") return "bg-profit/10 text-profit";
+  if (impact === "Bearish Gold") return "bg-loss/10 text-loss";
+  if (impact === "Mixed-Wait") return "bg-gold/10 text-gold";
+  return "bg-surface-panel text-text-primary";
 }
 
 function biasClass(value: string) {
-  if (value === "Bullish Gold") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
-  if (value === "Bearish Gold") return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
-  if (value === "Mixed / Wait") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+  if (value === "Bullish Gold") return "bg-profit/15 text-profit";
+  if (value === "Bearish Gold") return "bg-loss/15 text-loss";
+  if (value === "Mixed / Wait") return "bg-gold/15 text-gold";
+  return "bg-surface-elevated text-text-secondary";
 }
 
 function overallBiasClass(value: string) {
-  if (value === "Bullish") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
-  if (value === "Bearish") return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
-  if (value === "Wait") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+  if (value === "Bullish") return "bg-profit/15 text-profit";
+  if (value === "Bearish") return "bg-loss/15 text-loss";
+  if (value === "Wait") return "bg-gold/15 text-gold";
+  return "bg-surface-elevated text-text-secondary";
 }
 
 function checklistBadgeClass(value: string) {
-  if (value === "Aligned") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
-  if (value === "Mixed" || value === "Wait") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
+  if (value === "Aligned") return "bg-profit/15 text-profit";
+  if (value === "Mixed" || value === "Wait") return "bg-gold/15 text-gold";
+  return "bg-loss/15 text-loss";
 }
 
 const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:focus:border-slate-200";
+  "w-full rounded-md border border-border-subtle bg-surface-panel px-3 py-2 text-sm text-text-primary shadow-sm outline-none transition placeholder:text-text-muted focus:border-gold focus:ring-2 focus:ring-gold/10";
