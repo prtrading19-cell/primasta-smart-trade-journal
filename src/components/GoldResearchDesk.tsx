@@ -66,7 +66,9 @@ interface XauusdMarketData {
   suggestedResistance: string;
   currentPriceLocation: string;
   source: string;
+  provider: string;
   message: string;
+  verified: boolean;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -87,8 +89,10 @@ const EMPTY_MARKET_DATA: XauusdMarketData = {
   suggestedSupport: "",
   suggestedResistance: "",
   currentPriceLocation: "Unknown",
-  source: "Twelve Data",
-  message: ""
+  source: "None",
+  provider: "None",
+  message: "",
+  verified: false
 };
 
 const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
@@ -432,15 +436,17 @@ export function GoldResearchDesk() {
   const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
   const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
   const marketDataConnected = marketData?.status === "success";
-  const terminalGoldPrice = marketData?.currentPrice || autoReport?.goldCurrentPrice || setupInputs.currentGoldPrice || "Awaiting feed";
-  const terminalLastUpdated = marketData?.lastUpdated || autoReport?.date || activeDailyResearch?.reportDate || "Not synced";
+  const terminalGoldPrice = marketData?.currentPrice || "LIVE DATA UNAVAILABLE";
+  const terminalLastUpdated = marketData?.lastUpdated || "LIVE DATA UNAVAILABLE";
   const terminalReportDate = activeDailyResearch?.reportDate || autoReport?.date || reportDate;
+  const terminalPriceSource = marketData?.source || "LIVE DATA UNAVAILABLE";
+  const terminalPriceProvider = marketData?.provider || "LIVE DATA UNAVAILABLE";
   const autoImpactCounts = useMemo(() => getAutoImpactCounts(autoReport), [autoReport]);
 
   useEffect(() => {
-    if (!autoReport?.goldCurrentPrice) return;
-    setSetupInputs((current) => ({ ...current, setupDate: autoReport.date, currentGoldPrice: current.currentGoldPrice || autoReport.goldCurrentPrice }));
-  }, [autoReport]);
+    if (!marketData?.currentPrice || marketData.status !== "success") return;
+    setSetupInputs((current) => ({ ...current, setupDate: autoReport?.date || today(), currentGoldPrice: current.currentGoldPrice || marketData.currentPrice }));
+  }, [marketData, autoReport]);
 
   async function autoFillGoldResearch() {
     setAutoLoading(true);
@@ -744,6 +750,8 @@ export function GoldResearchDesk() {
         bullishCount={autoImpactCounts.bullish}
         bearishCount={autoImpactCounts.bearish}
         mixedCount={autoImpactCounts.mixed}
+        priceSource={terminalPriceSource}
+        priceProvider={terminalPriceProvider}
       />
 
       <ResearchEngineStatus
@@ -782,7 +790,7 @@ export function GoldResearchDesk() {
         {autoReport ? (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <AutoMeta label="Report date" value={autoReport.date} />
-            <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "Data not verified."} />
+             <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "LIVE DATA UNAVAILABLE"} />
             <AutoMeta label="Overall bias" value={autoReport.fullSummary.overallGoldBias} />
           </div>
         ) : null}
@@ -1115,7 +1123,9 @@ function GoldTerminalHeader({
   checklistResult,
   bullishCount,
   bearishCount,
-  mixedCount
+  mixedCount,
+  priceSource,
+  priceProvider
 }: {
   currentPrice: string;
   overallBias: string;
@@ -1126,6 +1136,8 @@ function GoldTerminalHeader({
   bullishCount: number;
   bearishCount: number;
   mixedCount: number;
+  priceSource: string;
+  priceProvider: string;
 }) {
   return (
     <header className="overflow-hidden rounded-lg border border-stone-800 bg-[#0a0907] p-5 text-white shadow-soft">
@@ -1142,7 +1154,7 @@ function GoldTerminalHeader({
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? "Twelve Data connected" : "Awaiting market feed"} tone={marketDataConnected ? "success" : "warning"} />
+        <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? `${priceProvider} connected` : "LIVE DATA UNAVAILABLE"} tone={marketDataConnected ? "success" : "danger"} />
         <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
         <TerminalMetric icon={<Layers3 className="h-4 w-4" />} label="Driver Stack" value={`${bullishCount}B / ${bearishCount}S / ${mixedCount}M`} detail="Bullish, bearish, mixed" tone="neutral" />
         <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Checklist" value={checklistResult} detail="Pre-trade readiness" tone={checklistResult === "Aligned" ? "success" : checklistResult === "Wait" ? "warning" : "neutral"} />
@@ -1179,7 +1191,7 @@ function ResearchEngineStatus({
   riskRewardPasses: boolean;
 }) {
   const layers = [
-    { icon: Database, label: "Market Data Layer", status: marketDataConnected ? "Connected" : "Not connected", tone: marketDataConnected ? "success" : "warning" },
+    { icon: Database, label: "Market Data Layer", status: marketDataConnected ? "Verified Live Data" : "LIVE DATA UNAVAILABLE", tone: marketDataConnected ? "success" : "danger" },
     { icon: BrainCircuit, label: "AI Analysis Layer", status: hasAutoReport ? "Research loaded" : "Awaiting auto-fill", tone: hasAutoReport ? "success" : "neutral" },
     { icon: ShieldCheck, label: "Chart Confirmation Layer", status: liquidityConfirmed ? "Confirmed" : "Needs confirmation", tone: liquidityConfirmed ? "success" : "warning" },
     { icon: Gauge, label: "Execution Readiness", status: setupResult?.setupVerdict ?? (riskRewardPasses ? "Risk ready" : "Risk not ready"), tone: setupResult?.setupVerdict === "Buy Setup" || setupResult?.setupVerdict === "Sell Setup" ? "success" : setupResult?.setupVerdict === "Wait" ? "danger" : riskRewardPasses ? "neutral" : "warning" }
@@ -1368,8 +1380,8 @@ function MarketDataSourcePanel({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MarketDataMetric label="Provider" value="Twelve Data" />
-        <MarketDataMetric label="Status" value={connected ? "Connected" : "Not connected"} tone={connected ? "success" : "neutral"} />
+        <MarketDataMetric label="Provider" value={display.provider || "LIVE DATA UNAVAILABLE"} tone={connected ? "success" : "neutral"} />
+        <MarketDataMetric label="Status" value={connected ? "Verified Live Data" : "LIVE DATA UNAVAILABLE"} tone={connected ? "success" : undefined} />
         <MarketDataMetric label="Last updated" value={display.lastUpdated || "Not fetched"} />
         <MarketDataMetric label="Current Gold price" value={display.currentPrice || "Not fetched"} />
         <MarketDataMetric label="Price location" value={display.currentPriceLocation || "Unknown"} tag={connected ? "Suggested from market data" : ""} />
@@ -1543,8 +1555,10 @@ function normalizeMarketDataResponse(value: Record<string, unknown>): XauusdMark
     suggestedSupport: marketDataString(value.suggestedSupport),
     suggestedResistance: marketDataString(value.suggestedResistance),
     currentPriceLocation: normalizePriceLocation(marketDataString(value.currentPriceLocation)) || "Unknown",
-    source: marketDataString(value.source) || "Twelve Data",
-    message: marketDataString(value.message)
+    source: marketDataString(value.source) || "None",
+    provider: marketDataString(value.provider) || marketDataString(value.source) || "None",
+    message: marketDataString(value.message),
+    verified: Boolean(value.verified)
   };
 }
 
@@ -1691,7 +1705,7 @@ function AutoFieldValue({ label, value }: { label: string; value: string }) {
     );
   }
 
-  return <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{value || "Data not verified."}</p>;
+  return <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{value || "LIVE DATA UNAVAILABLE"}</p>;
 }
 
 function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; value: string; onChange: (value: string) => void }) {

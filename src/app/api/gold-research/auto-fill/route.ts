@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // Change this later only if you want to manually use a different OpenAI model.
-const DEFAULT_MODEL = "gpt-4o-mini";
+// gpt-4.1 is more reliable than gpt-4o-mini at actually invoking web_search
+// and transcribing exact figures instead of blending in memorized values.
+const DEFAULT_MODEL = "gpt-4.1";
 
 const SYSTEM_INSTRUCTION =
   "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Always include source links. If data is not verified, say so. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
@@ -15,6 +17,7 @@ const SYSTEM_INSTRUCTION =
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   console.info("[gold-auto-fill] api_key_exists", Boolean(apiKey));
+  console.info("[gold-auto-fill] using_model", process.env.OPENAI_MODEL || DEFAULT_MODEL);
 
   if (!apiKey) {
     return errorResponse("missing_api_key", "OpenAI API key is missing in Vercel.", 500);
@@ -64,9 +67,9 @@ async function requestStructuredReport(apiKey: string, reportDate: string, mode:
     },
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
-      max_output_tokens: 3000,
-      tools: [{ type: "web_search" }],
-      tool_choice: "auto",
+      max_output_tokens: 6000,
+      tools: [{ type: "web_search", search_context_size: "high" }],
+      tool_choice: "required",
       input: [
         { role: "system", content: SYSTEM_INSTRUCTION },
         { role: "user", content: mode === "full" ? buildAutoFillPrompt(reportDate) : buildRetryPrompt(reportDate) }
@@ -186,7 +189,7 @@ Keep each section compact:
 - newsHeadline: one headline
 - newsSummary: 1-2 short sentences, include source date if available
 - chartObservation: short practical chart note; if not verified, say Data not verified.
-- sourceLink: real URL, or Not found
+- sourceLink: a single raw URL only (e.g. https://example.com/article), starting with http:// or https://, with nothing else appended — no notes, no parentheses, no "(via X)" annotations. Use "Not found" if no URL is available.
 - reason: short reason for Gold impact
 
 Gold impact rules:
@@ -208,10 +211,14 @@ Personal rule must be exactly: ${GOLD_PERSONAL_RULE}
 function buildRetryPrompt(reportDate: string) {
   return `
 Create a compact PRIMASTA Gold/XAUUSD research JSON object for ${reportDate}.
+You MUST use the web_search tool to verify fresh data before answering. Do not invent, estimate,
+or recall prices, data, or source links from memory. If a value cannot be verified via a fresh
+web search, set that field to "Data not verified", sourceLink to "Not found", and goldImpact to "Mixed-Wait".
+
 Use exactly these 9 section driver names, in order:
 ${GOLD_AUTO_DRIVER_NAMES.join("\n")}
 
-Each section must be short and must include a sourceLink value. Use "Not found" and goldImpact "Mixed-Wait" when data is not verified.
+Each section must be short and must include a sourceLink value.
 Use the personalRule exactly: ${GOLD_PERSONAL_RULE}
 `.trim();
 }
