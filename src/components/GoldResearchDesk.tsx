@@ -436,11 +436,11 @@ export function GoldResearchDesk() {
   const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
   const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
   const marketDataConnected = marketData?.status === "success";
-  const terminalGoldPrice = marketData?.currentPrice || "LIVE DATA UNAVAILABLE";
-  const terminalLastUpdated = marketData?.lastUpdated || "LIVE DATA UNAVAILABLE";
+  const terminalGoldPrice = marketData?.currentPrice || autoReport?.goldCurrentPrice || setupInputs.currentGoldPrice || "Awaiting feed";
+  const terminalLastUpdated = marketData?.lastUpdated || autoReport?.date || activeDailyResearch?.reportDate || "Not synced";
   const terminalReportDate = activeDailyResearch?.reportDate || autoReport?.date || reportDate;
-  const terminalPriceSource = marketData?.source || "LIVE DATA UNAVAILABLE";
-  const terminalPriceProvider = marketData?.provider || "LIVE DATA UNAVAILABLE";
+  const terminalPriceSource = marketData?.source || "Twelve Data";
+  const terminalPriceProvider = marketData?.provider || "Twelve Data";
   const autoImpactCounts = useMemo(() => getAutoImpactCounts(autoReport), [autoReport]);
 
   useEffect(() => {
@@ -790,7 +790,7 @@ export function GoldResearchDesk() {
         {autoReport ? (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <AutoMeta label="Report date" value={autoReport.date} />
-             <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "LIVE DATA UNAVAILABLE"} />
+             <AutoMeta label="Gold current price" value={autoReport.goldCurrentPrice || "Data not verified."} />
             <AutoMeta label="Overall bias" value={autoReport.fullSummary.overallGoldBias} />
           </div>
         ) : null}
@@ -1154,7 +1154,7 @@ function GoldTerminalHeader({
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? `${priceProvider} connected` : "LIVE DATA UNAVAILABLE"} tone={marketDataConnected ? "success" : "danger"} />
+        <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? `${priceProvider} connected` : "Awaiting market feed"} tone={marketDataConnected ? "success" : "warning"} />
         <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
         <TerminalMetric icon={<Layers3 className="h-4 w-4" />} label="Driver Stack" value={`${bullishCount}B / ${bearishCount}S / ${mixedCount}M`} detail="Bullish, bearish, mixed" tone="neutral" />
         <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Checklist" value={checklistResult} detail="Pre-trade readiness" tone={checklistResult === "Aligned" ? "success" : checklistResult === "Wait" ? "warning" : "neutral"} />
@@ -1191,7 +1191,7 @@ function ResearchEngineStatus({
   riskRewardPasses: boolean;
 }) {
   const layers = [
-    { icon: Database, label: "Market Data Layer", status: marketDataConnected ? "Verified Live Data" : "LIVE DATA UNAVAILABLE", tone: marketDataConnected ? "success" : "danger" },
+    { icon: Database, label: "Market Data Layer", status: marketDataConnected ? "Connected" : "Not connected", tone: marketDataConnected ? "success" : "warning" },
     { icon: BrainCircuit, label: "AI Analysis Layer", status: hasAutoReport ? "Research loaded" : "Awaiting auto-fill", tone: hasAutoReport ? "success" : "neutral" },
     { icon: ShieldCheck, label: "Chart Confirmation Layer", status: liquidityConfirmed ? "Confirmed" : "Needs confirmation", tone: liquidityConfirmed ? "success" : "warning" },
     { icon: Gauge, label: "Execution Readiness", status: setupResult?.setupVerdict ?? (riskRewardPasses ? "Risk ready" : "Risk not ready"), tone: setupResult?.setupVerdict === "Buy Setup" || setupResult?.setupVerdict === "Sell Setup" ? "success" : setupResult?.setupVerdict === "Wait" ? "danger" : riskRewardPasses ? "neutral" : "warning" }
@@ -1380,8 +1380,8 @@ function MarketDataSourcePanel({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MarketDataMetric label="Provider" value={display.provider || "LIVE DATA UNAVAILABLE"} tone={connected ? "success" : "neutral"} />
-        <MarketDataMetric label="Status" value={connected ? "Verified Live Data" : "LIVE DATA UNAVAILABLE"} tone={connected ? "success" : undefined} />
+        <MarketDataMetric label="Provider" value={display.provider || "Twelve Data"} />
+        <MarketDataMetric label="Status" value={connected ? "Connected" : "Not connected"} tone={connected ? "success" : "neutral"} />
         <MarketDataMetric label="Last updated" value={display.lastUpdated || "Not fetched"} />
         <MarketDataMetric label="Current Gold price" value={display.currentPrice || "Not fetched"} />
         <MarketDataMetric label="Price location" value={display.currentPriceLocation || "Unknown"} tag={connected ? "Suggested from market data" : ""} />
@@ -1705,7 +1705,7 @@ function AutoFieldValue({ label, value }: { label: string; value: string }) {
     );
   }
 
-  return <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{value || "LIVE DATA UNAVAILABLE"}</p>;
+  return <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{value || "Data not verified."}</p>;
 }
 
 function DriverInput({ config, value, onChange }: { config: DriverFieldConfig; value: string; onChange: (value: string) => void }) {
