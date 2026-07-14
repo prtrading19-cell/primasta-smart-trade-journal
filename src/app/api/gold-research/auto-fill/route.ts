@@ -25,6 +25,7 @@ export async function POST(request: Request) {
 
   const body = await readJson(request);
   const reportDate = typeof body.date === "string" && body.date ? body.date : today();
+  const livePricePromise = fetchLiveGoldPrice();
 
   try {
     const firstAttempt = await requestStructuredReport(apiKey, reportDate, "full");
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     logAttempt(firstAttempt.status, firstAttempt.body, firstParsed.ok, 1);
 
     if (firstAttempt.statusOk && firstParsed.ok) {
-      return NextResponse.json(firstParsed.report);
+      return NextResponse.json(await withLivePrice(firstParsed.report, livePricePromise));
     }
 
     if (!firstAttempt.statusOk) {
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     logAttempt(retryAttempt.status, retryAttempt.body, retryParsed.ok, 2);
 
     if (retryAttempt.statusOk && retryParsed.ok) {
-      return NextResponse.json(retryParsed.report);
+      return NextResponse.json(await withLivePrice(retryParsed.report, livePricePromise));
     }
 
     if (!retryAttempt.statusOk) {
@@ -56,6 +57,38 @@ export async function POST(request: Request) {
     console.info("[gold-auto-fill] parse_success", false);
     return errorResponse("unknown_error", safeErrorMessage(error), 500);
   }
+}
+
+async function fetchLiveGoldPrice(): Promise<string> {
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  if (!apiKey) return "";
+
+  try {
+    const url = new URL("https://api.twelvedata.com/quote");
+    url.searchParams.set("symbol", "XAU/USD");
+    url.searchParams.set("apikey", apiKey);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    clearTimeout(timeout);
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    const price = isRecord(data) ? Number(data.close ?? data.price) : NaN;
+
+    return Number.isFinite(price) ? price.toFixed(2) : "";
+  } catch (error) {
+    console.info("[gold-auto-fill] live_price_fetch_failed", error instanceof Error ? error.message : "unknown");
+    return "";
+  }
+}
+
+async function withLivePrice(report: GoldAutoFillResponse, livePricePromise: Promise<string>): Promise<GoldAutoFillResponse> {
+  const livePrice = await livePricePromise;
+  console.info("[gold-auto-fill] live_price", livePrice || "unavailable");
+
+  if (!livePrice) return report;
+  return { ...report, goldCurrentPrice: `$${livePrice} (live, Twelve Data)` };
 }
 
 async function requestStructuredReport(apiKey: string, reportDate: string, mode: "full" | "retry") {
