@@ -12,7 +12,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1";
 
 const SYSTEM_INSTRUCTION =
-  "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Always include source links. If data is not verified, say so. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
+  "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Always include source links. If data is not verified, say so. Every news item MUST include its publication date. Reject any article or data older than 7 days from today unless the user explicitly requests historical analysis. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
 
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -212,6 +212,14 @@ function buildAutoFillPrompt(reportDate: string) {
   return `
 Create today's PRIMASTA Gold/XAUUSD research report for ${reportDate}.
 
+You MUST use the web_search tool with today's date to find the MOST RECENT information available. Reject any article or data point older than 7 days unless it is the only information available for that specific driver.
+
+CRITICAL DATE RULES:
+- Every section MUST include a newsHeadline, newsSummary with the publication date clearly stated, and a sourceLink.
+- If the most recent data you find for a section is older than 7 days, set currentDataValue to "Data not found for recent period (last 7 days)" and goldImpact to "Mixed-Wait".
+- The currentDataValue field MUST include the value AND the date of the data point (e.g. "DXY at 104.25 as of 2026-07-13").
+- The newsSummary MUST include the publication date of the article (e.g. "As of July 13, 2026, Reuters reported...").
+
 Use web search for fresh source-backed information. Prefer official or reliable sources:
 US yields/Treasury/FRED, real yields/FRED, Fed/FOMC/Federal Reserve, CPI/PCE/BLS/BEA, jobs/BLS, ETF and central bank demand/World Gold Council or reputable gold reports, geopolitics/reputable news, DXY and Gold technicals/reliable market source.
 
@@ -219,10 +227,10 @@ Return exactly 9 sections in this order:
 ${GOLD_AUTO_DRIVER_NAMES.map((driver, index) => `${index + 1}. ${driver}`).join("\n")}
 
 Keep each section compact:
-- newsHeadline: one headline
-- newsSummary: 1-2 short sentences, include source date if available
+- newsHeadline: one headline from a recent (within 7 days) article
+- newsSummary: 1-2 short sentences. MUST include the publication date (e.g. "As of July 13, 2026...").
 - chartObservation: short practical chart note; if not verified, say Data not verified.
-- sourceLink: a single raw URL only (e.g. https://example.com/article), starting with http:// or https://, with nothing else appended — no notes, no parentheses, no "(via X)" annotations. Use "Not found" if no URL is available.
+- sourceLink: a single raw URL only (e.g. https://example.com/article), starting with http:// or https://, with nothing else appended. Use "Not found" if no URL is available.
 - reason: short reason for Gold impact
 
 Gold impact rules:
@@ -247,6 +255,7 @@ Create a compact PRIMASTA Gold/XAUUSD research JSON object for ${reportDate}.
 You MUST use the web_search tool to verify fresh data before answering. Do not invent, estimate,
 or recall prices, data, or source links from memory. If a value cannot be verified via a fresh
 web search, set that field to "Data not verified", sourceLink to "Not found", and goldImpact to "Mixed-Wait".
+Every newsSummary MUST include the publication date. Reject articles older than 7 days.
 
 Use exactly these 9 section driver names, in order:
 ${GOLD_AUTO_DRIVER_NAMES.join("\n")}
