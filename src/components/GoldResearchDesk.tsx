@@ -33,6 +33,8 @@ import {
   type GoldTradeSetupResearchSummary,
   type GoldTradeSetupResult
 } from "@/types/goldTradeSetup";
+import { DRIVER_REGISTRY, getDriverById, getDriversByCategory } from "@/config/driverRegistry";
+import { CATEGORY_DEFINITIONS, getCategoryById } from "@/config/categoryConfig";
 
 type DriverFieldType = "text" | "textarea" | "select" | "url";
 

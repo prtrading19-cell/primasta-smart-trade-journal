@@ -21,6 +21,14 @@ export const GOLD_AUTO_DRIVER_NAMES: GoldAutoDriverName[] = [
   "Gold Technical Structure Check"
 ];
 
+export function getAutoDriverNames(): GoldAutoDriverName[] {
+  return [...GOLD_AUTO_DRIVER_NAMES];
+}
+
+export function getAutoDriverCount(): number {
+  return GOLD_AUTO_DRIVER_NAMES.length;
+}
+
 const AUTO_IMPACTS: GoldAutoImpact[] = ["Bullish Gold", "Bearish Gold", "Neutral", "Mixed-Wait"];
 const OVERALL_BIASES: GoldAutoOverallBias[] = ["Bullish", "Bearish", "Neutral", "Mixed-Wait"];
 const PRE_TRADE_VERDICTS: GoldAutoPreTradeVerdict[] = ["Trade Allowed", "Wait", "Avoid Before News", "Manage Existing Trade Only"];

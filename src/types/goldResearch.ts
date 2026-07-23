@@ -286,3 +286,51 @@ export interface NewDailyGoldResearchReportInput {
   overallGoldBias: GoldAutoOverallBias;
   preTradeVerdict: GoldAutoPreTradeVerdict;
 }
+
+export const DRIVER_NAME_TO_ID: Record<GoldDriverName, string> = {
+  "DXY / US Dollar": "dxy-us-dollar",
+  "US Yields": "us-yields",
+  "Real Yields": "real-yields",
+  "Fed Tone / FOMC": "fed-tone-fomc",
+  "CPI / PCE": "cpi-pce",
+  "NFP / Jobs": "nfp-jobs",
+  "Geopolitics": "geopolitics",
+  "ETF / Central Bank Demand": "etf-flows",
+  "Custom News": "custom-news",
+};
+
+export const AUTO_DRIVER_NAME_TO_ID: Record<GoldAutoDriverName, string> = {
+  "DXY / US Dollar Check": "dxy-us-dollar",
+  "US Yields Check": "us-yields",
+  "Real Yields Check": "real-yields",
+  "Fed Tone / FOMC Check": "fed-tone-fomc",
+  "CPI / PCE Inflation Check": "cpi-pce",
+  "NFP / Jobs Check": "nfp-jobs",
+  "Geopolitics / Risk Sentiment Check": "geopolitics",
+  "ETF / Central Bank Demand Check": "etf-flows",
+  "Gold Technical Structure Check": "gold-technical-structure",
+};
+
+export const ID_TO_DRIVER_NAME: Record<string, GoldDriverName> = Object.fromEntries(
+  Object.entries(DRIVER_NAME_TO_ID).map(([name, id]) => [id, name as GoldDriverName])
+) as Record<string, GoldDriverName>;
+
+export const ID_TO_AUTO_DRIVER_NAME: Record<string, GoldAutoDriverName> = Object.fromEntries(
+  Object.entries(AUTO_DRIVER_NAME_TO_ID).map(([name, id]) => [id, name as GoldAutoDriverName])
+) as Record<string, GoldAutoDriverName>;
+
+export function getDriverIdFromName(name: GoldDriverName): string {
+  return DRIVER_NAME_TO_ID[name] ?? name;
+}
+
+export function getDriverNameFromId(id: string): GoldDriverName {
+  return ID_TO_DRIVER_NAME[id] ?? (id as GoldDriverName);
+}
+
+export function getAutoDriverIdFromName(name: GoldAutoDriverName): string {
+  return AUTO_DRIVER_NAME_TO_ID[name] ?? name;
+}
+
+export function getAutoDriverNameFromId(id: string): GoldAutoDriverName {
+  return ID_TO_AUTO_DRIVER_NAME[id] ?? (id as GoldAutoDriverName);
+}
