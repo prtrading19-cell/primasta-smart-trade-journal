@@ -660,6 +660,18 @@ export function GoldResearchDesk() {
         </div>
       </section>
 
+      <div
+        style={{
+          background: "red",
+          color: "white",
+          padding: 20,
+          fontSize: 24,
+          zIndex: 99999,
+        }}
+      >
+        DEBUG: BEFORE DECISION ENGINE
+      </div>
+
       <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -804,6 +816,18 @@ export function GoldResearchDesk() {
           </div>
         )}
       </section>
+
+      <div
+        style={{
+          background: "green",
+          color: "white",
+          padding: 20,
+          fontSize: 24,
+          zIndex: 99999,
+        }}
+      >
+        DEBUG: AFTER DECISION ENGINE
+      </div>
 
       <GoldDriverHeatmap
         report={autoReport}
