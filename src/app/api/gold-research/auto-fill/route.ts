@@ -1,68 +1,91 @@
 import { NextResponse } from "next/server";
 import { GOLD_AUTO_DRIVER_NAMES, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
 import { buildEnhancedAnalysis } from "@/lib/goldResearchIntegrations";
+import { collectMarketData, mapMarketDataToResearch, type MarketData, type MappedSections } from "@/lib/market-data";
 import { GOLD_PERSONAL_RULE, type GoldAutoFillResponse } from "@/types/goldResearch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-// Change this later only if you want to manually use a different OpenAI model.
-// gpt-4.1 is more reliable than gpt-4o-mini at actually invoking web_search
-// and transcribing exact figures instead of blending in memorized values.
 const DEFAULT_MODEL = "gpt-4.1";
 
-const SYSTEM_INSTRUCTION =
-  "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Always include source links. If data is not verified, say so. Every news item MUST include its publication date. Reject any article or data older than 7 days from today unless the user explicitly requests historical analysis. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
+const ANALYST_INSTRUCTION =
+  "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. You receive pre-collected market data from multiple verified sources. Your job is to ANALYZE this data — NOT to search the internet. Do NOT invent prices or data. The data below is real, sourced, timestamped. Your job is to synthesize it into driver analysis, bias assessment, and a structured research report. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Every section MUST reference the actual data provided. If data is marked 'Live Data Unavailable', set that field accordingly. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  console.info("[gold-auto-fill] api_key_exists", Boolean(apiKey));
-  console.info("[gold-auto-fill] using_model", process.env.OPENAI_MODEL || DEFAULT_MODEL);
+  const startTime = Date.now();
+  const openaiKey = process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
-    return errorResponse("missing_api_key", "OpenAI API key is missing in Vercel.", 500);
-  }
+  console.info("[gold-auto-fill] pipeline_start", new Date().toISOString());
+  console.info("[gold-auto-fill] openai_key_exists", Boolean(openaiKey));
 
   const body = await readJson(request);
   const reportDate = typeof body.date === "string" && body.date ? body.date : today();
-  const livePricePromise = fetchLiveGoldPrice();
 
   try {
-    const firstAttempt = await requestStructuredReport(apiKey, reportDate, "full");
-    const firstParsed = parseStructuredReport(firstAttempt.body);
-    logAttempt(firstAttempt.status, firstAttempt.body, firstParsed.ok, 1);
+    // STEP 1: Collect live gold price from Twelve Data
+    const goldPriceStart = Date.now();
+    const livePrice = await fetchLiveGoldPrice();
+    console.info("[gold-auto-fill] live_price_duration", Date.now() - goldPriceStart, "ms", livePrice ? "success" : "unavailable");
 
-    if (firstAttempt.statusOk && firstParsed.ok) {
-      const report = await withLivePrice(firstParsed.report, livePricePromise);
+    // STEP 2: Collect market data from all providers (parallel)
+    const collectStart = Date.now();
+    const marketData = await collectMarketData(livePrice);
+    console.info("[gold-auto-fill] collect_duration", Date.now() - collectStart, "ms");
+    console.info("[gold-auto-fill] providers_succeeded", marketData.providerResults.filter((r) => r.success).map((r) => r.provider));
+    console.info("[gold-auto-fill] providers_failed", marketData.providerResults.filter((r) => !r.success).map((r) => r.provider));
+
+    // STEP 3: Map market data to research sections
+    const mapStart = Date.now();
+    const mapped = mapMarketDataToResearch(marketData);
+    console.info("[gold-auto-fill] map_duration", Date.now() - mapStart, "ms");
+
+    // STEP 4: Check if we have any real data
+    const hasRealData = marketData.sources.length > 0;
+    if (!hasRealData) {
+      console.info("[gold-auto-fill] all_providers_failed", "returning mapped data without OpenAI enhancement");
+      const report = buildResponseFromMapped(mapped, reportDate);
       const engineAnalysis = runEngineAnalysis(report);
-      return NextResponse.json({ ...report, engineAnalysis });
+      return NextResponse.json({ ...report, engineAnalysis, marketData: { sources: marketData.sources, errors: marketData.errors, providerResults: marketData.providerResults } });
     }
 
-    if (!firstAttempt.statusOk) {
-      return openAiErrorResponse(firstAttempt.body, firstAttempt.status);
+    // STEP 5: Send normalized data to OpenAI for analysis (if key available)
+    if (openaiKey) {
+      const openaiStart = Date.now();
+      const openaiAnalysis = await requestOpenAIAnalysis(openaiKey, marketData, mapped, reportDate);
+      console.info("[gold-auto-fill] openai_duration", Date.now() - openaiStart, "ms", openaiAnalysis ? "success" : "fallback");
+
+      if (openaiAnalysis) {
+        const report = mergeOpenAIAnalysis(mapped, openaiAnalysis, reportDate);
+        const engineAnalysis = runEngineAnalysis(report);
+        const totalDuration = Date.now() - startTime;
+        console.info("[gold-auto-fill] pipeline_complete", totalDuration, "ms");
+        return NextResponse.json({
+          ...report,
+          engineAnalysis,
+          marketData: { sources: marketData.sources, errors: marketData.errors, providerResults: marketData.providerResults },
+        });
+      }
     }
 
-    const retryAttempt = await requestStructuredReport(apiKey, reportDate, "retry");
-    const retryParsed = parseStructuredReport(retryAttempt.body);
-    logAttempt(retryAttempt.status, retryAttempt.body, retryParsed.ok, 2);
-
-    if (retryAttempt.statusOk && retryParsed.ok) {
-      const report = await withLivePrice(retryParsed.report, livePricePromise);
-      const engineAnalysis = runEngineAnalysis(report);
-      return NextResponse.json({ ...report, engineAnalysis });
-    }
-
-    if (!retryAttempt.statusOk) {
-      return openAiErrorResponse(retryAttempt.body, retryAttempt.status);
-    }
-
-    return errorResponse("json_parse_error", "AI response format error. Please retry or check server logs.", 502);
+    // STEP 6: Fallback — use mapped data without OpenAI enhancement
+    const report = buildResponseFromMapped(mapped, reportDate);
+    const engineAnalysis = runEngineAnalysis(report);
+    const totalDuration = Date.now() - startTime;
+    console.info("[gold-auto-fill] pipeline_complete_fallback", totalDuration, "ms");
+    return NextResponse.json({
+      ...report,
+      engineAnalysis,
+      marketData: { sources: marketData.sources, errors: marketData.errors, providerResults: marketData.providerResults },
+    });
   } catch (error) {
-    console.info("[gold-auto-fill] parse_success", false);
-    return errorResponse("unknown_error", safeErrorMessage(error), 500);
+    console.error("[gold-auto-fill] pipeline_error", error instanceof Error ? error.message : "unknown");
+    return errorResponse("pipeline_error", error instanceof Error ? error.message : "Auto-fill pipeline failed.", 500);
   }
 }
+
+// ---- Live Gold Price ----
 
 async function fetchLiveGoldPrice(): Promise<string> {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
@@ -88,77 +111,272 @@ async function fetchLiveGoldPrice(): Promise<string> {
   }
 }
 
-async function withLivePrice(report: GoldAutoFillResponse, livePricePromise: Promise<string>): Promise<GoldAutoFillResponse> {
-  const livePrice = await livePricePromise;
-  console.info("[gold-auto-fill] live_price", livePrice || "unavailable");
+// ---- OpenAI Analysis (Analyst Only) ----
 
-  if (!livePrice) return report;
-  return { ...report, goldCurrentPrice: `$${livePrice} (live, Twelve Data)` };
-}
-
-async function requestStructuredReport(apiKey: string, reportDate: string, mode: "full" | "retry") {
-  const response = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
-      max_output_tokens: 6000,
-      tools: [{ type: "web_search", search_context_size: "high" }],
-      tool_choice: "required",
-      input: [
-        { role: "system", content: SYSTEM_INSTRUCTION },
-        { role: "user", content: mode === "full" ? buildAutoFillPrompt(reportDate) : buildRetryPrompt(reportDate) }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "primasta_gold_research_auto_fill",
-          strict: true,
-          schema: GOLD_AUTO_FILL_SCHEMA
-        }
-      }
-    })
-  });
-
-  return {
-    status: response.status,
-    statusOk: response.ok,
-    body: await readOpenAiBody(response)
+interface OpenAIAnalysis {
+  sections: Array<{
+    driver: string;
+    goldImpact: "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed-Wait";
+    reason: string;
+    newsHeadline: string;
+    newsSummary: string;
+    chartObservation: string;
+    sourceLink: string;
+  }>;
+  fullSummary: {
+    overallGoldBias: "Bullish" | "Bearish" | "Neutral" | "Mixed-Wait";
+    preTradeVerdict: "Trade Allowed" | "Wait" | "Avoid Before News" | "Manage Existing Trade Only";
+    finalGuidance: string;
   };
 }
 
-function parseStructuredReport(responseBody: unknown): { ok: true; report: GoldAutoFillResponse } | { ok: false } {
-  const parsedObject = extractParsedObject(responseBody);
-
-  if (parsedObject) {
-    return { ok: true, report: normalizeAutoFillResponse(parsedObject) };
-  }
-
-  const outputText = cleanJsonText(extractOutputText(responseBody));
-  if (!outputText) return { ok: false };
+async function requestOpenAIAnalysis(
+  apiKey: string,
+  marketData: Awaited<ReturnType<typeof collectMarketData>>,
+  mapped: ReturnType<typeof mapMarketDataToResearch>,
+  reportDate: string
+): Promise<OpenAIAnalysis | null> {
+  const dataContext = buildDataContext(marketData, mapped);
 
   try {
-    return { ok: true, report: normalizeAutoFillResponse(JSON.parse(outputText)) };
-  } catch {
-    return { ok: false };
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+        max_output_tokens: 4000,
+        input: [
+          { role: "system", content: ANALYST_INSTRUCTION },
+          { role: "user", content: buildAnalystPrompt(reportDate, dataContext) },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "gold_research_analysis",
+            strict: true,
+            schema: ANALYST_SCHEMA,
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.info("[gold-auto-fill] openai_error", response.status);
+      return null;
+    }
+
+    const responseBody = await response.json();
+    const parsed = extractParsedAnalysis(responseBody);
+    return parsed;
+  } catch (error) {
+    console.info("[gold-auto-fill] openai_exception", error instanceof Error ? error.message : "unknown");
+    return null;
   }
 }
 
-function extractParsedObject(value: unknown): unknown | null {
-  if (!isRecord(value)) return null;
-  if (looksLikeReport(value)) return value;
-  if (isRecord(value.output_parsed) && looksLikeReport(value.output_parsed)) return value.output_parsed;
+function buildDataContext(marketData: MarketData, mapped: MappedSections): string {
+  return `
+GOLD PRICE: ${marketData.goldPrice || "Live Data Unavailable"}
+DXY: ${marketData.dxy}
+US 10Y YIELD: ${marketData.us10Yield}
+US 2Y YIELD: ${marketData.us2Yield}
+REAL YIELD: ${marketData.realYield}
+FED FUNDS RATE: ${marketData.fedFundsRate}
+MARKET SENTIMENT: ${marketData.marketSentiment}
+DATA SOURCES: ${marketData.sources.join(", ") || "None"}
+DATA ERRORS: ${marketData.errors.join("; ") || "None"}
+TIMESTAMP: ${marketData.timestamp}
 
-  const output = Array.isArray(value.output) ? value.output : [];
+GOLD NEWS:
+${marketData.goldNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source}, ${n.publishedAt})`).join("\n")}
+
+FED NEWS:
+${marketData.fedNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source}, ${n.publishedAt})`).join("\n")}
+
+INFLATION NEWS:
+${marketData.inflationNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source}, ${n.publishedAt})`).join("\n")}
+
+GEOPOLITICAL NEWS:
+${marketData.geopoliticalNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source}, ${n.publishedAt})`).join("\n")}
+
+PRE-MAPPED SECTIONS:
+${mapped.sections.map((s) => `- ${s.driver}: ${s.currentDataValue} | Impact: ${s.goldImpact} | ${s.reason}`).join("\n")}
+`.trim();
+}
+
+function buildAnalystPrompt(reportDate: string, dataContext: string): string {
+  return `
+Analyze the following PRIMASTA Gold/XAUUSD market data for ${reportDate}.
+
+The data below was collected from multiple verified APIs (FRED, Alpha Vantage, Finnhub, NewsAPI, GNews).
+You are the ANALYST. Do NOT search the internet. Do NOT invent prices. Use ONLY the data provided below.
+
+YOUR TASK:
+For each of the 9 driver sections, provide:
+- goldImpact: "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed-Wait"
+- reason: 1 sentence explaining the impact based on the provided data
+- newsHeadline: from the provided news or "Data not verified"
+- newsSummary: 1-2 sentences referencing the actual data point and source
+- chartObservation: from the provided data
+- sourceLink: from the provided news or "Not found"
+
+Also provide a fullSummary with overallGoldBias, preTradeVerdict, and finalGuidance.
+
+Gold impact rules:
+- DXY falling = Bullish Gold. DXY rising = Bearish Gold.
+- Yields falling = Bullish Gold. Yields rising = Bearish Gold.
+- Real yields falling = Bullish Gold. Rising = Bearish Gold.
+- Dovish Fed = Bullish Gold. Hawkish = Bearish Gold.
+- Softer inflation = Bullish Gold. Hot inflation = Bearish Gold.
+- High geopolitical risk = Bullish Gold. Low risk = Neutral.
+- Weak jobs = Bullish Gold. Strong jobs = Bearish Gold.
+- ETF inflows + CB buying = Bullish Gold. Outflows = Bearish Gold.
+- Bullish technical structure = Bullish Gold. Bearish = Bearish Gold.
+
+DATA:
+${dataContext}
+
+Return exactly 9 sections matching these drivers:
+${GOLD_AUTO_DRIVER_NAMES.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+`.trim();
+}
+
+function buildResponseFromMapped(mapped: ReturnType<typeof mapMarketDataToResearch>, reportDate: string): GoldAutoFillResponse {
+  const sections = GOLD_AUTO_DRIVER_NAMES.map((driver) => {
+    const mappedSection = mapped.sections.find((s) => s.driver === driver);
+    return {
+      driver,
+      currentDataValue: mappedSection?.currentDataValue || "Live Data Unavailable",
+      direction: mappedSection?.direction || "",
+      tenYearYieldDirection: "",
+      twoYearYieldDirection: "",
+      realYieldsDirection: mappedSection?.realYieldsDirection || "",
+      fedTone: mappedSection?.fedTone || "",
+      rateExpectation: mappedSection?.rateExpectation || "",
+      latestInflationData: mappedSection?.latestInflationData || "",
+      inflationResult: mappedSection?.inflationResult || "",
+      latestJobsData: mappedSection?.latestJobsData || "",
+      jobsResult: mappedSection?.jobsResult || "",
+      unemploymentRate: mappedSection?.unemploymentRate || "",
+      wageGrowth: mappedSection?.wageGrowth || "",
+      riskLevel: mappedSection?.riskLevel || "",
+      dxyReaction: mappedSection?.dxyReaction || "",
+      etfFlowDirection: mappedSection?.etfFlowDirection || "",
+      centralBankDemand: mappedSection?.centralBankDemand || "",
+      higherTimeframeBias: mappedSection?.higherTimeframeBias || "",
+      keySupport: mappedSection?.keySupport || "",
+      keyResistance: mappedSection?.keyResistance || "",
+      liquidityArea: mappedSection?.liquidityArea || "",
+      marketStructure: mappedSection?.marketStructure || "",
+      setupPresent: mappedSection?.setupPresent || "",
+      setupType: mappedSection?.setupType || "",
+      newsHeadline: mappedSection?.newsHeadline || "Awaiting data",
+      newsSummary: mappedSection?.newsSummary || "Awaiting data",
+      chartObservation: mappedSection?.chartObservation || "Awaiting data",
+      sourceLink: mappedSection?.sourceLink || "Not found",
+      goldImpact: mappedSection?.goldImpact || "Mixed-Wait",
+      goldTechnicalVerdict: mappedSection?.goldTechnicalVerdict || "",
+      reason: mappedSection?.reason || "Awaiting data",
+    };
+  });
+
+  return {
+    date: reportDate,
+    goldCurrentPrice: mapped.goldCurrentPrice,
+    sections: sections as GoldAutoFillResponse["sections"],
+    fullSummary: mapped.fullSummary as GoldAutoFillResponse["fullSummary"],
+  };
+}
+
+function mergeOpenAIAnalysis(mapped: ReturnType<typeof mapMarketDataToResearch>, analysis: OpenAIAnalysis, reportDate: string): GoldAutoFillResponse {
+  const sections = GOLD_AUTO_DRIVER_NAMES.map((driver) => {
+    const mappedSection = mapped.sections.find((s) => s.driver === driver);
+    const aiSection = analysis.sections.find((s) => s.driver === driver);
+
+    return {
+      driver,
+      currentDataValue: mappedSection?.currentDataValue || "Live Data Unavailable",
+      direction: mappedSection?.direction || "",
+      tenYearYieldDirection: "",
+      twoYearYieldDirection: "",
+      realYieldsDirection: mappedSection?.realYieldsDirection || "",
+      fedTone: mappedSection?.fedTone || "",
+      rateExpectation: mappedSection?.rateExpectation || "",
+      latestInflationData: mappedSection?.latestInflationData || "",
+      inflationResult: mappedSection?.inflationResult || "",
+      latestJobsData: mappedSection?.latestJobsData || "",
+      jobsResult: mappedSection?.jobsResult || "",
+      unemploymentRate: mappedSection?.unemploymentRate || "",
+      wageGrowth: mappedSection?.wageGrowth || "",
+      riskLevel: mappedSection?.riskLevel || "",
+      dxyReaction: mappedSection?.dxyReaction || "",
+      etfFlowDirection: mappedSection?.etfFlowDirection || "",
+      centralBankDemand: mappedSection?.centralBankDemand || "",
+      higherTimeframeBias: mappedSection?.higherTimeframeBias || "",
+      keySupport: mappedSection?.keySupport || "",
+      keyResistance: mappedSection?.keyResistance || "",
+      liquidityArea: mappedSection?.liquidityArea || "",
+      marketStructure: mappedSection?.marketStructure || "",
+      setupPresent: mappedSection?.setupPresent || "",
+      setupType: mappedSection?.setupType || "",
+      newsHeadline: aiSection?.newsHeadline || mappedSection?.newsHeadline || "Awaiting data",
+      newsSummary: aiSection?.newsSummary || mappedSection?.newsSummary || "Awaiting data",
+      chartObservation: aiSection?.chartObservation || mappedSection?.chartObservation || "Awaiting data",
+      sourceLink: aiSection?.sourceLink || mappedSection?.sourceLink || "Not found",
+      goldImpact: aiSection?.goldImpact || mappedSection?.goldImpact || "Mixed-Wait",
+      goldTechnicalVerdict: mappedSection?.goldTechnicalVerdict || "",
+      reason: aiSection?.reason || mappedSection?.reason || "Awaiting data",
+    };
+  });
+
+  const summary = analysis.fullSummary
+    ? {
+        ...mapped.fullSummary,
+        overallGoldBias: analysis.fullSummary.overallGoldBias,
+        preTradeVerdict: analysis.fullSummary.preTradeVerdict,
+        finalGuidance: analysis.fullSummary.finalGuidance,
+      }
+    : mapped.fullSummary;
+
+  return {
+    date: reportDate,
+    goldCurrentPrice: mapped.goldCurrentPrice,
+    sections: sections as GoldAutoFillResponse["sections"],
+    fullSummary: summary as GoldAutoFillResponse["fullSummary"],
+  };
+}
+
+function extractParsedAnalysis(responseBody: unknown): OpenAIAnalysis | null {
+  if (!isRecord(responseBody)) return null;
+
+  if (isRecord(responseBody.output_parsed) && Array.isArray(responseBody.output_parsed.sections)) {
+    return responseBody.output_parsed as unknown as OpenAIAnalysis;
+  }
+
+  const output = Array.isArray(responseBody.output) ? responseBody.output : [];
   for (const item of output) {
     if (!isRecord(item)) continue;
-    if (isRecord(item.parsed) && looksLikeReport(item.parsed)) return item.parsed;
+    if (isRecord(item.parsed) && Array.isArray(item.parsed.sections)) {
+      return item.parsed as unknown as OpenAIAnalysis;
+    }
     const content = Array.isArray(item.content) ? item.content : [];
     for (const part of content) {
-      if (isRecord(part) && isRecord(part.parsed) && looksLikeReport(part.parsed)) return part.parsed;
+      if (isRecord(part) && isRecord(part.parsed) && Array.isArray(part.parsed.sections)) {
+        return part.parsed as unknown as OpenAIAnalysis;
+      }
+    }
+  }
+
+  const outputText = extractOutputText(responseBody);
+  if (outputText) {
+    try {
+      const parsed = JSON.parse(cleanJsonText(outputText));
+      if (Array.isArray(parsed.sections)) return parsed as unknown as OpenAIAnalysis;
+    } catch {
+      // fall through
     }
   }
 
@@ -193,132 +411,14 @@ function cleanJsonText(value: string) {
   return fenced ? fenced[1].trim() : trimmed;
 }
 
-async function readOpenAiBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) return {};
+// ---- Helpers ----
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { output_text: text };
-  }
-}
-
-async function readJson(request: Request): Promise<Record<string, unknown>> {
-  try {
-    const body = await request.json();
-    return isRecord(body) ? body : {};
-  } catch {
-    return {};
-  }
-}
-
-function buildAutoFillPrompt(reportDate: string) {
-  return `
-Create today's PRIMASTA Gold/XAUUSD research report for ${reportDate}.
-
-You MUST use the web_search tool with today's date to find the MOST RECENT information available. Reject any article or data point older than 7 days unless it is the only information available for that specific driver.
-
-CRITICAL DATE RULES:
-- Every section MUST include a newsHeadline, newsSummary with the publication date clearly stated, and a sourceLink.
-- If the most recent data you find for a section is older than 7 days, set currentDataValue to "Data not found for recent period (last 7 days)" and goldImpact to "Mixed-Wait".
-- The currentDataValue field MUST include the value AND the date of the data point (e.g. "DXY at 104.25 as of 2026-07-13").
-- The newsSummary MUST include the publication date of the article (e.g. "As of July 13, 2026, Reuters reported...").
-
-Use web search for fresh source-backed information. Prefer official or reliable sources:
-US yields/Treasury/FRED, real yields/FRED, Fed/FOMC/Federal Reserve, CPI/PCE/BLS/BEA, jobs/BLS, ETF and central bank demand/World Gold Council or reputable gold reports, geopolitics/reputable news, DXY and Gold technicals/reliable market source.
-
-Return exactly 9 sections in this order:
-${GOLD_AUTO_DRIVER_NAMES.map((driver, index) => `${index + 1}. ${driver}`).join("\n")}
-
-Keep each section compact:
-- newsHeadline: one headline from a recent (within 7 days) article
-- newsSummary: 1-2 short sentences. MUST include the publication date (e.g. "As of July 13, 2026...").
-- chartObservation: short practical chart note; if not verified, say Data not verified.
-- sourceLink: a single raw URL only (e.g. https://example.com/article), starting with http:// or https://, with nothing else appended. Use "Not found" if no URL is available.
-- reason: short reason for Gold impact
-
-Gold impact rules:
-DXY falling/rejecting resistance/breaking support = Bullish Gold. DXY rising/breaking resistance = Bearish Gold. Sideways = Neutral or Mixed-Wait.
-US 10Y and 2Y yields falling = Bullish Gold. Both rising = Bearish Gold. Mixed yields = Mixed-Wait.
-Real yields falling = Bullish Gold. Rising real yields = Bearish Gold. Sideways = Neutral.
-Dovish Fed/cuts expected = Bullish Gold. Hawkish/higher for longer = Bearish Gold. Mixed = Mixed-Wait.
-Softer inflation supporting cuts = Bullish Gold. Hot inflation strengthening yields/USD = Bearish Gold. In-line/conflicting = Neutral or Mixed-Wait.
-Weak jobs/rising unemployment/slowing wages = Bullish Gold. Strong jobs/low unemployment/hot wages = Bearish Gold. Mixed jobs data = Mixed-Wait.
-High risk/fear = Bullish Gold. High risk plus very strong DXY = Mixed-Wait. Low risk = Neutral.
-ETF inflows plus strong central bank buying = Bullish Gold. ETF outflows plus weak demand = Bearish Gold. Mixed flows = Mixed-Wait.
-Bullish technical structure/support/liquidity sweep/setup present = Bullish Gold. Bearish structure/resistance/rejection/setup present = Bearish Gold. Unclear structure = Mixed-Wait.
-
-Do not invent prices, data, or source links. If not verified, set sourceLink to "Not found" and goldImpact to "Mixed-Wait".
-Personal rule must be exactly: ${GOLD_PERSONAL_RULE}
-`.trim();
-}
-
-function buildRetryPrompt(reportDate: string) {
-  return `
-Create a compact PRIMASTA Gold/XAUUSD research JSON object for ${reportDate}.
-You MUST use the web_search tool to verify fresh data before answering. Do not invent, estimate,
-or recall prices, data, or source links from memory. If a value cannot be verified via a fresh
-web search, set that field to "Data not verified", sourceLink to "Not found", and goldImpact to "Mixed-Wait".
-Every newsSummary MUST include the publication date. Reject articles older than 7 days.
-
-Use exactly these 9 section driver names, in order:
-${GOLD_AUTO_DRIVER_NAMES.join("\n")}
-
-Each section must be short and must include a sourceLink value.
-Use the personalRule exactly: ${GOLD_PERSONAL_RULE}
-`.trim();
-}
-
-function openAiErrorResponse(responseBody: unknown, status: number) {
-  const { code, message } = getOpenAiError(responseBody);
-  console.info("[gold-auto-fill] openai_error_code", code || status);
-
-  if (status === 429 || /quota|billing|credit|insufficient/i.test(`${code} ${message}`)) {
-    return errorResponse("billing_or_quota", "OpenAI billing or credits issue. Check OpenAI usage/billing.", status);
-  }
-
-  if (/web_search|search|source/i.test(`${code} ${message}`)) {
-    return errorResponse("web_search_failed", "Could not verify fresh sources. Try again later.", status);
-  }
-
-  if (status === 401 || status === 403) {
-    return errorResponse("openai_auth_error", "OpenAI API key is missing in Vercel.", status);
-  }
-
-  return errorResponse(code || "openai_error", "Could not verify fresh sources. Try again later.", status || 502);
+function readJson(request: Request): Promise<Record<string, unknown>> {
+  return request.json().then((body) => (isRecord(body) ? body : {})).catch(() => ({}));
 }
 
 function errorResponse(code: string, error: string, status: number) {
   return NextResponse.json({ code, error }, { status });
-}
-
-function getOpenAiError(responseBody: unknown) {
-  if (!isRecord(responseBody)) return { code: "", message: "" };
-  const error = isRecord(responseBody.error) ? responseBody.error : responseBody;
-
-  return {
-    code: typeof error.code === "string" ? error.code : "",
-    message: typeof error.message === "string" ? error.message : ""
-  };
-}
-
-function logAttempt(status: number, responseBody: unknown, parseSuccess: boolean, attempt: number) {
-  const outputTextLength = extractOutputText(responseBody).length;
-  console.info("[gold-auto-fill] openai_status", status, "attempt", attempt);
-  console.info("[gold-auto-fill] response_text_length", outputTextLength, "attempt", attempt);
-  console.info("[gold-auto-fill] parse_success", parseSuccess, "attempt", attempt);
-}
-
-function looksLikeReport(value: Record<string, unknown>) {
-  return typeof value.date === "string" && Array.isArray(value.sections) && isRecord(value.fullSummary);
-}
-
-function safeErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (/quota|billing|credit|insufficient/i.test(message)) return "OpenAI billing or credits issue. Check OpenAI usage/billing.";
-  if (/search|source/i.test(message)) return "Could not verify fresh sources. Try again later.";
-  return "Could not verify fresh sources. Try again later.";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -338,13 +438,11 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const GOLD_AUTO_FILL_SCHEMA = {
+const ANALYST_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["date", "goldCurrentPrice", "sections", "fullSummary"],
+  required: ["sections", "fullSummary"],
   properties: {
-    date: { type: "string" },
-    goldCurrentPrice: { type: "string" },
     sections: {
       type: "array",
       minItems: 9,
@@ -352,49 +450,27 @@ const GOLD_AUTO_FILL_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["driver", "currentDataValue", "direction", "newsHeadline", "newsSummary", "chartObservation", "sourceLink", "goldImpact", "reason"],
+        required: ["driver", "goldImpact", "reason", "newsHeadline", "newsSummary", "chartObservation", "sourceLink"],
         properties: {
           driver: { type: "string", enum: GOLD_AUTO_DRIVER_NAMES },
-          currentDataValue: { type: "string" },
-          direction: { type: "string" },
+          goldImpact: { type: "string", enum: ["Bullish Gold", "Bearish Gold", "Neutral", "Mixed-Wait"] },
+          reason: { type: "string" },
           newsHeadline: { type: "string" },
           newsSummary: { type: "string" },
           chartObservation: { type: "string" },
           sourceLink: { type: "string" },
-          goldImpact: { type: "string", enum: ["Bullish Gold", "Bearish Gold", "Neutral", "Mixed-Wait"] },
-          reason: { type: "string" }
-        }
-      }
+        },
+      },
     },
     fullSummary: {
       type: "object",
       additionalProperties: false,
-      required: [
-        "overallGoldBias",
-        "bullishDrivers",
-        "bearishDrivers",
-        "mixedDrivers",
-        "strongestBullishDriver",
-        "strongestBearishDriver",
-        "mainRiskToday",
-        "bestSessionToTrade",
-        "preTradeVerdict",
-        "finalGuidance",
-        "personalRule"
-      ],
+      required: ["overallGoldBias", "preTradeVerdict", "finalGuidance"],
       properties: {
         overallGoldBias: { type: "string", enum: ["Bullish", "Bearish", "Neutral", "Mixed-Wait"] },
-        bullishDrivers: { type: "array", items: { type: "string" } },
-        bearishDrivers: { type: "array", items: { type: "string" } },
-        mixedDrivers: { type: "array", items: { type: "string" } },
-        strongestBullishDriver: { type: "string" },
-        strongestBearishDriver: { type: "string" },
-        mainRiskToday: { type: "string" },
-        bestSessionToTrade: { type: "string" },
         preTradeVerdict: { type: "string", enum: ["Trade Allowed", "Wait", "Avoid Before News", "Manage Existing Trade Only"] },
         finalGuidance: { type: "string" },
-        personalRule: { type: "string" }
-      }
-    }
-  }
+      },
+    },
+  },
 } as const;
