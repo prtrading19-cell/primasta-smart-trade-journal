@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { GOLD_AUTO_DRIVER_NAMES, normalizeAutoFillResponse } from "@/lib/goldAutoResearch";
+import { buildEnhancedAnalysis } from "@/lib/goldResearchIntegrations";
 import { GOLD_PERSONAL_RULE, type GoldAutoFillResponse } from "@/types/goldResearch";
 
 export const runtime = "nodejs";
@@ -33,7 +34,9 @@ export async function POST(request: Request) {
     logAttempt(firstAttempt.status, firstAttempt.body, firstParsed.ok, 1);
 
     if (firstAttempt.statusOk && firstParsed.ok) {
-      return NextResponse.json(await withLivePrice(firstParsed.report, livePricePromise));
+      const report = await withLivePrice(firstParsed.report, livePricePromise);
+      const engineAnalysis = runEngineAnalysis(report);
+      return NextResponse.json({ ...report, engineAnalysis });
     }
 
     if (!firstAttempt.statusOk) {
@@ -45,7 +48,9 @@ export async function POST(request: Request) {
     logAttempt(retryAttempt.status, retryAttempt.body, retryParsed.ok, 2);
 
     if (retryAttempt.statusOk && retryParsed.ok) {
-      return NextResponse.json(await withLivePrice(retryParsed.report, livePricePromise));
+      const report = await withLivePrice(retryParsed.report, livePricePromise);
+      const engineAnalysis = runEngineAnalysis(report);
+      return NextResponse.json({ ...report, engineAnalysis });
     }
 
     if (!retryAttempt.statusOk) {
@@ -318,6 +323,15 @@ function safeErrorMessage(error: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function runEngineAnalysis(report: GoldAutoFillResponse): unknown {
+  try {
+    return buildEnhancedAnalysis(report);
+  } catch (error) {
+    console.info("[gold-auto-fill] engine_analysis_failed", error instanceof Error ? error.message : "unknown");
+    return null;
+  }
 }
 
 function today() {

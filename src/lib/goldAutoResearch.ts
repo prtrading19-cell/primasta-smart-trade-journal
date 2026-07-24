@@ -18,7 +18,15 @@ export const GOLD_AUTO_DRIVER_NAMES: GoldAutoDriverName[] = [
   "NFP / Jobs Check",
   "Geopolitics / Risk Sentiment Check",
   "ETF / Central Bank Demand Check",
-  "Gold Technical Structure Check"
+  "Gold Technical Structure Check",
+  "Economic Growth Check",
+  "Gold ETF Flows Check",
+  "Central Bank Demand Check",
+  "Market Sentiment Check",
+  "Crowd Positioning Check",
+  "Liquidity Conditions Check",
+  "Seasonality Check",
+  "Position Risk Check"
 ];
 
 export function getAutoDriverNames(): GoldAutoDriverName[] {
@@ -121,7 +129,28 @@ function normalizeAutoSection(driver: GoldAutoDriverName, value: unknown): GoldA
     sourceLink: stringValue(source.sourceLink),
     goldImpact: normalizeAutoImpact(source.goldImpact),
     goldTechnicalVerdict: stringValue(source.goldTechnicalVerdict),
-    reason: stringValue(source.reason)
+    reason: stringValue(source.reason),
+    gdpGrowth: stringValue(source.gdpGrowth),
+    pmi: stringValue(source.pmi),
+    ism: stringValue(source.ism),
+    economicActivity: stringValue(source.economicActivity),
+    etfFlowMagnitude: stringValue(source.etfFlowMagnitude),
+    cbBuyingVolume: stringValue(source.cbBuyingVolume),
+    cbSellingVolume: stringValue(source.cbSellingVolume),
+    fearGreedIndex: stringValue(source.fearGreedIndex),
+    vixLevel: stringValue(source.vixLevel),
+    riskAppetite: stringValue(source.riskAppetite),
+    retailPositioning: stringValue(source.retailPositioning),
+    institutionalPositioning: stringValue(source.institutionalPositioning),
+    crowdedTradeRisk: stringValue(source.crowdedTradeRisk),
+    fundingConditions: stringValue(source.fundingConditions),
+    balanceSheetSize: stringValue(source.balanceSheetSize),
+    repoRate: stringValue(source.repoRate),
+    seasonalPattern: stringValue(source.seasonalPattern),
+    historicalReturn: stringValue(source.historicalReturn),
+    positionCrowding: stringValue(source.positionCrowding),
+    shortInterest: stringValue(source.shortInterest),
+    cftcNetLong: stringValue(source.cftcNetLong)
   };
 }
 

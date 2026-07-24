@@ -33,23 +33,22 @@ import {
   type GoldTradeSetupResearchSummary,
   type GoldTradeSetupResult
 } from "@/types/goldTradeSetup";
-import { DRIVER_REGISTRY, getDriverById, getDriversByCategory } from "@/config/driverRegistry";
+import { DRIVER_REGISTRY, getEnabledDrivers, getDriverNameFromAutoDriver, getCurrentValueFromConfig, getEnabledDriverNames } from "@/config/driverRegistry";
 import { CATEGORY_DEFINITIONS, getCategoryById } from "@/config/categoryConfig";
-
-type DriverFieldType = "text" | "textarea" | "select" | "url";
-
-interface DriverFieldConfig {
-  key: string;
-  label: string;
-  type: DriverFieldType;
-  placeholder: string;
-  options?: string[];
-}
-
-interface DriverFormConfig {
-  description: string;
-  fields: DriverFieldConfig[];
-}
+import type { GoldResearchAnalysis } from "@/types/goldResearchAnalysis";
+import { getCategoryTitle, formatScore } from "@/lib/goldResearchIntegrations";
+import {
+  DRIVER_FORM_CONFIG,
+  AUTO_SECTION_FIELDS,
+  CORE_FIELD_KEYS,
+  CORE_RESEARCH_FIELDS,
+  type DriverFieldConfig,
+  type DriverFormConfig,
+  type AutoSectionFieldConfig,
+  getDriverFormConfig,
+  getDriverSpecificFields,
+  getAutoSectionFields
+} from "@/config/driverFormFields";
 
 interface XauusdMarketData {
   status: "success" | "error";
@@ -95,245 +94,6 @@ const EMPTY_MARKET_DATA: XauusdMarketData = {
   provider: "None",
   message: "",
   verified: false
-};
-
-const CORE_FIELD_KEYS = new Set(["newsHeadline", "newsSummary", "chartObservation", "sourceLink", "notes"]);
-
-const CORE_RESEARCH_FIELDS: DriverFieldConfig[] = [
-  { key: "newsHeadline", label: "News Headline", type: "text", placeholder: "Paste the exact headline or write a clear research title" },
-  { key: "newsSummary", label: "News Summary", type: "textarea", placeholder: "Summarize the news driver, numbers, reaction, and important context" },
-  { key: "chartObservation", label: "My Chart Observation", type: "textarea", placeholder: "Write what price structure shows: resistance, support, supply, demand, rejection, breakout, or liquidity" },
-  { key: "sourceLink", label: "Source Link", type: "url", placeholder: "https://..." },
-  { key: "notes", label: "Notes", type: "textarea", placeholder: "Optional: extra risk, timing, or confirmation notes" }
-];
-
-const DRIVER_FORM_CONFIG: Record<GoldDriverName, DriverFormConfig> = {
-  "DXY / US Dollar": {
-    description: "Dollar pressure, DXY direction, and chart context.",
-    fields: [
-      { key: "dxyDirection", label: "DXY current direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting Resistance", "Breaking Support", "Breaking Resistance"] },
-      { key: "dxyCurrentLevel", label: "DXY current level", type: "text", placeholder: "Example: 105.20" },
-      { key: "dxySupportResistance", label: "DXY key support/resistance", type: "text", placeholder: "Example: Resistance at 105.50, support at 104.80" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Dollar weakens as rate-cut bets rise" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the Dollar driver in a few lines" },
-      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: DXY rejecting resistance on H1" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "US Yields": {
-    description: "10Y and 2Y Treasury direction, yield levels, and news reaction.",
-    fields: [
-      { key: "tenYearYieldDirection", label: "10Y yield direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
-      { key: "twoYearYieldDirection", label: "2Y yield direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
-      { key: "tenYearYieldValue", label: "Current 10Y yield value", type: "text", placeholder: "Example: 4.47%" },
-      { key: "twoYearYieldValue", label: "Current 2Y yield value", type: "text", placeholder: "Example: 3.82%" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Treasury yields jump on higher-for-longer outlook" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the yield move and market reaction" },
-      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: 10Y pulling back from recent high" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "Real Yields": {
-    description: "Real-yield pressure and inflation-expectation direction.",
-    fields: [
-      { key: "realYieldsDirection", label: "Real yields direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Sideways", "Rejecting High", "Breaking Higher", "Breaking Lower"] },
-      { key: "realYieldValue", label: "Current real yield value", type: "text", placeholder: "Example: 2.05%" },
-      { key: "inflationExpectationDirection", label: "Inflation expectation direction", type: "select", placeholder: "Select direction", options: ["Rising", "Falling", "Stable"] },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Real yields pull back as inflation expectations rise" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the real-yield driver" },
-      { key: "chartObservation", label: "My chart observation", type: "textarea", placeholder: "Example: Real yields rejecting recent high" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "Fed Tone / FOMC": {
-    description: "Fed tone, rate expectations, speakers, and key quote.",
-    fields: [
-      { key: "fedTone", label: "Fed tone", type: "select", placeholder: "Select tone", options: ["Hawkish", "Dovish", "Neutral", "Mixed"] },
-      { key: "rateExpectation", label: "Rate expectation", type: "select", placeholder: "Select expectation", options: ["Cuts Expected", "Hike Expected", "Hold Expected", "Higher For Longer"] },
-      { key: "fedSpeakerOrEvent", label: "Fed speaker or event", type: "text", placeholder: "Example: Powell speech, FOMC minutes" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Fed signals fewer cuts this year" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the Fed message" },
-      { key: "keyQuote", label: "Key quote or takeaway", type: "textarea", placeholder: "Paste the quote or your main takeaway" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "CPI / PCE": {
-    description: "Inflation surprise, actual/forecast/previous, and market reaction.",
-    fields: [
-      { key: "inflationResult", label: "Inflation result", type: "select", placeholder: "Select result", options: ["Hotter Than Expected", "Softer Than Expected", "In Line", "Mixed"] },
-      { key: "inflationType", label: "CPI/PCE type", type: "select", placeholder: "Select type", options: ["CPI", "Core CPI", "PCE", "Core PCE"] },
-      { key: "actualValue", label: "Actual value", type: "text", placeholder: "Example: 0.4% m/m" },
-      { key: "forecastValue", label: "Forecast value", type: "text", placeholder: "Example: 0.3% m/m" },
-      { key: "previousValue", label: "Previous value", type: "text", placeholder: "Example: 0.2% m/m" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: CPI comes in hotter than expected" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the inflation print and reaction" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "NFP / Jobs": {
-    description: "Payrolls, unemployment, wages, and labor-market reaction.",
-    fields: [
-      { key: "jobsResult", label: "Jobs result", type: "select", placeholder: "Select result", options: ["Stronger Than Expected", "Weaker Than Expected", "In Line", "Mixed"] },
-      { key: "nfpActual", label: "NFP actual", type: "text", placeholder: "Example: 210K" },
-      { key: "nfpForecast", label: "NFP forecast", type: "text", placeholder: "Example: 170K" },
-      { key: "unemploymentRate", label: "Unemployment rate", type: "text", placeholder: "Example: 4.1%, unemployment rising" },
-      { key: "wageGrowth", label: "Wage growth", type: "text", placeholder: "Example: wages cooling / 0.2% m/m" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Payrolls miss forecast as unemployment rises" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the jobs report and reaction" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  Geopolitics: {
-    description: "Risk level, event type, DXY reaction, and safe-haven demand.",
-    fields: [
-      { key: "geopoliticalRiskLevel", label: "Geopolitical risk level", type: "select", placeholder: "Select risk", options: ["Low", "Medium", "High", "Extreme"] },
-      { key: "eventType", label: "Event type", type: "select", placeholder: "Select event", options: ["War", "Conflict", "Sanctions", "Election Risk", "Banking Risk", "Global Uncertainty", "Other"] },
-      { key: "dxyReaction", label: "DXY reaction", type: "select", placeholder: "Select reaction", options: ["Rising", "Falling", "Stable", "Unknown"] },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Gold catches safe-haven bid as tensions rise" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the geopolitical event and market reaction" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "ETF / Central Bank Demand": {
-    description: "ETF flows, central-bank demand, and longer-term Gold demand.",
-    fields: [
-      { key: "etfFlowDirection", label: "ETF flow direction", type: "select", placeholder: "Select flow", options: ["Inflows", "Outflows", "Flat", "Unknown"] },
-      { key: "centralBankDemand", label: "Central bank demand", type: "select", placeholder: "Select demand", options: ["Strong Buying", "Weak Buying", "Selling", "Unknown"] },
-      { key: "reportPeriod", label: "Report period", type: "text", placeholder: "Example: Weekly, May 2026, Q2" },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: ETF inflows rise as central banks keep buying" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the demand report" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  },
-  "Custom News": {
-    description: "Any Gold-related news that does not fit one driver cleanly.",
-    fields: [
-      { key: "newsCategory", label: "News category", type: "select", placeholder: "Select category", options: ["Dollar", "Yields", "Fed", "Inflation", "Jobs", "Geopolitics", "Gold Demand", "Other"] },
-      { key: "newsHeadline", label: "News headline", type: "text", placeholder: "Example: Gold reacts to mixed macro headlines" },
-      { key: "newsSummary", label: "News summary", type: "textarea", placeholder: "Summarize the news and market reaction" },
-      { key: "sourceLink", label: "Source link", type: "url", placeholder: "https://..." },
-      { key: "myInterpretation", label: "My interpretation", type: "textarea", placeholder: "Example: This looks Gold-supportive only if DXY keeps falling" },
-      { key: "notes", label: "Notes", type: "textarea", placeholder: "Extra context or risk notes" }
-    ]
-  }
-};
-
-type AutoFieldType = "text" | "textarea" | "url" | "select";
-
-interface AutoSectionFieldConfig {
-  key: keyof GoldAutoResearchSection;
-  label: string;
-  type?: AutoFieldType;
-  options?: string[];
-}
-
-const AUTO_IMPACT_OPTIONS = ["Bullish Gold", "Bearish Gold", "Neutral", "Mixed-Wait"];
-
-const AUTO_SECTION_FIELDS: Record<GoldAutoDriverName, AutoSectionFieldConfig[]> = {
-  "DXY / US Dollar Check": [
-    { key: "currentDataValue", label: "Current Data/Value" },
-    { key: "direction", label: "Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Rejecting Resistance", "Breaking Support", "Breaking Resistance", "Data not verified"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "US Yields Check": [
-    { key: "currentDataValue", label: "Current Data/Value" },
-    { key: "tenYearYieldDirection", label: "10Y Yield Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
-    { key: "twoYearYieldDirection", label: "2Y Yield Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "Real Yields Check": [
-    { key: "currentDataValue", label: "Current Data/Value" },
-    { key: "realYieldsDirection", label: "Real Yields Direction", type: "select", options: ["Rising", "Falling", "Sideways", "Mixed", "Data not verified"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "Fed Tone / FOMC Check": [
-    { key: "fedTone", label: "Fed Tone", type: "select", options: ["Hawkish", "Dovish", "Neutral", "Mixed", "Data not verified"] },
-    { key: "rateExpectation", label: "Rate Expectation", type: "select", options: ["Cuts Expected", "Hold Expected", "Hike Expected", "Higher For Longer", "Mixed", "Data not verified"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "CPI / PCE Inflation Check": [
-    { key: "latestInflationData", label: "Latest Inflation Data" },
-    { key: "inflationResult", label: "Inflation Result", type: "select", options: ["Hotter Than Expected", "Softer Than Expected", "In Line", "Mixed", "Data not verified"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "NFP / Jobs Check": [
-    { key: "latestJobsData", label: "Latest Jobs Data" },
-    { key: "jobsResult", label: "Jobs Result", type: "select", options: ["Stronger Than Expected", "Weaker Than Expected", "In Line", "Mixed", "Data not verified"] },
-    { key: "unemploymentRate", label: "Unemployment Rate" },
-    { key: "wageGrowth", label: "Wage Growth" },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "Geopolitics / Risk Sentiment Check": [
-    { key: "riskLevel", label: "Risk Level", type: "select", options: ["Low", "Medium", "High", "Extreme", "Data not verified"] },
-    { key: "dxyReaction", label: "DXY Reaction", type: "select", options: ["Rising", "Falling", "Stable", "Unknown"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "ETF / Central Bank Demand Check": [
-    { key: "etfFlowDirection", label: "ETF Flow Direction", type: "select", options: ["Inflows", "Outflows", "Flat", "Unknown"] },
-    { key: "centralBankDemand", label: "Central Bank Demand", type: "select", options: ["Strong Buying", "Weak Buying", "Selling", "Unknown"] },
-    { key: "newsHeadline", label: "News Headline" },
-    { key: "newsSummary", label: "News Summary", type: "textarea" },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldImpact", label: "Gold Impact", type: "select", options: AUTO_IMPACT_OPTIONS },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ],
-  "Gold Technical Structure Check": [
-    { key: "higherTimeframeBias", label: "Higher Timeframe Bias", type: "select", options: ["Bullish", "Bearish", "Neutral", "Data not verified"] },
-    { key: "keySupport", label: "Key Support" },
-    { key: "keyResistance", label: "Key Resistance" },
-    { key: "liquidityArea", label: "Liquidity Area" },
-    { key: "marketStructure", label: "Market Structure", type: "select", options: ["Bullish", "Bearish", "Ranging", "Data not verified"] },
-    { key: "setupPresent", label: "Setup Present", type: "select", options: ["Yes", "No", "Unclear"] },
-    { key: "setupType", label: "Setup Type", type: "select", options: ["Liquidity Sweep", "BOS", "MSS", "FVG", "OB", "Retest", "Other", "None"] },
-    { key: "chartObservation", label: "My Chart Observation", type: "textarea" },
-    { key: "sourceLink", label: "Source Link", type: "url" },
-    { key: "goldTechnicalVerdict", label: "Gold Technical Verdict", type: "select", options: ["Buy Setup", "Sell Setup", "Wait"] },
-    { key: "reason", label: "Reason", type: "textarea" }
-  ]
 };
 
 const SETUP_SELECT_OPTIONS: Partial<Record<keyof GoldTradeSetupInputs, string[]>> = {
@@ -421,6 +181,8 @@ export function GoldResearchDesk() {
   const [levelsFromMarketData, setLevelsFromMarketData] = useState(false);
   const [liquidityLevelsConfirmed, setLiquidityLevelsConfirmed] = useState(false);
   const [sections, setSections] = useState<GoldAutoResearchSection[]>(createEmptyAutoFillResponse().sections);
+  const [enhancedAnalysis, setEnhancedAnalysis] = useState<GoldResearchAnalysis | null>(null);
+  const [enhancing, setEnhancing] = useState(false);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -434,7 +196,21 @@ export function GoldResearchDesk() {
   }, [goldResearchReports]);
   const latestDailyResearch = dailyGoldResearchReports[0] ?? null;
   const activeDailyResearch = loadedDailyResearch ?? latestDailyResearch;
-  const setupResearch = useMemo(() => buildSetupResearchSummary(setupInputs.mode === "Assisted" ? activeDailyResearch : autoReport, biasSummary), [activeDailyResearch, autoReport, biasSummary, setupInputs.mode]);
+  const setupResearch = useMemo(() => {
+    const base = buildSetupResearchSummary(setupInputs.mode === "Assisted" ? activeDailyResearch : autoReport, biasSummary);
+    if (enhancedAnalysis?.decision) {
+      const bias = String(enhancedAnalysis.decision.overallBias) as string;
+      return {
+        ...base,
+        overallGoldBias: bias === "Strong Bullish" || bias === "Bullish"
+          ? "Bullish Gold"
+          : bias === "Strong Bearish" || bias === "Bearish"
+          ? "Bearish Gold"
+          : base.overallGoldBias
+      };
+    }
+    return base;
+  }, [activeDailyResearch, autoReport, biasSummary, setupInputs.mode, enhancedAnalysis?.decision]);
   const setupRiskReward = useMemo(() => calculateGoldSetupRiskReward(setupInputs), [setupInputs]);
   const showSetupAssistant = Boolean(autoReport || showSummary || goldResearchReports.length);
   const marketDataConnected = marketData?.status === "success";
@@ -470,7 +246,14 @@ export function GoldResearchDesk() {
       setReportDate(normalized.date);
       setShowAutoSummary(true);
       setEditingAutoDriver(null);
-      setAutoMessage(normalized.warning ?? "Auto-fill complete. Review and edit the research before saving.");
+
+      const engineResult = (result as Record<string, unknown>).engineAnalysis;
+      if (engineResult && typeof engineResult === "object") {
+        setEnhancedAnalysis(engineResult as GoldResearchAnalysis);
+        setAutoMessage(normalized.warning ?? "Auto-fill complete. Gold Research Engine analysis generated automatically. Review results below.");
+      } else {
+        setAutoMessage(normalized.warning ?? "Auto-fill complete. Review and edit the research before saving.");
+      }
     } catch (error) {
       setAutoMessage(error instanceof Error ? error.message : "Could not verify fresh sources. Try again later.");
     } finally {
@@ -515,7 +298,8 @@ export function GoldResearchDesk() {
         sections,
         fullSummary,
         overallGoldBias: fullSummary.overallGoldBias,
-        preTradeVerdict: fullSummary.preTradeVerdict
+        preTradeVerdict: fullSummary.preTradeVerdict,
+        engineAnalysis: enhancedAnalysis ?? undefined
       });
       setAutoReport((current) => ({
         date: current?.date || reportDate || today(),
@@ -524,7 +308,7 @@ export function GoldResearchDesk() {
         fullSummary
       }));
       setShowAutoSummary(true);
-      setAutoMessage("Daily Gold research saved to Supabase.");
+      setAutoMessage("Daily Gold research saved with engine analysis.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unable to save daily Gold research.";
       setAutoMessage(
@@ -740,11 +524,64 @@ export function GoldResearchDesk() {
     }
   }
 
+  async function rerunEngines() {
+    setEnhancing(true);
+
+    try {
+      let response: Response;
+
+      if (autoReport) {
+        response = await fetch("/api/gold-research/enhance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "auto-fill",
+            autoFillReport: autoReport,
+            currentPrice: parseGoldPrice(terminalGoldPrice)
+          })
+        });
+      } else if (goldResearchReports.length > 0) {
+        response = await fetch("/api/gold-research/enhance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "manual",
+            manualReports: goldResearchReports,
+            currentPrice: parseGoldPrice(terminalGoldPrice)
+          })
+        });
+      } else {
+        setEnhancing(false);
+        return;
+      }
+
+      const result = await readJsonResponse(response);
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Engine re-run failed.");
+
+      if (result.success && result.analysis) {
+        setEnhancedAnalysis(result.analysis as GoldResearchAnalysis);
+      }
+    } catch {
+    } finally {
+      setEnhancing(false);
+    }
+  }
+
+  function parseGoldPrice(priceStr: string): number | undefined {
+    const cleaned = priceStr.replace(/[^0-9.,]/g, "").replace(",", "");
+    const num = parseFloat(cleaned);
+    return Number.isFinite(num) && num > 0 ? num : undefined;
+  }
+
   return (
     <div className="space-y-6">
       <GoldTerminalHeader
         currentPrice={terminalGoldPrice}
-        overallBias={setupResearch.overallGoldBias || "Mixed-Wait"}
+        overallBias={enhancedAnalysis?.decision?.overallBias || setupResearch.overallGoldBias || "Mixed-Wait"}
+        goldScore={enhancedAnalysis?.decision?.overallGoldScore}
+        confidence={enhancedAnalysis?.decision?.overallConfidence}
+        riskRating={enhancedAnalysis?.decision?.riskRating}
+        decision={enhancedAnalysis?.decision?.decision}
         reportDate={terminalReportDate}
         lastUpdated={terminalLastUpdated}
         marketDataConnected={marketDataConnected}
@@ -821,6 +658,151 @@ export function GoldResearchDesk() {
             />
           ))}
         </div>
+      </section>
+
+      <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Gold Research Engine</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">Decision Engine Output</h2>
+            <p className="mt-1 text-sm text-text-secondary">Automatically generated after auto-fill. Weighted category scores, technical bias, institutional flow analysis, and a transparent decision with explanations.</p>
+          </div>
+          {autoReport ? (
+            <button
+              type="button"
+              onClick={() => void rerunEngines()}
+              disabled={enhancing}
+              className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-4 py-2 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60"
+            >
+              {enhancing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+              {enhancing ? "Running..." : "Re-run Engines"}
+            </button>
+          ) : null}
+        </div>
+
+        {enhancedAnalysis ? (
+          <div className="mt-5 space-y-5">
+            <div className="rounded-md border border-gold/20 bg-gold/5 px-4 py-3 text-sm text-gold">
+              <p className="font-semibold">Pipeline: {enhancedAnalysis.pipelineStatus} | Schema: {enhancedAnalysis.schemaVersion} | Execution: {enhancedAnalysis.executionTimeMs}ms</p>
+            </div>
+
+            {enhancedAnalysis.decision ? (
+              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Decision Engine</p>
+                  <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(enhancedAnalysis.decision.decision))}>{enhancedAnalysis.decision.decision}</span>
+                  <span className="rounded-md bg-surface-elevated px-3 py-1 text-xs font-bold text-text-secondary">{enhancedAnalysis.decision.overallConfidence}%</span>
+                  <span className="rounded-md bg-surface-elevated px-3 py-1 text-xs font-bold text-text-secondary">{enhancedAnalysis.decision.riskRating} Risk</span>
+                </div>
+                <div className="mt-4 grid gap-2 text-sm">
+                  <ResultRow label="Gold Bias" value={enhancedAnalysis.decision.overallBias} />
+                  <ResultRow label="Gold Score" value={formatScore(enhancedAnalysis.decision.overallGoldScore)} />
+                  <ResultRow label="Decision Quality" value={enhancedAnalysis.decision.decisionQuality} />
+                  <ResultRow label="Summary" value={enhancedAnalysis.decision.summary} />
+                  <ResultRow label="Primary Reason" value={enhancedAnalysis.decision.institutionalExplanation.primaryReason} />
+                  {enhancedAnalysis.decision.institutionalExplanation.supportingReasons.length > 0 ? (
+                    <ResultRow label="Supporting Reasons" value={enhancedAnalysis.decision.institutionalExplanation.supportingReasons.join("; ")} />
+                  ) : null}
+                  {enhancedAnalysis.decision.institutionalExplanation.conflictingReasons.length > 0 ? (
+                    <ResultRow label="Conflicting Reasons" value={enhancedAnalysis.decision.institutionalExplanation.conflictingReasons.join("; ")} />
+                  ) : null}
+                  {enhancedAnalysis.decision.institutionalExplanation.riskFactors.length > 0 ? (
+                    <ResultRow label="Risk Factors" value={enhancedAnalysis.decision.institutionalExplanation.riskFactors.join("; ")} />
+                  ) : null}
+                  <ResultRow label="Alignment" value={`Category: ${formatScore(enhancedAnalysis.decision.alignmentBreakdown.categoryAlignment)} | Technical: ${formatScore(enhancedAnalysis.decision.alignmentBreakdown.technicalAlignment)} | Institutional: ${formatScore(enhancedAnalysis.decision.alignmentBreakdown.institutionalAlignment)} | Overall: ${formatScore(enhancedAnalysis.decision.alignmentBreakdown.overallAlignment)}`} />
+                </div>
+              </div>
+            ) : null}
+
+            {enhancedAnalysis.categoryScores?.scores?.length ? (
+              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Category Scores</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {enhancedAnalysis.categoryScores.scores.map((score) => (
+                    <div key={score.categoryId} className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase text-stone-500">{score.categoryTitle}</p>
+                        <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", autoBadgeClass(score.bias))}>{score.bias}</span>
+                      </div>
+                      <p className="mt-2 text-lg font-bold text-white">{formatScore(score.weightedScore)}</p>
+                      <p className="mt-1 text-xs text-stone-500">{score.driverCount} drivers | {score.alignmentStrength} alignment | {formatScore(score.confidence)}% confidence</p>
+                      {score.reason ? <p className="mt-2 text-xs text-stone-400 line-clamp-2">{score.reason}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {enhancedAnalysis.technicalBias ? (
+                <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Technical Bias</p>
+                  <div className="mt-4 grid gap-2 text-sm">
+                    <ResultRow label="Overall Bias" value={enhancedAnalysis.technicalBias.technicalBias} />
+                    <ResultRow label="Confidence" value={`${formatScore(enhancedAnalysis.technicalBias.confidence)}%`} />
+                    <ResultRow label="Strength" value={enhancedAnalysis.technicalBias.strength} />
+                    <ResultRow label="Timeframe" value={enhancedAnalysis.technicalBias.timeframe} />
+                    <ResultRow label="Market Structure" value={enhancedAnalysis.technicalBias.marketStructure} />
+                    <ResultRow label="Setup Present" value={enhancedAnalysis.technicalBias.setupPresent ? `${enhancedAnalysis.technicalBias.setupType} setup` : "No setup detected"} />
+                    <ResultRow label="Risk Level" value={enhancedAnalysis.technicalBias.riskLevel} />
+                    <ResultRow label="Summary" value={enhancedAnalysis.technicalBias.summary} />
+                    {enhancedAnalysis.technicalBias.supportingFactors.length > 0 ? (
+                      <ResultRow label="Supporting Factors" value={enhancedAnalysis.technicalBias.supportingFactors.join("; ")} />
+                    ) : null}
+                    {enhancedAnalysis.technicalBias.conflictingFactors.length > 0 ? (
+                      <ResultRow label="Conflicting Factors" value={enhancedAnalysis.technicalBias.conflictingFactors.join("; ")} />
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {enhancedAnalysis.institutionalFlow ? (
+                <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Institutional Flow</p>
+                  <div className="mt-4 grid gap-2 text-sm">
+                    <ResultRow label="Overall Bias" value={enhancedAnalysis.institutionalFlow.institutionalBias} />
+                    <ResultRow label="Confidence" value={`${formatScore(enhancedAnalysis.institutionalFlow.confidence)}%`} />
+                    <ResultRow label="Strength" value={enhancedAnalysis.institutionalFlow.strength} />
+                    <ResultRow label="Data Quality" value={`${enhancedAnalysis.institutionalFlow.dataQuality.score}% completeness`} />
+                    <ResultRow label="Summary" value={enhancedAnalysis.institutionalFlow.summary} />
+                    {enhancedAnalysis.institutionalFlow.concentrationRisks.length > 0 ? (
+                      <ResultRow label="Concentration Risks" value={enhancedAnalysis.institutionalFlow.concentrationRisks.map((r) => `${r.type}: ${r.description}`).join("; ")} />
+                    ) : null}
+                    {enhancedAnalysis.institutionalFlow.supportingFactors.length > 0 ? (
+                      <ResultRow label="Supporting Factors" value={enhancedAnalysis.institutionalFlow.supportingFactors.join("; ")} />
+                    ) : null}
+                    {enhancedAnalysis.institutionalFlow.conflictingFactors.length > 0 ? (
+                      <ResultRow label="Conflicting Factors" value={enhancedAnalysis.institutionalFlow.conflictingFactors.join("; ")} />
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {enhancedAnalysis.diagnostics?.engines?.length ? (
+              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Engine Diagnostics</p>
+                <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {enhancedAnalysis.diagnostics.engines.map((engine) => (
+                    <div key={engine.engine} className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase text-stone-500">{engine.engine}</p>
+                        <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", engine.status === "success" ? "bg-emerald-400/10 text-emerald-300" : engine.status === "skipped" ? "bg-amber-300/10 text-amber-300" : "bg-red-400/10 text-red-300")}>{engine.status}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-stone-500">{engine.executionTimeMs}ms | {engine.inputFieldsAvailable}/{engine.inputFieldsRequired} fields</p>
+                      {engine.warnings.length > 0 ? <p className="mt-1 text-[10px] text-amber-300/80">{engine.warnings.join("; ")}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-md border border-border-subtle bg-surface-panel p-8 text-center">
+            <BrainCircuit className="mx-auto h-8 w-8 text-text-muted" />
+            <p className="mt-3 text-sm text-text-secondary">Run Auto-Fill to automatically generate category scores, technical bias, institutional flow, and a decision engine analysis.</p>
+          </div>
+        )}
       </section>
 
       <GoldDriverHeatmap
@@ -1119,6 +1101,10 @@ export function GoldResearchDesk() {
 function GoldTerminalHeader({
   currentPrice,
   overallBias,
+  goldScore,
+  confidence,
+  riskRating,
+  decision,
   reportDate,
   lastUpdated,
   marketDataConnected,
@@ -1131,6 +1117,10 @@ function GoldTerminalHeader({
 }: {
   currentPrice: string;
   overallBias: string;
+  goldScore?: number;
+  confidence?: number;
+  riskRating?: string;
+  decision?: string;
   reportDate: string;
   lastUpdated: string;
   marketDataConnected: boolean;
@@ -1155,11 +1145,19 @@ function GoldTerminalHeader({
         </Link>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? `${priceProvider} connected` : "Awaiting market feed"} tone={marketDataConnected ? "success" : "warning"} />
-        <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
+        {decision ? (
+          <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Engine Decision" value={decision} detail={goldScore !== undefined ? `Score: ${goldScore.toFixed(1)}` : ""} tone={decision.includes("Buy") ? "success" : decision.includes("Sell") ? "danger" : "warning"} />
+        ) : (
+          <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
+        )}
+        {confidence !== undefined ? (
+          <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Confidence" value={`${confidence}%`} detail={riskRating ? `${riskRating} risk` : "Engine confidence"} tone={confidence >= 65 ? "success" : confidence < 40 ? "danger" : "warning"} />
+        ) : (
+          <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Checklist" value={checklistResult} detail="Pre-trade readiness" tone={checklistResult === "Aligned" ? "success" : checklistResult === "Wait" ? "warning" : "neutral"} />
+        )}
         <TerminalMetric icon={<Layers3 className="h-4 w-4" />} label="Driver Stack" value={`${bullishCount}B / ${bearishCount}S / ${mixedCount}M`} detail="Bullish, bearish, mixed" tone="neutral" />
-        <TerminalMetric icon={<ShieldCheck className="h-4 w-4" />} label="Checklist" value={checklistResult} detail="Pre-trade readiness" tone={checklistResult === "Aligned" ? "success" : checklistResult === "Wait" ? "warning" : "neutral"} />
         <TerminalMetric icon={<Database className="h-4 w-4" />} label="Last Sync" value={lastUpdated} detail="Research and market data" tone="neutral" />
       </div>
     </header>
@@ -1657,18 +1655,21 @@ function AutoSectionCard({
       </div>
 
       <div className="mt-4 grid gap-3">
-        {fields.map((field) => (
-          <div key={String(field.key)} className="rounded-md bg-surface-panel px-4 py-3">
-            <p className="text-xs font-semibold uppercase text-text-muted">{field.label}</p>
-            <div className="mt-1">
-              {editing ? (
-                <AutoFieldInput config={field} value={String(section[field.key] ?? "")} onChange={(value) => onChange(field.key, value)} />
-              ) : (
-                <AutoFieldValue label={field.label} value={String(section[field.key] ?? "")} />
-              )}
+        {fields.map((field) => {
+          const fieldKey = field.key as keyof GoldAutoResearchSection;
+          return (
+            <div key={String(field.key)} className="rounded-md bg-surface-panel px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-text-muted">{field.label}</p>
+              <div className="mt-1">
+                {editing ? (
+                  <AutoFieldInput config={field} value={String(section[fieldKey] ?? "")} onChange={(value) => onChange(fieldKey, value)} />
+                ) : (
+                  <AutoFieldValue label={field.label} value={String(section[fieldKey] ?? "")} />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1831,24 +1832,12 @@ function buildAnalysisInput(driverName: GoldDriverName, reportDate: string, driv
     reportDate,
     headline: driverFields.newsHeadline ?? "",
     summary: driverFields.newsSummary ?? "",
-    currentValue: getCurrentValue(driverName, driverFields),
+    currentValue: getCurrentValueFromConfig(driverName, driverFields),
     chartObservation: driverFields.chartObservation ?? "",
     sourceLink: driverFields.sourceLink ?? "",
     notes: driverFields.notes ?? "",
     driverFields
   };
-}
-
-function getCurrentValue(driverName: GoldDriverName, fields: GoldDriverFields) {
-  if (driverName === "DXY / US Dollar") return fields.dxyCurrentLevel ?? "";
-  if (driverName === "US Yields") return [fields.tenYearYieldValue, fields.twoYearYieldValue].filter(Boolean).join(" / ");
-  if (driverName === "Real Yields") return fields.realYieldValue ?? "";
-  if (driverName === "Fed Tone / FOMC") return [fields.fedTone, fields.rateExpectation, fields.fedSpeakerOrEvent].filter(Boolean).join(" / ");
-  if (driverName === "CPI / PCE") return [fields.inflationType, fields.actualValue, fields.forecastValue, fields.previousValue].filter(Boolean).join(" / ");
-  if (driverName === "NFP / Jobs") return [fields.nfpActual, fields.nfpForecast, fields.unemploymentRate, fields.wageGrowth].filter(Boolean).join(" / ");
-  if (driverName === "Geopolitics") return [fields.geopoliticalRiskLevel, fields.eventType, fields.dxyReaction].filter(Boolean).join(" / ");
-  if (driverName === "ETF / Central Bank Demand") return [fields.etfFlowDirection, fields.centralBankDemand, fields.reportPeriod].filter(Boolean).join(" / ");
-  return fields.newsCategory ?? "";
 }
 
 function formatClues(clues: string[]) {
@@ -1898,15 +1887,7 @@ function getAutoImpactCounts(report: GoldAutoFillResponse | null) {
 }
 
 function getDriverFromAutoDriver(driver: GoldAutoDriverName): GoldDriverName {
-  if (driver === "DXY / US Dollar Check") return "DXY / US Dollar";
-  if (driver === "US Yields Check") return "US Yields";
-  if (driver === "Real Yields Check") return "Real Yields";
-  if (driver === "Fed Tone / FOMC Check") return "Fed Tone / FOMC";
-  if (driver === "CPI / PCE Inflation Check") return "CPI / PCE";
-  if (driver === "NFP / Jobs Check") return "NFP / Jobs";
-  if (driver === "Geopolitics / Risk Sentiment Check") return "Geopolitics";
-  if (driver === "ETF / Central Bank Demand Check") return "ETF / Central Bank Demand";
-  return "Custom News";
+  return getDriverNameFromAutoDriver(driver);
 }
 
 function inferTradeType(setup: GoldTradeSetupResult) {

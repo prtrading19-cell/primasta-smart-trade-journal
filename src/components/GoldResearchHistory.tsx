@@ -6,17 +6,20 @@ import { useMemo, useState } from "react";
 import { useAppData } from "@/context/AppDataContext";
 import { exportGoldReportPdf, exportGoldResearchCsv } from "@/lib/goldResearchExporters";
 import { cn } from "@/lib/format";
-import { GOLD_DRIVER_NAMES, type GoldBias, type GoldDriverName, type GoldResearchReport } from "@/types/goldResearch";
+import { type GoldBias, type GoldDriverName, type GoldResearchReport, type DailyGoldResearchReport, type GoldAutoResearchSection } from "@/types/goldResearch";
+import { getEnabledDriverNames } from "@/config/driverRegistry";
 
 const biasOptions: Array<GoldBias | "All"> = ["All", "Bullish Gold", "Bearish Gold", "Neutral", "Mixed / Wait"];
+const enabledDriverNames = getEnabledDriverNames();
 
 export function GoldResearchHistory() {
-  const { goldResearchReports, deleteGoldResearchReport } = useAppData();
+  const { goldResearchReports, dailyGoldResearchReports, deleteGoldResearchReport } = useAppData();
   const [driver, setDriver] = useState<GoldDriverName | "All">("All");
   const [bias, setBias] = useState<GoldBias | "All">("All");
   const [date, setDate] = useState("");
   const [search, setSearch] = useState("");
   const [viewing, setViewing] = useState<GoldResearchReport | null>(null);
+  const [viewingDaily, setViewingDaily] = useState<number | null>(null);
 
   const filteredReports = useMemo(() => {
     return goldResearchReports.filter((report) => {
@@ -57,7 +60,7 @@ export function GoldResearchHistory() {
         <input value={search} onChange={(event) => setSearch(event.target.value)} className={inputClass} placeholder="Search research" />
         <select value={driver} onChange={(event) => setDriver(event.target.value as GoldDriverName | "All")} className={inputClass}>
           <option>All</option>
-          {GOLD_DRIVER_NAMES.map((item) => (
+          {enabledDriverNames.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </select>
@@ -139,6 +142,62 @@ export function GoldResearchHistory() {
 
         <ReportDetail report={viewing ?? filteredReports[0] ?? null} />
       </section>
+
+      {dailyGoldResearchReports.length > 0 ? (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Daily Research with Engine Analysis</h2>
+          <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+            <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="table-scroll">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Price</th>
+                      <th className="px-4 py-3">Bias</th>
+                      <th className="px-4 py-3">Verdict</th>
+                      <th className="px-4 py-3">Engine</th>
+                      <th className="px-4 py-3">View</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {dailyGoldResearchReports.map((report, index) => {
+                      const analysis = report.engineAnalysis as Record<string, unknown> | undefined;
+                      const decision = analysis?.decision as Record<string, unknown> | undefined;
+                      return (
+                        <tr key={report.id} className="align-top hover:bg-slate-50 dark:hover:bg-slate-950/60">
+                          <td className="px-4 py-3">{report.reportDate}</td>
+                          <td className="px-4 py-3">{report.goldCurrentPrice || "-"}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn("rounded-md px-2 py-1 text-xs font-bold", biasClass(report.overallGoldBias === "Bullish" ? "Bullish Gold" : report.overallGoldBias === "Bearish" ? "Bearish Gold" : "Neutral"))}>{report.overallGoldBias}</span>
+                          </td>
+                          <td className="px-4 py-3">{report.preTradeVerdict}</td>
+                          <td className="px-4 py-3">
+                            {decision ? (
+                              <span className={cn("rounded-md px-2 py-1 text-xs font-bold", biasClass(String(decision.decision)))}>
+                                {String(decision.decision)} ({Number(decision.overallConfidence)}%)
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">No engine data</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button type="button" onClick={() => setViewingDaily(index)} className={actionClass}>
+                              <Eye className="h-4 w-4" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <DailyReportDetail report={dailyGoldResearchReports[viewingDaily ?? 0] ?? null} />
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -186,6 +245,90 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950">
       <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-1 text-slate-800 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function DailyReportDetail({ report }: { report: DailyGoldResearchReport | null }) {
+  if (!report) {
+    return <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">Select a daily report to view engine analysis.</div>;
+  }
+
+  const analysis = report.engineAnalysis as Record<string, unknown> | undefined;
+  const decision = analysis?.decision as Record<string, unknown> | undefined;
+  const categoryScores = analysis?.categoryScores as Record<string, unknown> | undefined;
+  const scores = Array.isArray(categoryScores?.scores) ? (categoryScores.scores as Array<Record<string, unknown>>) : [];
+  const technicalBias = analysis?.technicalBias as Record<string, unknown> | undefined;
+  const institutionalFlow = analysis?.institutionalFlow as Record<string, unknown> | undefined;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold">Daily Research - {report.reportDate}</h2>
+        {decision ? (
+          <span className={cn("rounded-md px-3 py-1 text-xs font-bold", biasClass(String(decision.decision)))}>
+            {String(decision.decision)} ({Number(decision.overallConfidence)}%)
+          </span>
+        ) : null}
+      </div>
+
+      <DetailRow label="Gold Price" value={report.goldCurrentPrice || "-"} />
+      <DetailRow label="Overall Bias" value={report.overallGoldBias} />
+      <DetailRow label="Pre-Trade Verdict" value={report.preTradeVerdict} />
+
+      {decision ? (
+        <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950 space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Decision Engine</p>
+          <DetailRow label="Gold Score" value={String(Number(decision.overallGoldScore).toFixed(1))} />
+          <DetailRow label="Risk Rating" value={String(decision.riskRating)} />
+          <DetailRow label="Decision Quality" value={String(decision.decisionQuality)} />
+          <DetailRow label="Summary" value={String(decision.summary)} />
+        </div>
+      ) : (
+        <div className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          No engine analysis available for this report. Run auto-fill on the Gold Research page to generate engine analysis.
+        </div>
+      )}
+
+      {scores.length > 0 ? (
+        <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950 space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Category Scores</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {scores.map((score) => (
+              <div key={String(score.categoryId)} className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+                <span className="font-semibold">{String(score.categoryTitle)}</span>
+                <span className={cn("rounded px-2 py-0.5 font-bold", biasClass(String(score.bias)))}>{Number(score.weightedScore).toFixed(1)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {technicalBias ? (
+        <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950 space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Technical Bias</p>
+          <DetailRow label="Bias" value={String(technicalBias.technicalBias)} />
+          <DetailRow label="Confidence" value={`${Number(technicalBias.confidence)}%`} />
+          <DetailRow label="Market Structure" value={String(technicalBias.marketStructure)} />
+          <DetailRow label="Summary" value={String(technicalBias.summary)} />
+        </div>
+      ) : null}
+
+      {institutionalFlow ? (
+        <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950 space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Institutional Flow</p>
+          <DetailRow label="Bias" value={String(institutionalFlow.institutionalBias)} />
+          <DetailRow label="Confidence" value={`${Number(institutionalFlow.confidence)}%`} />
+          <DetailRow label="Summary" value={String(institutionalFlow.summary)} />
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Raw Sections ({report.sections.length})</p>
+        {report.sections.slice(0, 3).map((section: GoldAutoResearchSection) => (
+          <DetailRow key={section.driver} label={section.driver} value={section.newsSummary || section.reason || "-"} />
+        ))}
+      </div>
     </div>
   );
 }

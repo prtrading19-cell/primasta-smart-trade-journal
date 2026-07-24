@@ -7,7 +7,16 @@ export type GoldDriverName =
   | "NFP / Jobs"
   | "Geopolitics"
   | "ETF / Central Bank Demand"
-  | "Custom News";
+  | "Custom News"
+  | "Economic Growth"
+  | "Gold ETF Flows"
+  | "Central Bank Demand"
+  | "Market Sentiment"
+  | "Crowd Positioning"
+  | "Liquidity Conditions"
+  | "Seasonality"
+  | "Position Risk"
+  | "Gold Technical Structure";
 
 export type GoldBias = "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed / Wait";
 export type GoldImpactLevel = "Low" | "Medium" | "High";
@@ -91,7 +100,16 @@ export const GOLD_DRIVER_NAMES: GoldDriverName[] = [
   "NFP / Jobs",
   "Geopolitics",
   "ETF / Central Bank Demand",
-  "Custom News"
+  "Custom News",
+  "Economic Growth",
+  "Gold ETF Flows",
+  "Central Bank Demand",
+  "Market Sentiment",
+  "Crowd Positioning",
+  "Liquidity Conditions",
+  "Seasonality",
+  "Position Risk",
+  "Gold Technical Structure"
 ];
 
 export const GOLD_RESEARCH_CHECKLIST_LABELS: Record<GoldResearchChecklistKey, string> = {
@@ -202,7 +220,15 @@ export type GoldAutoDriverName =
   | "NFP / Jobs Check"
   | "Geopolitics / Risk Sentiment Check"
   | "ETF / Central Bank Demand Check"
-  | "Gold Technical Structure Check";
+  | "Gold Technical Structure Check"
+  | "Economic Growth Check"
+  | "Gold ETF Flows Check"
+  | "Central Bank Demand Check"
+  | "Market Sentiment Check"
+  | "Crowd Positioning Check"
+  | "Liquidity Conditions Check"
+  | "Seasonality Check"
+  | "Position Risk Check";
 
 export type GoldAutoImpact = "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed-Wait";
 export type GoldAutoOverallBias = "Bullish" | "Bearish" | "Neutral" | "Mixed-Wait";
@@ -241,6 +267,27 @@ export interface GoldAutoResearchSection {
   goldImpact: GoldAutoImpact;
   goldTechnicalVerdict: string;
   reason: string;
+  gdpGrowth?: string;
+  pmi?: string;
+  ism?: string;
+  economicActivity?: string;
+  etfFlowMagnitude?: string;
+  cbBuyingVolume?: string;
+  cbSellingVolume?: string;
+  fearGreedIndex?: string;
+  vixLevel?: string;
+  riskAppetite?: string;
+  retailPositioning?: string;
+  institutionalPositioning?: string;
+  crowdedTradeRisk?: string;
+  fundingConditions?: string;
+  balanceSheetSize?: string;
+  repoRate?: string;
+  seasonalPattern?: string;
+  historicalReturn?: string;
+  positionCrowding?: string;
+  shortInterest?: string;
+  cftcNetLong?: string;
 }
 
 export interface GoldAutoFullSummary {
@@ -276,6 +323,7 @@ export interface DailyGoldResearchReport {
   preTradeVerdict: GoldAutoPreTradeVerdict;
   createdAt: string;
   updatedAt: string;
+  engineAnalysis?: unknown;
 }
 
 export interface NewDailyGoldResearchReportInput {
@@ -285,6 +333,7 @@ export interface NewDailyGoldResearchReportInput {
   fullSummary: GoldAutoFullSummary;
   overallGoldBias: GoldAutoOverallBias;
   preTradeVerdict: GoldAutoPreTradeVerdict;
+  engineAnalysis?: unknown;
 }
 
 export const DRIVER_NAME_TO_ID: Record<GoldDriverName, string> = {
@@ -297,6 +346,15 @@ export const DRIVER_NAME_TO_ID: Record<GoldDriverName, string> = {
   "Geopolitics": "geopolitics",
   "ETF / Central Bank Demand": "etf-flows",
   "Custom News": "custom-news",
+  "Economic Growth": "economic-growth",
+  "Gold ETF Flows": "etf-flows",
+  "Central Bank Demand": "central-bank-demand",
+  "Market Sentiment": "market-sentiment",
+  "Crowd Positioning": "crowd-positioning",
+  "Liquidity Conditions": "liquidity-conditions",
+  "Seasonality": "seasonality",
+  "Position Risk": "position-risk",
+  "Gold Technical Structure": "gold-technical-structure",
 };
 
 export const AUTO_DRIVER_NAME_TO_ID: Record<GoldAutoDriverName, string> = {
@@ -309,6 +367,14 @@ export const AUTO_DRIVER_NAME_TO_ID: Record<GoldAutoDriverName, string> = {
   "Geopolitics / Risk Sentiment Check": "geopolitics",
   "ETF / Central Bank Demand Check": "etf-flows",
   "Gold Technical Structure Check": "gold-technical-structure",
+  "Economic Growth Check": "economic-growth",
+  "Gold ETF Flows Check": "etf-flows",
+  "Central Bank Demand Check": "central-bank-demand",
+  "Market Sentiment Check": "market-sentiment",
+  "Crowd Positioning Check": "crowd-positioning",
+  "Liquidity Conditions Check": "liquidity-conditions",
+  "Seasonality Check": "seasonality",
+  "Position Risk Check": "position-risk",
 };
 
 export const ID_TO_DRIVER_NAME: Record<string, GoldDriverName> = Object.fromEntries(

@@ -57,6 +57,8 @@ export function analyzeGoldDriver(input: GoldAnalysisInput): GoldDriverAnalysis 
       return analyzeEtfCentralBankDriver(input);
     case "Custom News":
       return analyzeCustomNewsDriver(input);
+    default:
+      return analyzeCustomNewsDriver(input);
   }
 }
 

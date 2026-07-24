@@ -7,16 +7,19 @@ import { CloseTradeDialog } from "@/components/CloseTradeDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAppData } from "@/context/AppDataContext";
 import { exportTradePdf } from "@/lib/exporters";
-import { money, number, shortDate } from "@/lib/format";
+import { money, number, shortDate, cn } from "@/lib/format";
 import { getScreenshotDisplayUrl, isSupabaseStorageUri } from "@/lib/storage";
 import { CHECKLIST_LABELS } from "@/types/trade";
 import { getAPlusScore, getPlannedRiskReward, isRuleFollowed } from "@/lib/calculations";
+import type { DailyGoldResearchReport } from "@/types/goldResearch";
 
 export default function TradeDetailPage({ params }: { params: { id: string } }) {
-  const { trades, goldResearchReports, closeTrade } = useAppData();
+  const { trades, goldResearchReports, dailyGoldResearchReports, closeTrade } = useAppData();
   const [closing, setClosing] = useState(false);
   const trade = trades.find((item) => item.id === params.id);
   const goldResearchReport = trade?.goldResearchReportId ? goldResearchReports.find((report) => report.id === trade.goldResearchReportId) : null;
+  const dailyReport = trade?.date ? dailyGoldResearchReports.find((r) => r.reportDate === trade.date) ?? null : null;
+  const engineAnalysis = (dailyReport?.engineAnalysis ?? null) as Record<string, unknown> | null;
 
   if (!trade) {
     return (
@@ -135,6 +138,16 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
         </Panel>
       </section>
 
+      <section>
+        <Panel title="Gold Engine Analysis">
+          {engineAnalysis ? (
+            <EngineAnalysisPanel analysis={engineAnalysis} dailyReport={dailyReport} />
+          ) : (
+            <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-950 dark:text-slate-400">No engine analysis available for this trade date ({trade.date}). Run auto-fill on the Gold Research page to generate engine analysis.</p>
+          )}
+        </Panel>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <ScreenshotPanel title="Before-trade screenshot" value={trade.screenshotBefore} />
         <ScreenshotPanel title="After-trade screenshot" value={trade.screenshotAfter} />
@@ -150,6 +163,84 @@ function DetailCard({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <p className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 text-lg font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function biasColor(bias: string): string {
+  const b = bias.toLowerCase();
+  if (b.includes("bullish") || b.includes("buy") || b.includes("strong")) return "text-green-600 dark:text-green-400";
+  if (b.includes("bearish") || b.includes("sell") || b.includes("weak")) return "text-red-600 dark:text-red-400";
+  return "text-slate-600 dark:text-slate-400";
+}
+
+function EngineAnalysisPanel({ analysis, dailyReport }: { analysis: Record<string, unknown>; dailyReport: DailyGoldResearchReport | null }) {
+  const decision = analysis.decision as Record<string, unknown> | undefined;
+  const categoryScores = analysis.categoryScores as Record<string, unknown> | undefined;
+  const scores = Array.isArray(categoryScores?.scores) ? (categoryScores.scores as Array<Record<string, unknown>>) : [];
+  const technicalBias = analysis.technicalBias as Record<string, unknown> | undefined;
+  const institutionalFlow = analysis.institutionalFlow as Record<string, unknown> | undefined;
+
+  return (
+    <div className="space-y-4">
+      {dailyReport && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DetailCard label="Gold Price" value={dailyReport.goldCurrentPrice || "-"} />
+          <DetailCard label="Overall Bias" value={dailyReport.overallGoldBias} />
+          <DetailCard label="Pre-Trade Verdict" value={dailyReport.preTradeVerdict} />
+          <DetailCard label="Date" value={dailyReport.reportDate} />
+        </div>
+      )}
+
+      {decision ? (
+        <div className="rounded-md bg-slate-50 p-4 dark:bg-slate-950">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-3">Decision Engine</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailCard label="Gold Score" value={Number(decision.overallGoldScore).toFixed(1)} />
+            <DetailCard label="Decision" value={String(decision.decision)} />
+            <DetailCard label="Confidence" value={`${Number(decision.overallConfidence)}%`} />
+            <DetailCard label="Risk Rating" value={String(decision.riskRating)} />
+          </div>
+          <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{String(decision.summary)}</p>
+        </div>
+      ) : null}
+
+      {scores.length > 0 ? (
+        <div className="rounded-md bg-slate-50 p-4 dark:bg-slate-950">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-3">Category Scores</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {scores.map((score) => (
+              <div key={String(score.categoryId)} className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+                <span className="font-semibold">{String(score.categoryTitle)}</span>
+                <span className={cn("font-bold", biasColor(String(score.bias)))}>{Number(score.weightedScore).toFixed(1)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {technicalBias ? (
+        <div className="rounded-md bg-slate-50 p-4 dark:bg-slate-950">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-3">Technical Bias</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailCard label="Bias" value={String(technicalBias.technicalBias)} />
+            <DetailCard label="Confidence" value={`${Number(technicalBias.confidence)}%`} />
+            <DetailCard label="Market Structure" value={String(technicalBias.marketStructure)} />
+          </div>
+          <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{String(technicalBias.summary)}</p>
+        </div>
+      ) : null}
+
+      {institutionalFlow ? (
+        <div className="rounded-md bg-slate-50 p-4 dark:bg-slate-950">
+          <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-3">Institutional Flow</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailCard label="Bias" value={String(institutionalFlow.institutionalBias)} />
+            <DetailCard label="Confidence" value={`${Number(institutionalFlow.confidence)}%`} />
+          </div>
+          <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{String(institutionalFlow.summary)}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -417,7 +417,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         sections: input.sections,
         fullSummary: input.fullSummary,
         overallGoldBias: input.overallGoldBias,
-        preTradeVerdict: input.preTradeVerdict
+        preTradeVerdict: input.preTradeVerdict,
+        engineAnalysis: input.engineAnalysis
       };
 
       if (isSupabaseConfigured && supabase) {
@@ -975,7 +976,8 @@ function fromDailyGoldResearchRow(row: any): DailyGoldResearchReport {
     overallGoldBias: row.overall_gold_bias ?? "Mixed-Wait",
     preTradeVerdict: row.pre_trade_verdict ?? "Wait",
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    engineAnalysis: row.engine_analysis_json ?? row.category_scores_json ?? undefined
   });
 }
 
@@ -990,7 +992,8 @@ function toDailyGoldResearchRow(report: DailyGoldResearchReport) {
     overall_gold_bias: report.overallGoldBias,
     pre_trade_verdict: report.preTradeVerdict,
     created_at: report.createdAt,
-    updated_at: report.updatedAt
+    updated_at: report.updatedAt,
+    ...(report.engineAnalysis ? { engine_analysis_json: report.engineAnalysis } : {})
   };
 }
 
@@ -1012,7 +1015,8 @@ function normalizeDailyGoldResearchReport(report: DailyGoldResearchReport): Dail
     overallGoldBias: normalized.fullSummary.overallGoldBias,
     preTradeVerdict: normalized.fullSummary.preTradeVerdict,
     createdAt: report.createdAt,
-    updatedAt: report.updatedAt
+    updatedAt: report.updatedAt,
+    engineAnalysis: report.engineAnalysis
   };
 }
 

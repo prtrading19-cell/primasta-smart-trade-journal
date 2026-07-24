@@ -94,6 +94,13 @@ export interface DriverAnalysisObject {
   weight: number;
   contribution: number;
   dataFields: Record<string, string>;
+  categoryWeight?: number;
+  weightedScore?: number;
+  categoryOrder?: number;
+  isPrimaryDriver?: boolean;
+  dataFreshness?: "current" | "recent" | "stale" | "unknown";
+  newsRecency?: string;
+  chartRecency?: string;
 }
 
 export interface DriverHistoricalContext {
@@ -114,6 +121,23 @@ export interface CategoryScoreObject {
   reason: string;
   drivers: string[];
   timestamp: string;
+  weight: number;
+  weightedScore: number;
+  driverContributions: DriverContribution[];
+  alignmentScore: number;
+  alignmentStrength: "Strong" | "Moderate" | "Weak" | "None";
+  hasConflict: boolean;
+}
+
+export interface DriverContribution {
+  driverId: string;
+  driverTitle: string;
+  bias: DriverBias;
+  strength: DriverStrength;
+  confidence: number;
+  weight: number;
+  contribution: number;
+  reason: string;
 }
 
 export interface GoldDecisionEngineOutput {
