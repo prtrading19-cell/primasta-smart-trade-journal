@@ -10,6 +10,9 @@ export interface FREDData {
   us2Yield: string;
   fedFundsRate: string;
   realYield: string;
+  unemploymentRate: string;
+  gdpGrowth: string;
+  balanceSheetSize: string;
   raw: Record<string, unknown>;
 }
 
@@ -23,6 +26,9 @@ export interface FinnhubData {
   marketNews: NewsItem[];
   financialNews: NewsItem[];
   fedNews: NewsItem[];
+  etfNews: NewsItem[];
+  sentimentNews: NewsItem[];
+  positioningNews: NewsItem[];
   raw: Record<string, unknown>;
 }
 
@@ -31,12 +37,25 @@ export interface NewsApiData {
   fedNews: NewsItem[];
   inflationNews: NewsItem[];
   geopoliticalNews: NewsItem[];
+  economicNews: NewsItem[];
+  etfNews: NewsItem[];
+  centralBankNews: NewsItem[];
+  sentimentNews: NewsItem[];
+  positioningNews: NewsItem[];
+  liquidityNews: NewsItem[];
+  seasonalityNews: NewsItem[];
   raw: Record<string, unknown>;
 }
 
 export interface GNewsData {
   goldNews: NewsItem[];
   fedNews: NewsItem[];
+  economicNews: NewsItem[];
+  etfNews: NewsItem[];
+  centralBankNews: NewsItem[];
+  sentimentNews: NewsItem[];
+  positioningNews: NewsItem[];
+  liquidityNews: NewsItem[];
   raw: Record<string, unknown>;
 }
 
@@ -55,11 +74,21 @@ export interface MarketData {
   us2Yield: string;
   realYield: string;
   fedFundsRate: string;
+  unemploymentRate: string;
+  gdpGrowth: string;
+  balanceSheetSize: string;
+  vixLevel: string;
   marketSentiment: string;
   goldNews: NewsItem[];
   fedNews: NewsItem[];
   inflationNews: NewsItem[];
   geopoliticalNews: NewsItem[];
+  economicNews: NewsItem[];
+  etfNews: NewsItem[];
+  centralBankNews: NewsItem[];
+  sentimentNews: NewsItem[];
+  positioningNews: NewsItem[];
+  liquidityNews: NewsItem[];
   timestamp: string;
   sources: string[];
   errors: string[];

@@ -185,6 +185,10 @@ US 10Y YIELD: ${marketData.us10Yield}
 US 2Y YIELD: ${marketData.us2Yield}
 REAL YIELD: ${marketData.realYield}
 FED FUNDS RATE: ${marketData.fedFundsRate}
+UNEMPLOYMENT RATE: ${marketData.unemploymentRate}
+GDP GROWTH: ${marketData.gdpGrowth}
+BALANCE SHEET: ${marketData.balanceSheetSize}
+VIX: ${marketData.vixLevel}
 MARKET SENTIMENT: ${marketData.marketSentiment}
 DATA SOURCES: ${marketData.sources.join(", ") || "None"}
 DATA ERRORS: ${marketData.errors.join("; ") || "None"}
@@ -201,6 +205,24 @@ ${marketData.inflationNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.
 
 GEOPOLITICAL NEWS:
 ${marketData.geopoliticalNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source}, ${n.publishedAt})`).join("\n")}
+
+ECONOMIC NEWS:
+${marketData.economicNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
+
+ETF NEWS:
+${marketData.etfNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
+
+CENTRAL BANK NEWS:
+${marketData.centralBankNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
+
+SENTIMENT NEWS:
+${marketData.sentimentNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
+
+POSITIONING NEWS:
+${marketData.positioningNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
+
+LIQUIDITY NEWS:
+${marketData.liquidityNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
 
 PRE-MAPPED SECTIONS:
 ${mapped.sections.map((s) => `- ${s.driver}: ${s.currentDataValue} | Impact: ${s.goldImpact} | ${s.reason}`).join("\n")}
@@ -246,40 +268,61 @@ ${GOLD_AUTO_DRIVER_NAMES.map((d, i) => `${i + 1}. ${d}`).join("\n")}
 
 function buildResponseFromMapped(mapped: ReturnType<typeof mapMarketDataToResearch>, reportDate: string): GoldAutoFillResponse {
   const sections = GOLD_AUTO_DRIVER_NAMES.map((driver) => {
-    const mappedSection = mapped.sections.find((s) => s.driver === driver);
+    const s = mapped.sections.find((m) => m.driver === driver);
     return {
       driver,
-      currentDataValue: mappedSection?.currentDataValue || "Live Data Unavailable",
-      direction: mappedSection?.direction || "",
-      tenYearYieldDirection: "",
-      twoYearYieldDirection: "",
-      realYieldsDirection: mappedSection?.realYieldsDirection || "",
-      fedTone: mappedSection?.fedTone || "",
-      rateExpectation: mappedSection?.rateExpectation || "",
-      latestInflationData: mappedSection?.latestInflationData || "",
-      inflationResult: mappedSection?.inflationResult || "",
-      latestJobsData: mappedSection?.latestJobsData || "",
-      jobsResult: mappedSection?.jobsResult || "",
-      unemploymentRate: mappedSection?.unemploymentRate || "",
-      wageGrowth: mappedSection?.wageGrowth || "",
-      riskLevel: mappedSection?.riskLevel || "",
-      dxyReaction: mappedSection?.dxyReaction || "",
-      etfFlowDirection: mappedSection?.etfFlowDirection || "",
-      centralBankDemand: mappedSection?.centralBankDemand || "",
-      higherTimeframeBias: mappedSection?.higherTimeframeBias || "",
-      keySupport: mappedSection?.keySupport || "",
-      keyResistance: mappedSection?.keyResistance || "",
-      liquidityArea: mappedSection?.liquidityArea || "",
-      marketStructure: mappedSection?.marketStructure || "",
-      setupPresent: mappedSection?.setupPresent || "",
-      setupType: mappedSection?.setupType || "",
-      newsHeadline: mappedSection?.newsHeadline || "Awaiting data",
-      newsSummary: mappedSection?.newsSummary || "Awaiting data",
-      chartObservation: mappedSection?.chartObservation || "Awaiting data",
-      sourceLink: mappedSection?.sourceLink || "Not found",
-      goldImpact: mappedSection?.goldImpact || "Mixed-Wait",
-      goldTechnicalVerdict: mappedSection?.goldTechnicalVerdict || "",
-      reason: mappedSection?.reason || "Awaiting data",
+      currentDataValue: s?.currentDataValue || "",
+      direction: s?.direction || "",
+      tenYearYieldDirection: s?.tenYearYieldDirection || "",
+      twoYearYieldDirection: s?.twoYearYieldDirection || "",
+      realYieldsDirection: s?.realYieldsDirection || "",
+      fedTone: s?.fedTone || "",
+      rateExpectation: s?.rateExpectation || "",
+      latestInflationData: s?.latestInflationData || "",
+      inflationResult: s?.inflationResult || "",
+      latestJobsData: s?.latestJobsData || "",
+      jobsResult: s?.jobsResult || "",
+      unemploymentRate: s?.unemploymentRate || "",
+      wageGrowth: s?.wageGrowth || "",
+      riskLevel: s?.riskLevel || "",
+      dxyReaction: s?.dxyReaction || "",
+      etfFlowDirection: s?.etfFlowDirection || "",
+      centralBankDemand: s?.centralBankDemand || "",
+      higherTimeframeBias: s?.higherTimeframeBias || "",
+      keySupport: s?.keySupport || "",
+      keyResistance: s?.keyResistance || "",
+      liquidityArea: s?.liquidityArea || "",
+      marketStructure: s?.marketStructure || "",
+      setupPresent: s?.setupPresent || "",
+      setupType: s?.setupType || "",
+      newsHeadline: s?.newsHeadline || "",
+      newsSummary: s?.newsSummary || "",
+      chartObservation: s?.chartObservation || "",
+      sourceLink: s?.sourceLink || "",
+      goldImpact: s?.goldImpact || "Mixed-Wait",
+      goldTechnicalVerdict: s?.goldTechnicalVerdict || "",
+      reason: s?.reason || "",
+      gdpGrowth: s?.gdpGrowth || "",
+      pmi: s?.pmi || "",
+      ism: s?.ism || "",
+      economicActivity: s?.economicActivity || "",
+      etfFlowMagnitude: s?.etfFlowMagnitude || "",
+      cbBuyingVolume: s?.cbBuyingVolume || "",
+      cbSellingVolume: s?.cbSellingVolume || "",
+      fearGreedIndex: s?.fearGreedIndex || "",
+      vixLevel: s?.vixLevel || "",
+      riskAppetite: s?.riskAppetite || "",
+      retailPositioning: s?.retailPositioning || "",
+      institutionalPositioning: s?.institutionalPositioning || "",
+      crowdedTradeRisk: s?.crowdedTradeRisk || "",
+      fundingConditions: s?.fundingConditions || "",
+      balanceSheetSize: s?.balanceSheetSize || "",
+      repoRate: s?.repoRate || "",
+      seasonalPattern: s?.seasonalPattern || "",
+      historicalReturn: s?.historicalReturn || "",
+      positionCrowding: s?.positionCrowding || "",
+      shortInterest: s?.shortInterest || "",
+      cftcNetLong: s?.cftcNetLong || "",
     };
   });
 
@@ -293,42 +336,63 @@ function buildResponseFromMapped(mapped: ReturnType<typeof mapMarketDataToResear
 
 function mergeOpenAIAnalysis(mapped: ReturnType<typeof mapMarketDataToResearch>, analysis: OpenAIAnalysis, reportDate: string): GoldAutoFillResponse {
   const sections = GOLD_AUTO_DRIVER_NAMES.map((driver) => {
-    const mappedSection = mapped.sections.find((s) => s.driver === driver);
-    const aiSection = analysis.sections.find((s) => s.driver === driver);
+    const s = mapped.sections.find((m) => m.driver === driver);
+    const ai = analysis.sections.find((a) => a.driver === driver);
 
     return {
       driver,
-      currentDataValue: mappedSection?.currentDataValue || "Live Data Unavailable",
-      direction: mappedSection?.direction || "",
-      tenYearYieldDirection: "",
-      twoYearYieldDirection: "",
-      realYieldsDirection: mappedSection?.realYieldsDirection || "",
-      fedTone: mappedSection?.fedTone || "",
-      rateExpectation: mappedSection?.rateExpectation || "",
-      latestInflationData: mappedSection?.latestInflationData || "",
-      inflationResult: mappedSection?.inflationResult || "",
-      latestJobsData: mappedSection?.latestJobsData || "",
-      jobsResult: mappedSection?.jobsResult || "",
-      unemploymentRate: mappedSection?.unemploymentRate || "",
-      wageGrowth: mappedSection?.wageGrowth || "",
-      riskLevel: mappedSection?.riskLevel || "",
-      dxyReaction: mappedSection?.dxyReaction || "",
-      etfFlowDirection: mappedSection?.etfFlowDirection || "",
-      centralBankDemand: mappedSection?.centralBankDemand || "",
-      higherTimeframeBias: mappedSection?.higherTimeframeBias || "",
-      keySupport: mappedSection?.keySupport || "",
-      keyResistance: mappedSection?.keyResistance || "",
-      liquidityArea: mappedSection?.liquidityArea || "",
-      marketStructure: mappedSection?.marketStructure || "",
-      setupPresent: mappedSection?.setupPresent || "",
-      setupType: mappedSection?.setupType || "",
-      newsHeadline: aiSection?.newsHeadline || mappedSection?.newsHeadline || "Awaiting data",
-      newsSummary: aiSection?.newsSummary || mappedSection?.newsSummary || "Awaiting data",
-      chartObservation: aiSection?.chartObservation || mappedSection?.chartObservation || "Awaiting data",
-      sourceLink: aiSection?.sourceLink || mappedSection?.sourceLink || "Not found",
-      goldImpact: aiSection?.goldImpact || mappedSection?.goldImpact || "Mixed-Wait",
-      goldTechnicalVerdict: mappedSection?.goldTechnicalVerdict || "",
-      reason: aiSection?.reason || mappedSection?.reason || "Awaiting data",
+      currentDataValue: s?.currentDataValue || "",
+      direction: s?.direction || "",
+      tenYearYieldDirection: s?.tenYearYieldDirection || "",
+      twoYearYieldDirection: s?.twoYearYieldDirection || "",
+      realYieldsDirection: s?.realYieldsDirection || "",
+      fedTone: s?.fedTone || "",
+      rateExpectation: s?.rateExpectation || "",
+      latestInflationData: s?.latestInflationData || "",
+      inflationResult: s?.inflationResult || "",
+      latestJobsData: s?.latestJobsData || "",
+      jobsResult: s?.jobsResult || "",
+      unemploymentRate: s?.unemploymentRate || "",
+      wageGrowth: s?.wageGrowth || "",
+      riskLevel: s?.riskLevel || "",
+      dxyReaction: s?.dxyReaction || "",
+      etfFlowDirection: s?.etfFlowDirection || "",
+      centralBankDemand: s?.centralBankDemand || "",
+      higherTimeframeBias: s?.higherTimeframeBias || "",
+      keySupport: s?.keySupport || "",
+      keyResistance: s?.keyResistance || "",
+      liquidityArea: s?.liquidityArea || "",
+      marketStructure: s?.marketStructure || "",
+      setupPresent: s?.setupPresent || "",
+      setupType: s?.setupType || "",
+      newsHeadline: ai?.newsHeadline || s?.newsHeadline || "",
+      newsSummary: ai?.newsSummary || s?.newsSummary || "",
+      chartObservation: ai?.chartObservation || s?.chartObservation || "",
+      sourceLink: ai?.sourceLink || s?.sourceLink || "",
+      goldImpact: ai?.goldImpact || s?.goldImpact || "Mixed-Wait",
+      goldTechnicalVerdict: s?.goldTechnicalVerdict || "",
+      reason: ai?.reason || s?.reason || "",
+      gdpGrowth: s?.gdpGrowth || "",
+      pmi: s?.pmi || "",
+      ism: s?.ism || "",
+      economicActivity: s?.economicActivity || "",
+      etfFlowMagnitude: s?.etfFlowMagnitude || "",
+      cbBuyingVolume: s?.cbBuyingVolume || "",
+      cbSellingVolume: s?.cbSellingVolume || "",
+      fearGreedIndex: s?.fearGreedIndex || "",
+      vixLevel: s?.vixLevel || "",
+      riskAppetite: s?.riskAppetite || "",
+      retailPositioning: s?.retailPositioning || "",
+      institutionalPositioning: s?.institutionalPositioning || "",
+      crowdedTradeRisk: s?.crowdedTradeRisk || "",
+      fundingConditions: s?.fundingConditions || "",
+      balanceSheetSize: s?.balanceSheetSize || "",
+      repoRate: s?.repoRate || "",
+      seasonalPattern: s?.seasonalPattern || "",
+      historicalReturn: s?.historicalReturn || "",
+      positionCrowding: s?.positionCrowding || "",
+      shortInterest: s?.shortInterest || "",
+      cftcNetLong: s?.cftcNetLong || "",
     };
   });
 

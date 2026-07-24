@@ -6,6 +6,7 @@ import type {
   FinnhubData,
   NewsApiData,
   GNewsData,
+  NewsItem,
 } from "./types";
 
 export function normalizeMarketData(params: {
@@ -34,43 +35,83 @@ export function normalizeMarketData(params: {
     }
   }
 
-  const allFedNews = [
-    ...(newsApi?.fedNews || []),
-    ...(finnhub?.fedNews || []),
-    ...(gnews?.fedNews || []),
-  ];
+  const allFedNews = mergeNews(
+    newsApi?.fedNews,
+    finnhub?.fedNews,
+    gnews?.fedNews,
+  );
 
-  const allGoldNews = [
-    ...(newsApi?.goldNews || []),
-    ...(gnews?.goldNews || []),
-  ];
+  const allGoldNews = mergeNews(
+    newsApi?.goldNews,
+    gnews?.goldNews,
+  );
 
-  const allInflationNews = [
-    ...(newsApi?.inflationNews || []),
-  ];
+  const allInflationNews = newsApi?.inflationNews || [];
+  const allGeopoliticalNews = newsApi?.geopoliticalNews || [];
 
-  const allGeopoliticalNews = [
-    ...(newsApi?.geopoliticalNews || []),
-  ];
+  const allEconomicNews = mergeNews(
+    newsApi?.economicNews,
+    finnhub?.marketNews,
+    gnews?.economicNews,
+  );
+
+  const allEtfNews = mergeNews(
+    newsApi?.etfNews,
+    finnhub?.etfNews,
+    gnews?.etfNews,
+  );
+
+  const allCentralBankNews = mergeNews(
+    newsApi?.centralBankNews,
+    gnews?.centralBankNews,
+  );
+
+  const allSentimentNews = mergeNews(
+    newsApi?.sentimentNews,
+    finnhub?.sentimentNews,
+    gnews?.sentimentNews,
+  );
+
+  const allPositioningNews = mergeNews(
+    newsApi?.positioningNews,
+    finnhub?.positioningNews,
+    gnews?.positioningNews,
+  );
+
+  const allLiquidityNews = mergeNews(
+    newsApi?.liquidityNews,
+    gnews?.liquidityNews,
+  );
 
   const marketSentiment = deriveMarketSentiment({
     dxy: alphaVantage?.dxy || "",
     us10Yield: fred?.us10Yield || "",
     goldNews: allGoldNews,
+    sentimentNews: allSentimentNews,
   });
 
   return {
     goldPrice,
-    dxy: alphaVantage?.dxy || "Live Data Unavailable",
-    us10Yield: fred?.us10Yield || "Live Data Unavailable",
-    us2Yield: fred?.us2Yield || "Live Data Unavailable",
-    realYield: fred?.realYield || "Live Data Unavailable",
-    fedFundsRate: fred?.fedFundsRate || "Live Data Unavailable",
+    dxy: alphaVantage?.dxy || "",
+    us10Yield: fred?.us10Yield || "",
+    us2Yield: fred?.us2Yield || "",
+    realYield: fred?.realYield || "",
+    fedFundsRate: fred?.fedFundsRate || "",
+    unemploymentRate: fred?.unemploymentRate || "",
+    gdpGrowth: fred?.gdpGrowth || "",
+    balanceSheetSize: fred?.balanceSheetSize || "",
+    vixLevel: extractVixLevel(allSentimentNews),
     marketSentiment,
     goldNews: allGoldNews,
     fedNews: allFedNews,
     inflationNews: allInflationNews,
     geopoliticalNews: allGeopoliticalNews,
+    economicNews: allEconomicNews,
+    etfNews: allEtfNews,
+    centralBankNews: allCentralBankNews,
+    sentimentNews: allSentimentNews,
+    positioningNews: allPositioningNews,
+    liquidityNews: allLiquidityNews,
     timestamp: new Date().toISOString(),
     sources,
     errors,
@@ -78,12 +119,40 @@ export function normalizeMarketData(params: {
   };
 }
 
+function mergeNews(...arrays: (NewsItem[] | undefined)[]): NewsItem[] {
+  const seen = new Set<string>();
+  const result: NewsItem[] = [];
+  for (const arr of arrays) {
+    if (!arr) continue;
+    for (const item of arr) {
+      const key = item.title || item.url;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push(item);
+      }
+    }
+  }
+  return result;
+}
+
+function extractVixLevel(sentimentNews: NewsItem[]): string {
+  for (const item of sentimentNews) {
+    const text = `${item.title} ${item.summary}`;
+    const vixMatch = text.match(/vix\s*(?:at|rose|fell|jumped|dropped|climbed|slipped)?\s*(?:to|from)?\s*(\d+\.?\d*)/i);
+    if (vixMatch) return vixMatch[1];
+    const levelMatch = text.match(/volatility.*?(\d+\.?\d*)/i);
+    if (levelMatch) return levelMatch[1];
+  }
+  return "";
+}
+
 function deriveMarketSentiment(params: {
   dxy: string;
   us10Yield: string;
   goldNews: Array<{ title: string; summary: string }>;
+  sentimentNews: Array<{ title: string; summary: string }>;
 }): string {
-  const newsText = params.goldNews
+  const newsText = [...params.goldNews, ...params.sentimentNews]
     .map((n) => `${n.title} ${n.summary}`)
     .join(" ")
     .toLowerCase();
@@ -96,6 +165,9 @@ function deriveMarketSentiment(params: {
     /safe haven/i,
     /dovish/i,
     /rate cut/i,
+    /fear/i,
+    /panic/i,
+    /risk.off/i,
   ];
 
   const bearishSignals = [
@@ -106,6 +178,9 @@ function deriveMarketSentiment(params: {
     /hawkish/i,
     /rate hike/i,
     /strong dollar/i,
+    /greed/i,
+    /euphoria/i,
+    /risk.on/i,
   ];
 
   let bullish = 0;

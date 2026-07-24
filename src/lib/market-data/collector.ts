@@ -27,9 +27,12 @@ export async function collectMarketData(goldPrice: string): Promise<MarketData> 
   const newsApiCount =
     (newsApiResult?.goldNews?.length || 0) +
     (newsApiResult?.fedNews?.length || 0) +
-    (newsApiResult?.inflationNews?.length || 0);
+    (newsApiResult?.inflationNews?.length || 0) +
+    (newsApiResult?.economicNews?.length || 0) +
+    (newsApiResult?.etfNews?.length || 0) +
+    (newsApiResult?.centralBankNews?.length || 0);
 
-  if (gnewsKey && newsApiCount < 3) {
+  if (gnewsKey && newsApiCount < 5) {
     console.info("[market-data] newsapi_insufficient", newsApiCount, "switching to GNews backup");
     gnewsResult = await runProvider<GNewsData>("GNews", () => fetchGNews(gnewsKey), providerResults);
   }

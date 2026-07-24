@@ -6,22 +6,43 @@ export async function fetchFinnhub(apiKey: string): Promise<FinnhubData> {
   const from = daysAgo(7);
   const to = daysAgo(0);
 
-  const [marketResult, financialResult] = await Promise.allSettled([
+  const [marketResult, financialResult, sentimentResult, etfResult] = await Promise.allSettled([
     fetchFinnhubNews(apiKey, "general", from, to),
     fetchFinnhubNews(apiKey, "forex", from, to),
+    fetchFinnhubNews(apiKey, "technology", from, to),
+    fetchFinnhubNews(apiKey, "healthcare", from, to),
   ]);
 
   const marketNews = marketResult.status === "fulfilled" ? marketResult.value : [];
   const financialNews = financialResult.status === "fulfilled" ? financialResult.value : [];
+  const sentimentNews = sentimentResult.status === "fulfilled" ? sentimentResult.value : [];
+  const etfNews = etfResult.status === "fulfilled" ? etfResult.value : [];
 
-  const fedNews = [...marketNews, ...financialNews].filter(
+  const allNews = [...marketNews, ...financialNews, ...sentimentNews, ...etfNews];
+
+  const fedNews = allNews.filter(
     (item) => /fed|federal reserve|fomc|powell|interest rate/i.test(item.title + item.summary)
+  );
+
+  const etfNewsFiltered = allNews.filter(
+    (item) => /etf|fund flow|inflow|outflow|gld|iau|gdx/i.test(item.title + item.summary)
+  );
+
+  const sentimentNewsFiltered = allNews.filter(
+    (item) => /vix|fear|greed|sentiment|risk.on|risk.off|volatility|panic|euphoria/i.test(item.title + item.summary)
+  );
+
+  const positioningNews = allNews.filter(
+    (item) => /cftc|commitment|positioning|short|long|crowd|retail|institution/i.test(item.title + item.summary)
   );
 
   return {
     marketNews: marketNews.slice(0, 10),
     financialNews: financialNews.slice(0, 10),
     fedNews: fedNews.slice(0, 5),
+    etfNews: etfNewsFiltered.slice(0, 5),
+    sentimentNews: sentimentNewsFiltered.slice(0, 5),
+    positioningNews: positioningNews.slice(0, 5),
     raw: { marketCount: marketNews.length, financialCount: financialNews.length },
   };
 }

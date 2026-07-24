@@ -9,7 +9,14 @@ export async function fetchNewsApi(apiKey: string): Promise<NewsApiData> {
     { key: "gold", query: "gold XAUUSD price" },
     { key: "fed", query: "federal reserve interest rate FOMC" },
     { key: "inflation", query: "inflation CPI PCE" },
-    { key: "geopolitics", query: "geopolitics risk crisis" },
+    { key: "geopolitics", query: "geopolitics risk crisis war" },
+    { key: "economic", query: "US GDP PMI ISM economic growth" },
+    { key: "etf", query: "gold ETF GLD flows inflow outflow" },
+    { key: "centralBank", query: "central bank gold buying reserves" },
+    { key: "sentiment", query: "market sentiment VIX fear greed volatility" },
+    { key: "positioning", query: "CFTC gold positioning futures commitment" },
+    { key: "liquidity", query: "fed liquidity repo rate balance sheet reserves" },
+    { key: "seasonality", query: "gold seasonal trend historical" },
   ];
 
   const results = await Promise.allSettled(
@@ -20,17 +27,38 @@ export async function fetchNewsApi(apiKey: string): Promise<NewsApiData> {
   const fedNews = results[1].status === "fulfilled" ? results[1].value : [];
   const inflationNews = results[2].status === "fulfilled" ? results[2].value : [];
   const geopoliticalNews = results[3].status === "fulfilled" ? results[3].value : [];
+  const economicNews = results[4].status === "fulfilled" ? results[4].value : [];
+  const etfNews = results[5].status === "fulfilled" ? results[5].value : [];
+  const centralBankNews = results[6].status === "fulfilled" ? results[6].value : [];
+  const sentimentNews = results[7].status === "fulfilled" ? results[7].value : [];
+  const positioningNews = results[8].status === "fulfilled" ? results[8].value : [];
+  const liquidityNews = results[9].status === "fulfilled" ? results[9].value : [];
+  const seasonalityNews = results[10].status === "fulfilled" ? results[10].value : [];
 
   return {
     goldNews: goldNews.slice(0, 5),
     fedNews: fedNews.slice(0, 5),
     inflationNews: inflationNews.slice(0, 5),
     geopoliticalNews: geopoliticalNews.slice(0, 5),
+    economicNews: economicNews.slice(0, 5),
+    etfNews: etfNews.slice(0, 5),
+    centralBankNews: centralBankNews.slice(0, 5),
+    sentimentNews: sentimentNews.slice(0, 5),
+    positioningNews: positioningNews.slice(0, 5),
+    liquidityNews: liquidityNews.slice(0, 5),
+    seasonalityNews: seasonalityNews.slice(0, 5),
     raw: {
       goldCount: goldNews.length,
       fedCount: fedNews.length,
       inflationCount: inflationNews.length,
       geopoliticsCount: geopoliticalNews.length,
+      economicCount: economicNews.length,
+      etfCount: etfNews.length,
+      centralBankCount: centralBankNews.length,
+      sentimentCount: sentimentNews.length,
+      positioningCount: positioningNews.length,
+      liquidityCount: liquidityNews.length,
+      seasonalityCount: seasonalityNews.length,
     },
   };
 }

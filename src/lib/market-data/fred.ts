@@ -7,16 +7,22 @@ const SERIES_IDS = {
   US2Yield: "DGS2",
   FedFundsRate: "FEDFUNDS",
   RealYield: "DFII10",
+  UnemploymentRate: "UNRATE",
+  GDPGrowth: "A191RL1Q225SBEA",
+  BalanceSheet: "WALCL",
 } as const;
 
 const TIMEOUT_MS = 10000;
 
 export async function fetchFRED(apiKey: string): Promise<FREDData> {
-  const [us10, us2, fed, real] = await Promise.allSettled([
+  const [us10, us2, fed, real, unemployment, gdp, balance] = await Promise.allSettled([
     fetchFredSeries(apiKey, SERIES_IDS.US10Yield),
     fetchFredSeries(apiKey, SERIES_IDS.US2Yield),
     fetchFredSeries(apiKey, SERIES_IDS.FedFundsRate),
     fetchFredSeries(apiKey, SERIES_IDS.RealYield),
+    fetchFredSeries(apiKey, SERIES_IDS.UnemploymentRate),
+    fetchFredSeries(apiKey, SERIES_IDS.GDPGrowth),
+    fetchFredSeries(apiKey, SERIES_IDS.BalanceSheet),
   ]);
 
   return {
@@ -24,11 +30,17 @@ export async function fetchFRED(apiKey: string): Promise<FREDData> {
     us2Yield: extractValue(us2),
     fedFundsRate: extractValue(fed),
     realYield: extractValue(real),
+    unemploymentRate: extractValue(unemployment),
+    gdpGrowth: extractValue(gdp),
+    balanceSheetSize: extractBalanceSheet(balance),
     raw: {
       DGS10: extractRaw(us10),
       DGS2: extractRaw(us2),
       FEDFUNDS: extractRaw(fed),
       DFII10: extractRaw(real),
+      UNRATE: extractRaw(unemployment),
+      A191RL1Q225SBEA: extractRaw(gdp),
+      WALCL: extractRaw(balance),
     },
   };
 }
@@ -67,11 +79,20 @@ interface FredObservation {
 }
 
 function extractValue(result: PromiseSettledResult<FredObservation[]>): string {
-  if (result.status === "rejected") return "Live Data Unavailable";
+  if (result.status === "rejected") return "";
   const observations = result.value;
   const latest = observations[0];
-  if (!latest || latest.value === "." || latest.value === undefined) return "Live Data Unavailable";
+  if (!latest || latest.value === "." || latest.value === undefined) return "";
   return `${latest.value}% (as of ${latest.date || "recent"})`;
+}
+
+function extractBalanceSheet(result: PromiseSettledResult<FredObservation[]>): string {
+  if (result.status === "rejected") return "";
+  const observations = result.value;
+  const latest = observations[0];
+  if (!latest || latest.value === "." || latest.value === undefined) return "";
+  const billions = (parseFloat(latest.value) / 1000).toFixed(1);
+  return `$${billions}B (as of ${latest.date || "recent"})`;
 }
 
 function extractRaw(result: PromiseSettledResult<FredObservation[]>): unknown {
