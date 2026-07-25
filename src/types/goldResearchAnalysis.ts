@@ -26,6 +26,7 @@ export interface GoldResearchAnalysisInput {
   timestamp?: string;
   notes?: string;
   options?: OrchestratorOptions;
+  researchBias?: string;
 }
 
 export interface OrchestratorOptions {

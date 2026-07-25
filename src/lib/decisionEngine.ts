@@ -99,9 +99,14 @@ export function calculateDecision(
   const adjustedScore = applyAdjustments(rawScore, input, weights, t, overallAlignment, conflictScore);
   const clampedScore = Math.max(0, Math.min(100, Math.round(adjustedScore)));
 
-  const overallBias = scoreToBias(clampedScore, t);
+  const computedBias = scoreToBias(clampedScore, t);
+
+  const researchBiasBias = mapResearchBiasToDriverBias(input.researchBias);
+
+  const overallBias = researchBiasBias ?? computedBias;
+
   const confidence = calculateOverallConfidence(input);
-  const decision = deriveDecision(overallBias, confidence, conflictScore, t);
+  const decision = deriveDecision(overallBias, confidence, conflictScore, t, input.researchBias);
   const riskRating = deriveRiskRating(conflictScore, confidence, input);
   const decisionQuality = deriveDecisionQuality(confidence, conflictScore, overallAlignment, t);
 
@@ -130,7 +135,8 @@ export function calculateDecision(
     input,
     supportingDrivers,
     conflictingDrivers,
-    concentrationRisks
+    concentrationRisks,
+    input.researchBias
   );
 
   const summary = generateSummary(
@@ -140,7 +146,8 @@ export function calculateDecision(
     riskRating,
     decisionQuality,
     topContributors,
-    concentrationRisks
+    concentrationRisks,
+    input.researchBias
   );
 
   return {
@@ -207,11 +214,24 @@ function scoreToBias(score: number, thresholds: DecisionThresholds): DriverBias 
   return "Neutral";
 }
 
+function mapResearchBiasToDriverBias(researchBias?: string): DriverBias | null {
+  if (!researchBias) return null;
+  const lower = researchBias.toLowerCase();
+  if (lower.includes("strong bullish")) return "Strong Bullish";
+  if (lower.includes("bullish")) return "Bullish";
+  if (lower.includes("strong bearish")) return "Strong Bearish";
+  if (lower.includes("bearish")) return "Bearish";
+  if (lower.includes("mixed") || lower.includes("wait")) return "Neutral";
+  if (lower.includes("neutral")) return "Neutral";
+  return null;
+}
+
 function deriveDecision(
   bias: DriverBias,
   confidence: number,
   conflict: number,
-  thresholds: DecisionThresholds
+  thresholds: DecisionThresholds,
+  researchBias?: string
 ): DecisionAction {
   const confLevel = confidence >= thresholds.confidence.highThreshold
     ? "highConfidence"
@@ -227,6 +247,13 @@ function deriveDecision(
 
   if (conflict >= thresholds.conflict.highThreshold && confidence < thresholds.confidence.mediumThreshold) {
     return "Wait";
+  }
+
+  const researchLower = researchBias?.toLowerCase() ?? "";
+  if (researchLower.includes("mixed") || researchLower.includes("wait")) {
+    if (baseDecision === "Buy" || baseDecision === "Sell" || baseDecision === "Strong Buy" || baseDecision === "Strong Sell") {
+      return "Wait";
+    }
   }
 
   return baseDecision;
@@ -360,13 +387,18 @@ function buildExplanation(
   input: DecisionEngineInput,
   supportingDrivers: string[],
   conflictingDrivers: string[],
-  concentrationRisks: string[]
+  concentrationRisks: string[],
+  researchBias?: string
 ): DecisionExplanation {
   const catBias = input.categoryScores.overallBias;
   const techBias = input.technicalBias.technicalBias;
   const instBias = input.institutionalFlow.institutionalBias;
 
-  const primaryReason = `Overall ${bias.toLowerCase()} bias with ${decision.toLowerCase()} decision based on ${confidence}% confidence.`;
+  const researchSource = researchBias
+    ? `Institutional research bias: ${researchBias}. `
+    : "";
+
+  const primaryReason = `${researchSource}Overall ${bias.toLowerCase()} bias with ${decision.toLowerCase()} decision based on ${confidence}% confidence.`;
 
   const supportingReasons: string[] = [];
   const conflictingReasons: string[] = [];
@@ -428,9 +460,14 @@ function generateSummary(
   riskRating: RiskRating,
   quality: DecisionQuality,
   topContributors: Contributor[],
-  concentrationRisks: string[]
+  concentrationRisks: string[],
+  researchBias?: string
 ): string {
   const parts: string[] = [];
+
+  if (researchBias) {
+    parts.push(`Institutional research bias: ${researchBias}.`);
+  }
 
   parts.push(`Gold decision: ${decision} with ${bias.toLowerCase()} bias.`);
 

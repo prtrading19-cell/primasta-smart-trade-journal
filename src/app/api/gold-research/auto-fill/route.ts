@@ -257,7 +257,7 @@ The data below was collected from multiple verified APIs (FRED, Alpha Vantage, F
 You are the ANALYST. Do NOT search the internet. Do NOT invent prices. Use ONLY the data provided below.
 
 YOUR TASK:
-For each of the 9 driver sections, provide:
+For each of the 17 driver sections, provide:
 - goldImpact: "Bullish Gold" | "Bearish Gold" | "Neutral" | "Mixed-Wait"
 - reason: 1 sentence explaining the impact based on the provided data
 - newsHeadline: from the provided news or "Data not verified"
@@ -530,7 +530,7 @@ const ANALYST_SCHEMA = {
     sections: {
       type: "array",
       minItems: 9,
-      maxItems: 9,
+      maxItems: 20,
       items: {
         type: "object",
         additionalProperties: false,

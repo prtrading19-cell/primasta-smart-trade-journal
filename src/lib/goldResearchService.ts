@@ -53,7 +53,8 @@ export function analyzeResearch(
       currentPrice: request.currentPrice,
       timestamp: request.timestamp,
       notes: request.notes,
-      options: request.options
+      options: request.options,
+      researchBias: request.researchBias
     };
 
     const analysis = orchestrateGoldResearch(orchestratorInput);

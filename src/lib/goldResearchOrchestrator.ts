@@ -56,7 +56,8 @@ export function orchestrateGoldResearch(
     weightConfiguration: input.weightConfiguration,
     currentPrice: input.currentPrice,
     options,
-    diagnostics
+    diagnostics,
+    researchBias: input.researchBias
   };
 
   const pipelineResult = runPipeline(ctx);

@@ -7,6 +7,7 @@ import type { GoldResearchAnalysis, OrchestratorOptions } from "@/types/goldRese
 import { DRIVER_REGISTRY, getDriverIdByTitle, getEnabledDrivers } from "@/config/driverRegistry";
 import { CATEGORY_DEFINITIONS } from "@/config/categoryConfig";
 import { analyzeResearch } from "@/lib/goldResearchService";
+import { getResearchBiasFromSections } from "@/lib/goldAutoResearch";
 
 const AUTO_DRIVER_TO_REGISTRY_ID: Record<string, string> = {
   "DXY / US Dollar Check": "dxy-us-dollar",
@@ -151,6 +152,7 @@ export function buildEnhancedAnalysis(
   const institutionalInput = adaptAutoFillToInstitutionalInput(report);
 
   const currentPrice = parsePrice(report.goldCurrentPrice);
+  const researchBias = getResearchBiasFromSections(report.sections);
 
   const serviceRequest: GoldResearchServiceRequest = {
     driverAnalyses,
@@ -159,7 +161,8 @@ export function buildEnhancedAnalysis(
     currentPrice,
     timestamp: new Date().toISOString(),
     notes: `Enhanced from auto-fill report dated ${report.date}`,
-    options
+    options,
+    researchBias
   };
 
   const response = analyzeResearch(serviceRequest);
@@ -177,13 +180,15 @@ export function buildEnhancedAnalysisFromManual(
   options?: OrchestratorOptions
 ): GoldResearchAnalysis {
   const driverAnalyses = adaptManualReportsToDriverAnalyses(reports);
+  const researchBias = getManualReportsBias(reports);
 
   const serviceRequest: GoldResearchServiceRequest = {
     driverAnalyses,
     currentPrice,
     timestamp: new Date().toISOString(),
     notes: `Enhanced from ${reports.length} manual driver reports`,
-    options
+    options,
+    researchBias
   };
 
   const response = analyzeResearch(serviceRequest);
@@ -474,6 +479,23 @@ function parsePrice(priceStr: string): number | undefined {
   const cleaned = priceStr.replace(/[^0-9.,]/g, "").replace(",", "");
   const num = parseFloat(cleaned);
   return Number.isFinite(num) && num > 0 ? num : undefined;
+}
+
+function getManualReportsBias(reports: GoldResearchReport[]): string | undefined {
+  if (reports.length === 0) return undefined;
+  let bullish = 0;
+  let bearish = 0;
+  let neutral = 0;
+  for (const report of reports) {
+    const bias = report.goldBias?.toLowerCase() ?? "";
+    if (bias.includes("bullish")) bullish++;
+    else if (bias.includes("bearish")) bearish++;
+    else neutral++;
+  }
+  const total = reports.length;
+  if (bullish > bearish && bullish >= total * 0.4) return "Bullish";
+  if (bearish > bullish && bearish >= total * 0.4) return "Bearish";
+  return "Neutral";
 }
 
 export function getCategoryTitle(categoryId: string): string {

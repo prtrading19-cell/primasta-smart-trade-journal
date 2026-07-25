@@ -56,7 +56,10 @@ export function normalizeAutoFillResponse(value: unknown): GoldAutoFillResponse 
   };
 }
 
-export function buildAutoGoldSummary(sections: GoldAutoResearchSection[]): GoldAutoFullSummary {
+export function buildAutoGoldSummary(
+  sections: GoldAutoResearchSection[],
+  engineDecision?: { overallBias: string; overallConfidence: number; decision: string; overallGoldScore: number; alignmentBreakdown?: { overallAlignment: number } } | null
+): GoldAutoFullSummary {
   const bullishSections = sections.filter((section) => section.goldImpact === "Bullish Gold");
   const bearishSections = sections.filter((section) => section.goldImpact === "Bearish Gold");
   const mixedSections = sections.filter((section) => section.goldImpact === "Mixed-Wait");
@@ -64,24 +67,94 @@ export function buildAutoGoldSummary(sections: GoldAutoResearchSection[]): GoldA
   const technicalSection = sections.find((section) => section.driver === "Gold Technical Structure Check");
   const technicalVerdict = technicalSection?.goldTechnicalVerdict || "Wait";
   const hasMajorNewsRisk = sections.some((section) => hasNewsRisk(`${section.newsHeadline} ${section.newsSummary} ${section.reason}`));
-  const overallGoldBias = getOverallBias(bullishSections.length, bearishSections.length, mixedSections.length, neutralSections.length);
-  const preTradeVerdict = getPreTradeVerdict(overallGoldBias, technicalVerdict, hasMajorNewsRisk, mixedSections.length);
+
+  const totalDrivers = sections.length;
+  const bullishCount = bullishSections.length;
+  const bearishCount = bearishSections.length;
+  const mixedCount = mixedSections.length;
+  const neutralCount = neutralSections.length;
+
+  const hasEngineDecision = engineDecision && typeof engineDecision.overallBias === "string";
+  let overallGoldBias: GoldAutoOverallBias;
+  let confidence: number;
+  let alignment: string;
+  let institutionalScore: number;
+
+  if (hasEngineDecision) {
+    const bias = engineDecision.overallBias;
+    if (/strong bullish|bullish/i.test(bias)) overallGoldBias = "Bullish";
+    else if (/strong bearish|bearish/i.test(bias)) overallGoldBias = "Bearish";
+    else if (/neutral/i.test(bias)) overallGoldBias = "Neutral";
+    else overallGoldBias = getOverallBias(bullishCount, bearishCount, mixedCount, neutralCount);
+    confidence = engineDecision.overallConfidence;
+    alignment = engineDecision.alignmentBreakdown
+      ? `${engineDecision.alignmentBreakdown.overallAlignment}%`
+      : `${calculateHeuristicAlignment(bullishCount, bearishCount, mixedCount, neutralCount, totalDrivers)}%`;
+    institutionalScore = engineDecision.overallGoldScore;
+  } else {
+    overallGoldBias = getOverallBias(bullishCount, bearishCount, mixedCount, neutralCount);
+    confidence = calculateHeuristicConfidence(bullishCount, bearishCount, mixedCount, neutralCount, totalDrivers);
+    alignment = `${calculateHeuristicAlignment(bullishCount, bearishCount, mixedCount, neutralCount, totalDrivers)}%`;
+    institutionalScore = calculateInstitutionalScore(bullishCount, bearishCount, mixedCount, neutralCount, totalDrivers);
+  }
+
+  const preTradeVerdict = getPreTradeVerdict(overallGoldBias, technicalVerdict, hasMajorNewsRisk, mixedCount);
   const strongestBullishDriver = strongestDriver(bullishSections);
   const strongestBearishDriver = strongestDriver(bearishSections);
+
+  const engineTradeAction = engineDecision ? mapEngineDecisionToTradeAction(engineDecision.decision) : null;
+  const tradeAction = engineTradeAction ?? deriveTradeAction(overallGoldBias, preTradeVerdict, mixedCount, totalDrivers);
+  const tradeReason = engineTradeAction
+    ? `Engine decision: ${engineDecision!.decision} (${engineDecision!.overallConfidence}% confidence). Bias: ${overallGoldBias}.`
+    : deriveTradeReason(tradeAction, overallGoldBias, strongestBullishDriver, strongestBearishDriver, mixedCount, totalDrivers);
+  const tradeConfidence = confidence;
 
   return {
     overallGoldBias,
     bullishDrivers: bullishSections.map((section) => section.driver),
     bearishDrivers: bearishSections.map((section) => section.driver),
-    mixedDrivers: [...mixedSections, ...neutralSections].map((section) => section.driver),
+    mixedDrivers: mixedSections.map((section) => section.driver),
+    neutralDrivers: neutralSections.map((section) => section.driver),
     strongestBullishDriver,
     strongestBearishDriver,
     mainRiskToday: getMainRisk(sections, mixedSections, bearishSections),
     bestSessionToTrade: hasMajorNewsRisk ? "Wait until the major news reaction settles" : "London-New York overlap after technical confirmation",
     preTradeVerdict,
     finalGuidance: getFinalGuidance(overallGoldBias, technicalVerdict, preTradeVerdict, strongestBullishDriver, strongestBearishDriver),
-    personalRule: GOLD_PERSONAL_RULE
+    personalRule: GOLD_PERSONAL_RULE,
+    statistics: {
+      bullishCount,
+      bearishCount,
+      mixedCount,
+      neutralCount,
+      totalDrivers,
+      overallBias: overallGoldBias,
+      confidence,
+      alignment,
+      institutionalScore
+    },
+    tradeRecommendation: {
+      action: tradeAction,
+      reason: tradeReason,
+      confidence: tradeConfidence
+    },
+    engineDecisionUsed: Boolean(hasEngineDecision)
   };
+}
+
+export function calculateInstitutionalResearch(
+  sections: GoldAutoResearchSection[],
+  engineDecision?: { overallBias: string; overallConfidence: number; decision: string; overallGoldScore: number; alignmentBreakdown?: { overallAlignment: number } } | null
+): GoldAutoFullSummary {
+  return buildAutoGoldSummary(sections, engineDecision);
+}
+
+export function getResearchBiasFromSections(sections: GoldAutoResearchSection[]): GoldAutoOverallBias {
+  const bullishCount = sections.filter((s) => s.goldImpact === "Bullish Gold").length;
+  const bearishCount = sections.filter((s) => s.goldImpact === "Bearish Gold").length;
+  const mixedCount = sections.filter((s) => s.goldImpact === "Mixed-Wait").length;
+  const neutralCount = sections.filter((s) => s.goldImpact === "Neutral").length;
+  return getOverallBias(bullishCount, bearishCount, mixedCount, neutralCount);
 }
 
 export function createEmptyAutoFillResponse(date = today()): GoldAutoFillResponse {
@@ -171,13 +244,31 @@ function normalizeAutoSummary(value: unknown, sections: GoldAutoResearchSection[
     bullishDrivers: stringArray(value.bullishDrivers),
     bearishDrivers: stringArray(value.bearishDrivers),
     mixedDrivers: stringArray(value.mixedDrivers),
+    neutralDrivers: stringArray(value.neutralDrivers),
     strongestBullishDriver: stringValue(value.strongestBullishDriver) || fallback.strongestBullishDriver,
     strongestBearishDriver: stringValue(value.strongestBearishDriver) || fallback.strongestBearishDriver,
     mainRiskToday: stringValue(value.mainRiskToday) || fallback.mainRiskToday,
     bestSessionToTrade: stringValue(value.bestSessionToTrade) || fallback.bestSessionToTrade,
     preTradeVerdict: includesValue(PRE_TRADE_VERDICTS, value.preTradeVerdict) ? value.preTradeVerdict : fallback.preTradeVerdict,
     finalGuidance: stringValue(value.finalGuidance) || fallback.finalGuidance,
-    personalRule: stringValue(value.personalRule) || GOLD_PERSONAL_RULE
+    personalRule: stringValue(value.personalRule) || GOLD_PERSONAL_RULE,
+    statistics: isRecord(value.statistics) ? {
+      bullishCount: typeof value.statistics.bullishCount === "number" ? value.statistics.bullishCount : fallback.statistics.bullishCount,
+      bearishCount: typeof value.statistics.bearishCount === "number" ? value.statistics.bearishCount : fallback.statistics.bearishCount,
+      mixedCount: typeof value.statistics.mixedCount === "number" ? value.statistics.mixedCount : fallback.statistics.mixedCount,
+      neutralCount: typeof value.statistics.neutralCount === "number" ? value.statistics.neutralCount : fallback.statistics.neutralCount,
+      totalDrivers: typeof value.statistics.totalDrivers === "number" ? value.statistics.totalDrivers : fallback.statistics.totalDrivers,
+      overallBias: stringValue(value.statistics.overallBias) || fallback.statistics.overallBias,
+      confidence: typeof value.statistics.confidence === "number" ? value.statistics.confidence : fallback.statistics.confidence,
+      alignment: stringValue(value.statistics.alignment) || fallback.statistics.alignment,
+      institutionalScore: typeof value.statistics.institutionalScore === "number" ? value.statistics.institutionalScore : fallback.statistics.institutionalScore
+    } : fallback.statistics,
+    tradeRecommendation: isRecord(value.tradeRecommendation) ? {
+      action: (value.tradeRecommendation.action === "BUY" || value.tradeRecommendation.action === "SELL" || value.tradeRecommendation.action === "WAIT") ? value.tradeRecommendation.action : fallback.tradeRecommendation.action,
+      reason: stringValue(value.tradeRecommendation.reason) || fallback.tradeRecommendation.reason,
+      confidence: typeof value.tradeRecommendation.confidence === "number" ? value.tradeRecommendation.confidence : fallback.tradeRecommendation.confidence
+    } : fallback.tradeRecommendation,
+    engineDecisionUsed: typeof value.engineDecisionUsed === "boolean" ? value.engineDecisionUsed : fallback.engineDecisionUsed
   };
 }
 
@@ -185,10 +276,72 @@ function normalizeAutoImpact(value: unknown): GoldAutoImpact {
   return includesValue(AUTO_IMPACTS, value) ? value : "Mixed-Wait";
 }
 
+function calculateHeuristicConfidence(bullish: number, bearish: number, mixed: number, neutral: number, total: number): number {
+  if (total === 0) return 0;
+  const dominant = Math.max(bullish, bearish, mixed, neutral);
+  const base = (dominant / total) * 100;
+  const penaltyPerMixed = 3;
+  return Math.max(10, Math.min(95, Math.round(base - mixed * penaltyPerMixed)));
+}
+
+function calculateHeuristicAlignment(bullish: number, bearish: number, mixed: number, neutral: number, total: number): number {
+  if (total === 0) return 0;
+  const dominant = Math.max(bullish, bearish);
+  return Math.round((dominant / total) * 100);
+}
+
+function calculateInstitutionalScore(bullish: number, bearish: number, mixed: number, _neutral: number, total: number): number {
+  if (total === 0) return 0;
+  const weighted = (bullish * 1.0 + bearish * -1.0 + mixed * 0.0) / total;
+  return Math.round(weighted * 50 + 50);
+}
+
+function mapEngineDecisionToTradeAction(engineDecision: string): "BUY" | "SELL" | "WAIT" | null {
+  const lower = engineDecision.toLowerCase();
+  if (lower.includes("strong buy")) return "BUY";
+  if (lower.includes("buy")) return "BUY";
+  if (lower.includes("strong sell")) return "SELL";
+  if (lower.includes("sell")) return "SELL";
+  if (lower.includes("wait")) return "WAIT";
+  return null;
+}
+
+function deriveTradeAction(bias: GoldAutoOverallBias, preTradeVerdict: GoldAutoPreTradeVerdict, mixedCount: number, totalDrivers: number): "BUY" | "SELL" | "WAIT" {
+  if (preTradeVerdict === "Avoid Before News" || preTradeVerdict === "Wait") return "WAIT";
+  if (mixedCount >= 3) return "WAIT";
+  if (totalDrivers < 5) return "WAIT";
+  if (bias === "Bullish") return "BUY";
+  if (bias === "Bearish") return "SELL";
+  return "WAIT";
+}
+
+function deriveTradeReason(
+  action: "BUY" | "SELL" | "WAIT",
+  bias: GoldAutoOverallBias,
+  strongestBullishDriver: string,
+  strongestBearishDriver: string,
+  mixedCount: number,
+  totalDrivers: number
+): string {
+  if (action === "BUY") {
+    return `${bias} bias supported by strongest driver: ${strongestBullishDriver}. Bearish pressure from ${strongestBearishDriver}. Enter only after technical confirmation.`;
+  }
+  if (action === "SELL") {
+    return `${bias} bias supported by strongest driver: ${strongestBearishDriver}. Bullish pressure from ${strongestBullishDriver}. Enter only after technical confirmation.`;
+  }
+  if (mixedCount >= 3) {
+    return `Too many mixed drivers (${mixedCount}/${totalDrivers}). Wait for clearer macro alignment before entering.`;
+  }
+  return `Bias is ${bias} with ${totalDrivers} drivers analyzed. Wait for stronger directional alignment.`;
+}
+
 function getOverallBias(bullish: number, bearish: number, mixed: number, neutral: number): GoldAutoOverallBias {
-  if (bullish >= 5 && bearish <= 2 && mixed <= 2) return "Bullish";
-  if (bearish >= 5 && bullish <= 2 && mixed <= 2) return "Bearish";
-  if (neutral >= 5 && bullish <= 2 && bearish <= 2) return "Neutral";
+  const total = bullish + bearish + mixed + neutral;
+  if (total === 0) return "Mixed-Wait";
+  const netScore = (bullish - bearish) / total;
+  if (netScore >= 0.3 && bullish >= 4) return "Bullish";
+  if (netScore <= -0.3 && bearish >= 4) return "Bearish";
+  if (Math.abs(netScore) < 0.1 && mixed <= 2) return "Neutral";
   return "Mixed-Wait";
 }
 

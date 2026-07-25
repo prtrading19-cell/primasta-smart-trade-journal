@@ -295,6 +295,7 @@ export interface GoldAutoFullSummary {
   bullishDrivers: string[];
   bearishDrivers: string[];
   mixedDrivers: string[];
+  neutralDrivers: string[];
   strongestBullishDriver: string;
   strongestBearishDriver: string;
   mainRiskToday: string;
@@ -302,6 +303,23 @@ export interface GoldAutoFullSummary {
   preTradeVerdict: GoldAutoPreTradeVerdict;
   finalGuidance: string;
   personalRule: string;
+  statistics: {
+    bullishCount: number;
+    bearishCount: number;
+    mixedCount: number;
+    neutralCount: number;
+    totalDrivers: number;
+    overallBias: string;
+    confidence: number;
+    alignment: string;
+    institutionalScore: number;
+  };
+  tradeRecommendation: {
+    action: "BUY" | "SELL" | "WAIT";
+    reason: string;
+    confidence: number;
+  };
+  engineDecisionUsed: boolean;
 }
 
 export interface GoldAutoFillResponse {

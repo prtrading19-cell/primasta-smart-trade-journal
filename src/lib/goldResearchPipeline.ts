@@ -26,6 +26,7 @@ export interface PipelineContext {
   currentPrice?: number;
   options: OrchestratorOptions;
   diagnostics: PipelineDiagnostics;
+  researchBias?: string;
 }
 
 export interface PipelineResult {
@@ -228,7 +229,8 @@ export function executeDecisionStage(
       technicalBias: result.technicalBias,
       institutionalFlow: result.institutionalFlow,
       currentPrice: ctx.currentPrice,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      researchBias: ctx.researchBias
     };
 
     const decisionResult = calculateDecision(decisionInput);

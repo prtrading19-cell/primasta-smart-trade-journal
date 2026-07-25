@@ -24,6 +24,7 @@ export interface GoldResearchServiceRequest {
   timestamp?: string;
   notes?: string;
   options?: OrchestratorOptions;
+  researchBias?: string;
 }
 
 export interface GoldResearchServiceResponse {

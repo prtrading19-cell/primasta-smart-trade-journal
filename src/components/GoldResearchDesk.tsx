@@ -273,20 +273,23 @@ export function GoldResearchDesk() {
         console.info(`[DEBUG:CLIENT] Normalized section "${ns.driver}" impact=${ns.goldImpact} empty_fields=${emptyFields.length > 0 ? emptyFields.join(",") : "none"}`);
       }
 
-      setAutoReport(normalized);
       setSections(normalized.sections);
       setReportDate(normalized.date);
       setShowAutoSummary(true);
       setEditingAutoDriver(null);
 
       const engineResult = (result as Record<string, unknown>).engineAnalysis;
-      console.info("[DEBUG:CLIENT] engineAnalysis type:", typeof engineResult, "value:", engineResult ? "present" : "null/undefined");
-      if (engineResult && typeof engineResult === "object") {
+      const engineDecision = engineResult && typeof engineResult === "object"
+        ? (engineResult as GoldResearchAnalysis).decision
+        : null;
+
+      if (engineDecision) {
         setEnhancedAnalysis(engineResult as GoldResearchAnalysis);
-        console.info("[DEBUG:CLIENT] enhancedAnalysis SET to engine result");
+        const syncedSummary = buildAutoGoldSummary(normalized.sections, engineDecision);
+        setAutoReport({ ...normalized, fullSummary: syncedSummary });
         setAutoMessage(normalized.warning ?? "Auto-fill complete. Gold Research Engine analysis generated automatically. Review results below.");
       } else {
-        console.info("[DEBUG:CLIENT] enhancedAnalysis NOT SET (engineResult is null/undefined)");
+        setAutoReport(normalized);
         setAutoMessage(normalized.warning ?? "Auto-fill complete. Review and edit the research before saving.");
       }
     } catch (error) {
@@ -304,13 +307,13 @@ export function GoldResearchDesk() {
       return {
         ...current,
         sections: updatedSections,
-        fullSummary: buildAutoGoldSummary(updatedSections)
+        fullSummary: buildAutoGoldSummary(updatedSections, enhancedAnalysis?.decision)
       };
     });
   }
 
   function generateAutoSummary() {
-    const summary = buildAutoGoldSummary(sections);
+    const summary = buildAutoGoldSummary(sections, enhancedAnalysis?.decision);
     setAutoReport((current) => ({
       date: current?.date || reportDate || today(),
       goldCurrentPrice: current?.goldCurrentPrice || "",
@@ -318,7 +321,7 @@ export function GoldResearchDesk() {
       fullSummary: summary
     }));
     setShowAutoSummary(true);
-    setAutoMessage("Full Gold bias summary generated from the current 9 sections.");
+    setAutoMessage("Full Gold bias summary generated from the current 17 research drivers.");
   }
 
   async function saveDailyGoldResearch() {
@@ -326,7 +329,7 @@ export function GoldResearchDesk() {
     setAutoMessage("");
 
     try {
-      const fullSummary = buildAutoGoldSummary(sections);
+      const fullSummary = buildAutoGoldSummary(sections, enhancedAnalysis?.decision);
       await addDailyGoldResearchReport({
         reportDate: autoReport?.date || reportDate || today(),
         goldCurrentPrice: autoReport?.goldCurrentPrice || "",
@@ -594,7 +597,14 @@ export function GoldResearchDesk() {
       if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Engine re-run failed.");
 
       if (result.success && result.analysis) {
-        setEnhancedAnalysis(result.analysis as GoldResearchAnalysis);
+        const analysis = result.analysis as GoldResearchAnalysis;
+        setEnhancedAnalysis(analysis);
+        if (autoReport) {
+          setAutoReport((current) => current
+            ? { ...current, fullSummary: buildAutoGoldSummary(current.sections, analysis.decision) }
+            : current
+          );
+        }
       }
     } catch {
     } finally {
@@ -640,8 +650,8 @@ export function GoldResearchDesk() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">AI Research Layer</p>
-            <h2 className="mt-1 text-lg font-semibold text-text-primary">9-Point Gold Pre-Trade Checklist</h2>
-            <p className="mt-1 text-sm text-text-secondary">Each Gold driver is reviewed with live data, news, chart observation, and impact assessment. Edit any field directly, then generate the full bias summary.</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">Institutional Gold Research Checklist</h2>
+            <p className="mt-1 text-sm text-text-secondary">Review every institutional Gold driver using verified live market data, news, technical observations and AI analysis before generating the final Gold bias. The checklist is dynamic and expandable.</p>
           </div>
           <button
             type="button"
@@ -679,8 +689,6 @@ export function GoldResearchDesk() {
             {autoSaving ? "Saving..." : "Save Daily Gold Research"}
           </button>
         </div>
-
-        {showAutoSummary && autoReport ? <AutoFullSummaryPanel report={autoReport} /> : null}
 
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
           {sections.map((section) => (
@@ -1080,7 +1088,7 @@ export function GoldResearchDesk() {
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-text-primary">Gold Pre-Trade Checklist</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Institutional Gold Research Checklist</h2>
             <span className={cn("rounded-md px-3 py-1 text-xs font-bold", checklistBadgeClass(checklistResult.result))}>
               {checklistResult.result} {checklistResult.score}/{checklistResult.total}
             </span>
@@ -1114,6 +1122,10 @@ export function GoldResearchDesk() {
           </div>
         </div>
       </section>
+
+      {showAutoSummary && autoReport ? (
+        <AutoFullSummaryPanel report={autoReport} enhancedAnalysis={enhancedAnalysis} />
+      ) : null}
 
       <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1183,7 +1195,7 @@ function GoldTerminalHeader({
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <TerminalMetric icon={<Activity className="h-4 w-4" />} label="XAUUSD Price" value={currentPrice} detail={marketDataConnected ? `${priceProvider} connected` : "Awaiting market feed"} tone={marketDataConnected ? "success" : "warning"} />
         {decision ? (
-          <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Engine Decision" value={decision} detail={goldScore !== undefined ? `Score: ${goldScore.toFixed(1)}` : ""} tone={decision.includes("Buy") ? "success" : decision.includes("Sell") ? "danger" : "warning"} />
+          <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Engine Decision" value={decision} detail={confidence !== undefined ? `Confidence: ${confidence}%` : ""} tone={decision.includes("Buy") ? "success" : decision.includes("Sell") ? "danger" : "warning"} />
         ) : (
           <TerminalMetric icon={<BrainCircuit className="h-4 w-4" />} label="Gold Bias" value={overallBias || "Mixed-Wait"} detail={`Report date: ${reportDate}`} tone={biasTone(overallBias)} />
         )}
@@ -1637,27 +1649,150 @@ function getAutoFillErrorMessage(result: Record<string, unknown>) {
   return error || "Could not verify fresh sources. Try again later.";
 }
 
-function AutoFullSummaryPanel({ report }: { report: GoldAutoFillResponse }) {
+function AutoFullSummaryPanel({
+  report,
+  enhancedAnalysis
+}: {
+  report: GoldAutoFillResponse;
+  enhancedAnalysis: GoldResearchAnalysis | null;
+}) {
   const summary = report.fullSummary;
+  const stats = summary.statistics;
+  const rec = summary.tradeRecommendation;
+  const decision = enhancedAnalysis?.decision;
+
+  const actionTone =
+    rec.action === "BUY"
+      ? "border-profit bg-profit/10 text-profit"
+      : rec.action === "SELL"
+      ? "border-loss bg-loss/10 text-loss"
+      : "border-gold bg-gold/10 text-gold";
+
+  const biasTone =
+    summary.overallGoldBias === "Bullish"
+      ? "text-profit"
+      : summary.overallGoldBias === "Bearish"
+      ? "text-loss"
+      : "text-gold";
 
   return (
-    <div className="mt-5 rounded-lg border border-profit/30 bg-profit/5 p-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-text-primary">Full Gold Bias Summary</h3>
-        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.overallGoldBias))}>{summary.overallGoldBias}</span>
-        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.preTradeVerdict))}>{summary.preTradeVerdict}</span>
+    <section className="overflow-hidden rounded-xl border-2 border-gold/30 bg-gradient-to-br from-[#0d0c09] via-[#12110d] to-[#0d0c09] p-6 shadow-lg sm:p-8">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-gold">Institutional Research Summary</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-white md:text-3xl">Full Gold Bias Report</h2>
+          <p className="mt-1 text-sm text-stone-400">{report.date} | {report.goldCurrentPrice ? `XAUUSD ${report.goldCurrentPrice}` : "Price not verified"} | {stats.totalDrivers} drivers analyzed</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {summary.engineDecisionUsed ? (
+            <span className="rounded-md border border-gold/30 bg-gold/10 px-3 py-1 text-[10px] font-bold uppercase text-gold">Engine Verified</span>
+          ) : null}
+          <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(summary.preTradeVerdict))}>{summary.preTradeVerdict}</span>
+        </div>
       </div>
-      <div className="mt-4 grid gap-2 text-sm">
-        <ResultRow label="Bullish drivers" value={summary.bullishDrivers.length ? summary.bullishDrivers.join("; ") : "None"} />
-        <ResultRow label="Bearish drivers" value={summary.bearishDrivers.length ? summary.bearishDrivers.join("; ") : "None"} />
-        <ResultRow label="Mixed drivers" value={summary.mixedDrivers.length ? summary.mixedDrivers.join("; ") : "None"} />
-        <ResultRow label="Strongest bullish driver" value={summary.strongestBullishDriver} />
-        <ResultRow label="Strongest bearish driver" value={summary.strongestBearishDriver} />
-        <ResultRow label="Main risk today" value={summary.mainRiskToday} />
-        <ResultRow label="Best session to trade" value={summary.bestSessionToTrade} />
-        <ResultRow label="Final guidance" value={summary.finalGuidance} />
-        <ResultRow label="Personal rule" value={summary.personalRule} />
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Overall Bias" value={summary.overallGoldBias} tone={biasTone} />
+        <StatCard label="Confidence" value={`${stats.confidence}%`} tone={stats.confidence >= 60 ? "text-profit" : stats.confidence < 35 ? "text-loss" : "text-gold"} />
+        <StatCard label="Alignment" value={stats.alignment} tone={parseInt(stats.alignment) >= 60 ? "text-profit" : "text-gold"} />
+        <StatCard label="Institutional Score" value={`${stats.institutionalScore}`} tone={stats.institutionalScore >= 60 ? "text-profit" : stats.institutionalScore <= 40 ? "text-loss" : "text-gold"} />
       </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CountBadge label="Bullish Gold" count={stats.bullishCount} color="profit" />
+        <CountBadge label="Bearish Gold" count={stats.bearishCount} color="loss" />
+        <CountBadge label="Mixed-Wait" count={stats.mixedCount} color="gold" />
+        <CountBadge label="Neutral" count={stats.neutralCount} color="muted" />
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Driver Contribution Breakdown</p>
+          <div className="mt-3 space-y-2 text-sm">
+            <DriverListRow label="Bullish Drivers" drivers={summary.bullishDrivers} color="text-emerald-300" empty="None identified" />
+            <DriverListRow label="Bearish Drivers" drivers={summary.bearishDrivers} color="text-red-300" empty="None identified" />
+            <DriverListRow label="Mixed Drivers" drivers={summary.mixedDrivers} color="text-amber-300" empty="None identified" />
+            <DriverListRow label="Neutral Drivers" drivers={summary.neutralDrivers} color="text-stone-400" empty="None identified" />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Key Drivers & Risks</p>
+          <div className="mt-3 grid gap-2 text-sm">
+            <ResultRow label="Strongest bullish driver" value={summary.strongestBullishDriver} />
+            <ResultRow label="Strongest bearish driver" value={summary.strongestBearishDriver} />
+            <ResultRow label="Main risk today" value={summary.mainRiskToday} />
+            <ResultRow label="Best session to trade" value={summary.bestSessionToTrade} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Institutional Assessment</p>
+        <p className="mt-3 text-sm leading-relaxed text-stone-300">{summary.finalGuidance}</p>
+      </div>
+
+      {decision ? (
+        <div className="mt-5 rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Engine Decision Alignment</p>
+            <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", autoBadgeClass(decision.decision))}>{decision.decision}</span>
+            <span className="rounded-md bg-stone-800 px-2 py-0.5 text-[10px] font-bold text-stone-400">{decision.overallConfidence}% confidence</span>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+            <ResultRow label="Engine Bias" value={decision.overallBias} />
+            <ResultRow label="Risk Rating" value={decision.riskRating} />
+            <ResultRow label="Decision Quality" value={decision.decisionQuality} />
+            <ResultRow label="Summary" value={decision.summary} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className={cn("mt-6 rounded-lg border-2 p-5", actionTone)}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">Trade Recommendation</p>
+            <p className={cn("mt-1 text-3xl font-black tracking-tight", rec.action === "BUY" ? "text-profit" : rec.action === "SELL" ? "text-loss" : "text-gold")}>{rec.action}</p>
+          </div>
+          <div className="rounded-md bg-black/20 px-4 py-2 text-right">
+            <p className="text-xs font-bold uppercase opacity-70">Confidence</p>
+            <p className="mt-1 text-xl font-bold">{rec.confidence}%</p>
+          </div>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed opacity-90">{rec.reason}</p>
+      </div>
+
+      <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="font-semibold">{summary.personalRule}</p>
+      </div>
+    </section>
+  );
+}
+
+function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">{label}</p>
+      <p className={cn("mt-2 text-xl font-bold tracking-tight", tone)}>{value}</p>
+    </div>
+  );
+}
+
+function CountBadge({ label, count, color }: { label: string; count: number; color: "profit" | "loss" | "gold" | "muted" }) {
+  const colorClass = color === "profit" ? "border-profit/30 bg-profit/5 text-profit" : color === "loss" ? "border-loss/30 bg-loss/5 text-loss" : color === "gold" ? "border-gold/30 bg-gold/5 text-gold" : "border-border-subtle bg-surface-panel text-text-secondary";
+  return (
+    <div className={cn("flex items-center justify-between rounded-lg border px-4 py-3", colorClass)}>
+      <span className="text-xs font-bold uppercase tracking-wide">{label}</span>
+      <span className="text-2xl font-black">{count}</span>
+    </div>
+  );
+}
+
+function DriverListRow({ label, drivers, color, empty }: { label: string; drivers: string[]; color: string; empty: string }) {
+  return (
+    <div>
+      <p className={cn("text-xs font-bold uppercase", color)}>{label}</p>
+      <p className="mt-1 text-xs text-stone-400">{drivers.length ? drivers.join(" | ") : empty}</p>
     </div>
   );
 }

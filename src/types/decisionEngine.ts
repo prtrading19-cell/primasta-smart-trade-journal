@@ -17,6 +17,7 @@ export interface DecisionEngineInput {
   currentPrice?: number;
   timestamp?: string;
   notes?: string;
+  researchBias?: string;
 }
 
 export interface Contributor {
