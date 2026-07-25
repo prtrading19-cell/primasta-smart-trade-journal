@@ -41,10 +41,15 @@ export async function POST(request: Request) {
     const mapped = mapMarketDataToResearch(marketData);
     console.info("[gold-auto-fill] map_duration", Date.now() - mapStart, "ms");
 
+    console.info("[DEBUG:ROUTE] Mapped goldCurrentPrice:", mapped.goldCurrentPrice || "(empty)");
+    console.info("[DEBUG:ROUTE] Mapped sections count:", mapped.sections.length);
+    console.info("[DEBUG:ROUTE] Mapped fullSummary:", JSON.stringify(mapped.fullSummary).slice(0, 300));
+
     // STEP 4: Check if we have any real data
     const hasRealData = marketData.sources.length > 0;
     if (!hasRealData) {
       console.info("[gold-auto-fill] all_providers_failed", "returning mapped data without OpenAI enhancement");
+      console.info("[DEBUG:ROUTE] No real data! Sources:", marketData.sources, "Errors:", marketData.errors);
       const report = buildResponseFromMapped(mapped, reportDate);
       const engineAnalysis = runEngineAnalysis(report);
       return NextResponse.json({ ...report, engineAnalysis, marketData: { sources: marketData.sources, errors: marketData.errors, providerResults: marketData.providerResults } });
@@ -58,7 +63,14 @@ export async function POST(request: Request) {
 
       if (openaiAnalysis) {
         const report = mergeOpenAIAnalysis(mapped, openaiAnalysis, reportDate);
+        console.info("[DEBUG:ROUTE] mergeOpenAIAnalysis report sections:", report.sections.map(s => ({
+          driver: s.driver,
+          goldImpact: s.goldImpact,
+          headlineEmpty: !s.newsHeadline,
+          reasonEmpty: !s.reason,
+        })));
         const engineAnalysis = runEngineAnalysis(report);
+        console.info("[DEBUG:ROUTE] engineAnalysis exists:", Boolean(engineAnalysis));
         const totalDuration = Date.now() - startTime;
         console.info("[gold-auto-fill] pipeline_complete", totalDuration, "ms");
         return NextResponse.json({
@@ -71,7 +83,15 @@ export async function POST(request: Request) {
 
     // STEP 6: Fallback — use mapped data without OpenAI enhancement
     const report = buildResponseFromMapped(mapped, reportDate);
+    console.info("[DEBUG:ROUTE] Fallback buildResponseFromMapped report sections:", report.sections.map(s => ({
+      driver: s.driver,
+      goldImpact: s.goldImpact,
+      currentDataValue: s.currentDataValue?.slice(0, 50),
+      headlineEmpty: !s.newsHeadline,
+      reasonEmpty: !s.reason,
+    })));
     const engineAnalysis = runEngineAnalysis(report);
+    console.info("[DEBUG:ROUTE] Fallback engineAnalysis exists:", Boolean(engineAnalysis));
     const totalDuration = Date.now() - startTime;
     console.info("[gold-auto-fill] pipeline_complete_fallback", totalDuration, "ms");
     return NextResponse.json({
