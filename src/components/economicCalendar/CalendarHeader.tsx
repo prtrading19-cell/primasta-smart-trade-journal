@@ -35,7 +35,7 @@ export default function CalendarHeader() {
           LIVE DATA
         </span>
         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-panel border border-border-subtle text-[11px] font-medium text-text-secondary">
-          Twelve Data / FRED
+          Financial Modeling Prep
         </span>
         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-panel border border-border-subtle text-[11px] font-medium text-text-secondary">
           {dateStr} &middot; {timeStr}
