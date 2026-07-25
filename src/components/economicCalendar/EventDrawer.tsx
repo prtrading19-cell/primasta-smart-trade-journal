@@ -18,10 +18,11 @@ interface EventInsight {
   importance: string;
   goldImpact: string;
   currencyImpact: string;
+  volatility: string;
 }
 
 function getEventInsight(event: EconomicEvent): EventInsight {
-  const name = event.eventName.toLowerCase();
+  const name = event.event.toLowerCase();
   const c = event.currency;
   const co = event.country;
 
@@ -30,6 +31,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "GDP is the broadest measure of economic activity for " + co + ". Stronger-than-forecast readings signal economic expansion, which typically strengthens the " + c + " and can trigger risk-on sentiment across global markets.",
       goldImpact: "Strong GDP reduces gold demand as a safe haven, often causing price declines. Weak GDP fuels gold rallies on recession fears.",
       currencyImpact: "Directly drives " + c + " valuation. A positive surprise strengthens the currency; a miss weakens it.",
+      volatility: "Moderate to High",
     };
   }
 
@@ -38,6 +40,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "Interest rate decisions are the single most impactful events for " + c + ". Central bank policy shifts affect borrowing costs, capital flows, and global risk appetite simultaneously.",
       goldImpact: "Rate hikes are bearish for gold (higher opportunity cost); rate cuts are bullish for gold as yields fall.",
       currencyImpact: "Rate increases attract foreign capital, strengthening " + c + ". Cuts weaken " + c + " as yield differentials narrow.",
+      volatility: "Very High",
     };
   }
 
@@ -46,6 +49,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "Inflation data is a key input for central bank policy. Above-target CPI may accelerate tightening, while below-target readings could prompt dovish action. This directly shapes " + c + " interest rate expectations.",
       goldImpact: "Rising inflation supports gold as a store of value. Deflationary readings reduce gold appeal as an inflation hedge.",
       currencyImpact: "Higher-than-expected inflation strengthens " + c + " via rate hike expectations; lower readings weaken it.",
+      volatility: "High",
     };
   }
 
@@ -54,6 +58,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "Labor market data reflects the health of the " + co + " economy. Strong employment supports consumer spending and GDP growth, while deterioration signals economic weakness.",
       goldImpact: "Strong jobs data reduces safe-haven demand for gold; weak employment boosts gold as recession risk rises.",
       currencyImpact: "Robust employment figures strengthen " + c + "; deteriorating labor data weakens it as central banks may ease policy.",
+      volatility: "High",
     };
   }
 
@@ -62,6 +67,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "PMI data provides a leading indicator of economic expansion or contraction. Readings above 50 signal growth; below 50 indicates contraction. This shapes forward-looking " + c + " market positioning.",
       goldImpact: "Expanding PMI reduces gold demand; contracting PMI increases safe-haven flows into gold.",
       currencyImpact: "Strong PMI readings support " + c + " through improved growth expectations; weak readings undermine it.",
+      volatility: "Moderate",
     };
   }
 
@@ -70,6 +76,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "Consumer spending accounts for a significant portion of " + co + " GDP. This data reveals real-time economic momentum and consumer confidence trends.",
       goldImpact: "Strong retail sales reduce gold safe-haven appeal; weak consumer spending increases gold demand.",
       currencyImpact: "Rising consumer spending supports " + c + " through stronger growth expectations; declines weaken it.",
+      volatility: "Moderate to High",
     };
   }
 
@@ -78,6 +85,25 @@ function getEventInsight(event: EconomicEvent): EventInsight {
       importance: "Trade balance data reflects the flow of goods and services between " + co + " and its trading partners. Persistent deficits can weaken " + c + " over time.",
       goldImpact: "Widening trade deficits can weaken " + c + " and increase gold demand as a store of value.",
       currencyImpact: "Improving trade balance supports " + c + "; widening deficits create headwinds.",
+      volatility: "Moderate",
+    };
+  }
+
+  if (name.includes("fomc") || name.includes("powell") || name.includes("fed")) {
+    return {
+      importance: "Federal Reserve communications directly influence global monetary policy expectations. Market participants closely parse every word for hints about future rate path and balance sheet decisions.",
+      goldImpact: "Dovish Fed signals are strongly bullish for gold; hawkish signals reduce gold appeal as yields rise.",
+      currencyImpact: "Fed policy is the primary driver of " + c + " direction. Any shift in tone can trigger massive repricing across all asset classes.",
+      volatility: "Very High",
+    };
+  }
+
+  if (name.includes("ecb") || name.includes("boe") || name.includes("boj") || name.includes("snb") || name.includes("rba") || name.includes("rbnz") || name.includes("boc")) {
+    return {
+      importance: "Central bank decisions from " + co + " directly affect " + c + " interest rate expectations and cross-border capital flows.",
+      goldImpact: "Dovish central bank moves are bullish for gold; hawkish moves reduce gold demand.",
+      currencyImpact: "Rate decisions and forward guidance are the primary short-term drivers of " + c + " valuation.",
+      volatility: "High",
     };
   }
 
@@ -85,6 +111,7 @@ function getEventInsight(event: EconomicEvent): EventInsight {
     importance: "This event directly impacts " + c + " valuation and global market sentiment. Traders should monitor for deviations from forecast that could trigger volatility.",
     goldImpact: "High impact events can cause significant gold price movement. Monitor deviations from forecast for trading opportunities.",
     currencyImpact: "Directly affects " + c + " strength. Unexpected data releases can trigger immediate and sustained directional moves.",
+    volatility: "Moderate",
   };
 }
 
@@ -152,13 +179,13 @@ export function EventDrawer({ event, onClose }: EventDrawerProps) {
                 </button>
 
                 <h2 className="text-lg font-bold text-text-primary pr-10">
-                  {event.eventName}
+                  {event.event}
                 </h2>
 
                 <div className="flex items-center gap-2 mt-2">
                   <CurrencyFlag currency={event.currency} />
-                  <StatusBadge status={event.status === "Pending" ? "Upcoming" : event.status} />
-                  <ImpactBadge impact={event.impact} />
+                  <StatusBadge status={event.status} />
+                  <ImpactBadge impact={event.importance} />
                 </div>
               </div>
 
@@ -173,14 +200,14 @@ export function EventDrawer({ event, onClose }: EventDrawerProps) {
                     <div className="col-span-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-text-muted">Importance</span>
-                        <ImpactBadge impact={event.impact} size="sm" />
+                        <ImpactBadge impact={event.importance} size="sm" />
                       </div>
                     </div>
-                    <DetailRow label="Release Time" value={event.time + " - " + event.date} />
+                    <DetailRow label="Release Time" value={event.time + " \u2014 " + event.date} />
                     <DetailRow label="Status" value={event.status} />
-                    <DetailRow label="Forecast" value={event.forecast} />
-                    <DetailRow label="Previous" value={event.previous} />
-                    <DetailRow label="Actual" value={event.actual} highlighted={!!event.actual} />
+                    <DetailRow label="Forecast" value={event.forecast ?? ""} />
+                    <DetailRow label="Previous" value={event.previous ?? ""} />
+                    <DetailRow label="Actual" value={event.actual ?? ""} highlighted={!!event.actual} />
                     <DetailRow label="Source" value={event.source} />
                   </div>
                 </div>
@@ -232,10 +259,10 @@ export function EventDrawer({ event, onClose }: EventDrawerProps) {
                         <div className="flex items-center gap-1.5">
                           <AlertTriangle className="h-3.5 w-3.5 text-text-muted" />
                           <span className="text-sm font-semibold text-text-primary">
-                            Market Volatility
+                            Expected Volatility
                           </span>
                         </div>
-                        <ImpactBadge impact={event.impact} size="sm" />
+                        <span className="text-xs font-medium text-text-secondary">{insight.volatility}</span>
                       </div>
                     </div>
                   </div>

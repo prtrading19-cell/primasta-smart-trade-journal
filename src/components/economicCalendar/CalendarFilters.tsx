@@ -6,6 +6,7 @@ import { CURRENCIES } from "@/types/economicCalendar";
 import { ImpactBadge } from "@/components/economicCalendar/ImpactBadge";
 import { CurrencyFlag } from "@/components/economicCalendar/CurrencyFlag";
 import type { CalendarFilterState, EconomicImpact } from "@/types/economicCalendar";
+import { TrendingUp } from "lucide-react";
 
 interface CalendarFiltersProps {
   filter: CalendarFilterState;
@@ -33,8 +34,31 @@ export function CalendarFilters({ filter, onFilterChange }: CalendarFiltersProps
     onFilterChange({ ...filter, currencies });
   }
 
+  function toggleGoldFocus() {
+    onFilterChange({ ...filter, goldFocus: !filter.goldFocus });
+  }
+
   return (
     <div className="bg-surface-card border border-border-subtle rounded-xl p-4 space-y-4">
+      {/* Gold Focus Mode */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+          Focus Mode
+        </p>
+        <button
+          onClick={toggleGoldFocus}
+          className={cn(
+            "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors w-full",
+            filter.goldFocus
+              ? "bg-gold/10 text-gold border-gold/30"
+              : "bg-surface-panel text-text-secondary border-border-subtle hover:border-text-muted/30"
+          )}
+        >
+          <TrendingUp className="h-3.5 w-3.5" />
+          <span>Gold Focus</span>
+        </button>
+      </div>
+
       {/* Date Range */}
       <div className="space-y-1.5">
         <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">

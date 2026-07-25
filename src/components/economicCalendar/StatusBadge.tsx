@@ -7,9 +7,7 @@ interface StatusBadgeProps {
 
 const STYLES: Record<EventStatus, string> = {
   Upcoming: "bg-surface-elevated text-text-secondary",
-  Live: "bg-loss/10 text-loss",
   Released: "bg-profit/10 text-profit",
-  Completed: "bg-surface-panel text-text-muted",
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
@@ -20,12 +18,6 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         STYLES[status]
       )}
     >
-      {status === "Live" && (
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-loss opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-loss" />
-        </span>
-      )}
       {status === "Released" && (
         <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
           <path
@@ -37,7 +29,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
           />
         </svg>
       )}
-      {status === "Live" ? "LIVE" : status}
+      {status}
     </span>
   );
 }

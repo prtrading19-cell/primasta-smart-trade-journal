@@ -15,31 +15,17 @@ export const STATUS_CONFIG: Record<
 > = {
   Upcoming: {
     color: "blue",
-    icon: "⏳",
+    icon: "\u23F3",
     bg: "bg-surface-elevated",
     text: "text-text-secondary",
     label: "Upcoming",
   },
-  Live: {
-    color: "red",
-    icon: "🔴",
-    bg: "bg-loss/10",
-    text: "text-loss",
-    label: "LIVE",
-  },
   Released: {
     color: "green",
-    icon: "✔",
+    icon: "\u2714",
     bg: "bg-profit/10",
     text: "text-profit",
     label: "Released",
-  },
-  Completed: {
-    color: "gray",
-    icon: "✓",
-    bg: "bg-surface-panel",
-    text: "text-text-muted",
-    label: "Completed",
   },
 };
 

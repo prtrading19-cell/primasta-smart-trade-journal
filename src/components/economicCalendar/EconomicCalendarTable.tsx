@@ -1,25 +1,20 @@
 "use client";
 
-import { EconomicEvent, EventStatus } from "@/types/economicCalendar";
+import { EconomicEvent } from "@/types/economicCalendar";
 import { ImpactBadge } from "@/components/economicCalendar/ImpactBadge";
 import { StatusBadge } from "@/components/economicCalendar/StatusBadge";
 import { CurrencyFlag } from "@/components/economicCalendar/CurrencyFlag";
 import { Countdown } from "@/components/economicCalendar/Countdown";
 import { cn } from "@/lib/format";
-import { formatEventTime, getStatusForEvent } from "@/lib/economicCalendar/utils";
-
-function toEventStatus(status: EconomicEvent["status"]): EventStatus {
-  if (status === "Pending") return "Upcoming";
-  return status;
-}
+import { formatEventTime } from "@/lib/economicCalendar/utils";
 
 interface EconomicCalendarTableProps {
   events: EconomicEvent[];
   onEventClick: (event: EconomicEvent) => void;
 }
 
-function getImpactBorderClass(impact: string): string {
-  switch (impact.toLowerCase()) {
+function getImpactBorderClass(importance: string): string {
+  switch (importance.toLowerCase()) {
     case "high":
       return "border-l-2 border-l-loss";
     case "medium":
@@ -71,7 +66,7 @@ export function EconomicCalendarTable({
                   onClick={() => onEventClick(event)}
                   className={cn(
                     "border-b border-border-subtle hover:bg-surface-hover cursor-pointer transition-colors",
-                    getImpactBorderClass(event.impact),
+                    getImpactBorderClass(event.importance),
                     isFirst && "rounded-t-xl",
                     isLast && "rounded-b-xl"
                   )}
@@ -81,18 +76,18 @@ export function EconomicCalendarTable({
                   </td>
                   <td className="px-4 py-3">
                     <Countdown
-                      targetTime={`${event.date}T${event.time}`}
-                      status={toEventStatus(event.status)}
+                      targetTime={event.date + "T" + event.time}
+                      status={event.status}
                     />
                   </td>
                   <td className="px-4 py-3">
                     <CurrencyFlag currency={event.currency} size="sm" />
                   </td>
                   <td className="px-4 py-3">
-                    <ImpactBadge impact={event.impact} size="sm" />
+                    <ImpactBadge impact={event.importance} size="sm" />
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-text-primary">
-                    {event.eventName}
+                    {event.event}
                   </td>
                   <td className="hidden md:table-cell px-4 py-3 text-sm text-text-secondary">
                     {event.forecast || "\u2014"}
@@ -111,7 +106,7 @@ export function EconomicCalendarTable({
                     {event.actual || "\u2014"}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={toEventStatus(event.status)} />
+                    <StatusBadge status={event.status} />
                   </td>
                 </tr>
               );

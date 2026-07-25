@@ -7,12 +7,14 @@ import type {
   CalendarStats,
   EconomicImpact,
 } from "@/types/economicCalendar";
+import { GOLD_FOCUS_KEYWORDS } from "@/types/economicCalendar";
 
 const DEFAULT_FILTER: CalendarFilterState = {
   dateRange: "today",
   impacts: [],
   currencies: [],
   searchQuery: "",
+  goldFocus: false,
 };
 
 const AUTO_REFRESH_INTERVAL = 60_000;
@@ -43,18 +45,25 @@ function applyFilter(events: EconomicEvent[], filter: CalendarFilterState): Econ
   }
 
   if (filter.impacts.length > 0) {
-    result = result.filter((e) => filter.impacts.includes(e.impact));
+    result = result.filter((e) => filter.impacts.includes(e.importance));
   }
 
   if (filter.currencies.length > 0) {
     result = result.filter((e) => filter.currencies.includes(e.currency));
   }
 
+  if (filter.goldFocus) {
+    result = result.filter((e) => {
+      const name = e.event.toLowerCase();
+      return GOLD_FOCUS_KEYWORDS.some((kw) => name.includes(kw));
+    });
+  }
+
   if (filter.searchQuery.trim()) {
     const q = filter.searchQuery.toLowerCase();
     result = result.filter(
       (e) =>
-        e.eventName.toLowerCase().includes(q) ||
+        e.event.toLowerCase().includes(q) ||
         e.currency.toLowerCase().includes(q) ||
         e.country.toLowerCase().includes(q)
     );
@@ -64,11 +73,11 @@ function applyFilter(events: EconomicEvent[], filter: CalendarFilterState): Econ
 }
 
 function computeStats(events: EconomicEvent[], allEvents: EconomicEvent[]): CalendarStats {
-  const highImpactCount = events.filter((e) => e.impact === "High").length;
-  const mediumImpactCount = events.filter((e) => e.impact === "Medium").length;
-  const lowImpactCount = events.filter((e) => e.impact === "Low").length;
+  const highImpactCount = events.filter((e) => e.importance === "High").length;
+  const mediumImpactCount = events.filter((e) => e.importance === "Medium").length;
+  const lowImpactCount = events.filter((e) => e.importance === "Low").length;
   const upcomingCount = events.filter((e) => e.status === "Upcoming").length;
-  const liveCount = events.filter((e) => e.status === "Live").length;
+  const liveCount = 0;
   const releasedCount = events.filter((e) => e.status === "Released").length;
   const usdEventsToday = allEvents.filter(
     (e) => e.currency === "USD" && e.date === new Date().toISOString().split("T")[0]
@@ -76,16 +85,9 @@ function computeStats(events: EconomicEvent[], allEvents: EconomicEvent[]): Cale
 
   const upcomingEvents = allEvents
     .filter((e) => e.status === "Upcoming")
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => (a.date + " " + a.time).localeCompare(b.date + " " + b.time));
 
   const nextEvent = upcomingEvents[0];
-
-  let marketStatus = "Closed";
-  if (liveCount > 0) {
-    marketStatus = "Active";
-  } else if (upcomingCount > 0) {
-    marketStatus = "Pre-Market";
-  }
 
   return {
     totalEvents: events.length,
@@ -95,10 +97,10 @@ function computeStats(events: EconomicEvent[], allEvents: EconomicEvent[]): Cale
     upcomingCount,
     liveCount,
     releasedCount,
-    nextEventName: nextEvent?.eventName ?? "—",
-    nextEventCountdown: nextEvent ? `${nextEvent.date}T${nextEvent.time}` : "",
+    nextEventName: nextEvent?.event ?? "\u2014",
+    nextEventCountdown: nextEvent ? nextEvent.date + "T" + nextEvent.time : "",
     usdEventsToday,
-    marketStatus,
+    marketStatus: "Active",
   };
 }
 
@@ -114,7 +116,10 @@ export function useEconomicCalendar() {
     try {
       setLoading((prev) => (events.length === 0 ? true : prev));
       const res = await fetch("/api/economic-calendar");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "HTTP " + res.status);
+      }
       const data = await res.json();
       setEvents(data.events ?? []);
       setLastSync(data.lastSync ?? "");
@@ -125,7 +130,8 @@ export function useEconomicCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [events.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchEvents();
@@ -133,12 +139,9 @@ export function useEconomicCalendar() {
   }, []);
 
   useEffect(() => {
-    const hasLive = events.some((e) => e.status === "Live");
-    if (!hasLive) return;
-
     const id = setInterval(fetchEvents, AUTO_REFRESH_INTERVAL);
     return () => clearInterval(id);
-  }, [events, fetchEvents]);
+  }, [fetchEvents]);
 
   const setFilter = useCallback((newFilter: CalendarFilterState) => {
     setFilterState(newFilter);
