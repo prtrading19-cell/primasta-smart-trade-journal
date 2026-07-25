@@ -12,27 +12,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0f172a",
-        profit: "#16C784",
-        loss: "#EA3943",
-        warning: "#D4AF37",
-        gold: "#D4AF37",
-        "gold-dim": "#B8960F",
+        ink: "hsl(var(--ink))",
+        profit: "hsl(var(--profit))",
+        loss: "hsl(var(--loss))",
+        warning: "hsl(var(--gold))",
+        gold: "hsl(var(--gold))",
+        "gold-dim": "hsl(var(--gold-dim))",
         surface: {
-          base: "#05070A",
-          card: "#0F172A",
-          panel: "#111827",
-          elevated: "#1A2332",
-          hover: "#1E293B"
+          base: "hsl(var(--surface-base))",
+          card: "hsl(var(--surface-card))",
+          panel: "hsl(var(--surface-panel))",
+          elevated: "hsl(var(--surface-elevated))",
+          hover: "hsl(var(--surface-hover))"
         },
         border: {
-          subtle: "#1E293B",
-          DEFAULT: "#253244",
-          emphasis: "#334155"
+          subtle: "hsl(var(--border-subtle))",
+          DEFAULT: "hsl(var(--border))",
+          emphasis: "hsl(var(--border-emphasis))"
         },
-        "text-primary": "#F8FAFC",
-        "text-secondary": "#94A3B8",
-        "text-muted": "#64748B"
+        "text-primary": "hsl(var(--text-primary))",
+        "text-secondary": "hsl(var(--text-secondary))",
+        "text-muted": "hsl(var(--text-muted))"
       },
       boxShadow: {
         soft: "0 18px 55px rgba(0, 0, 0, 0.3)",

@@ -2,34 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 25% 7%;
+    --surface-base: 0 0% 100%;
+    --surface-card: 210 40% 98%;
+    --surface-panel: 210 40% 96%;
+    --surface-elevated: 214 32% 91%;
+    --surface-hover: 213 28% 88%;
+    --border-subtle: 214 32% 91%;
+    --border: 213 28% 88%;
+    --border-emphasis: 215 20% 65%;
+    --text-primary: 215 25% 7%;
+    --text-secondary: 215 16% 37%;
+    --text-muted: 215 14% 56%;
+    --gold: 44 78% 52%;
+    --profit: 156 64% 45%;
+    --loss: 350 83% 58%;
+    --ink: 217 33% 12%;
+    --gold-dim: 44 60% 40%;
+    color-scheme: light;
+  }
 
-.dark {
-  color-scheme: dark;
-}
+  .dark {
+    --background: 222 47% 3%;
+    --foreground: 210 40% 98%;
+    --surface-base: 222 47% 3%;
+    --surface-card: 217 33% 12%;
+    --surface-panel: 220 22% 12%;
+    --surface-elevated: 213 35% 15%;
+    --surface-hover: 215 33% 18%;
+    --border-subtle: 215 33% 18%;
+    --border: 213 34% 21%;
+    --border-emphasis: 215 25% 26%;
+    --text-primary: 210 40% 98%;
+    --text-secondary: 215 16% 57%;
+    --text-muted: 215 14% 46%;
+    --gold: 44 78% 52%;
+    --profit: 156 64% 45%;
+    --loss: 350 83% 58%;
+    --ink: 217 33% 12%;
+    --gold-dim: 44 60% 40%;
+    color-scheme: dark;
+  }
 
-* {
-  box-sizing: border-box;
-}
+  body {
+    min-height: 100vh;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
 
-body {
-  min-height: 100vh;
-  background: #05070A;
-  color: #F8FAFC;
-}
-
-.dark body {
-  background: #05070A;
-  color: #F8FAFC;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
 
 .table-scroll {
@@ -46,22 +75,26 @@ textarea {
   height: 6px;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: hsl(var(--surface-card));
+}
+
 ::-webkit-scrollbar-track {
-  background: #0F172A;
+  background: hsl(var(--surface-panel));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: hsl(var(--border-emphasis));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: hsl(var(--border));
 }
 
 ::selection {
-  background: rgba(212, 175, 55, 0.3);
-  color: #F8FAFC;
+  background: hsl(var(--gold) / 0.3);
+  color: hsl(var(--foreground));
 }
 
 @layer utilities {

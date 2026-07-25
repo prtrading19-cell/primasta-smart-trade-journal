@@ -13,12 +13,28 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#05070A"
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#05070A" }
+  ]
 };
+
+function ThemeInit() {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `(function(){try{var t=localStorage.getItem('primasta-theme');var d=t==='light'?false:t==='dark'?true:true;document.documentElement.classList.toggle('dark',d)}catch(e){}})();`
+      }}
+    />
+  );
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeInit />
+      </head>
       <body className={inter.className}>
         <AppDataProvider>
           <AppShell>{children}</AppShell>

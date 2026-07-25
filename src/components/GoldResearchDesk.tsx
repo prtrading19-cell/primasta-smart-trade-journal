@@ -730,7 +730,7 @@ export function GoldResearchDesk() {
             </div>
 
             {enhancedAnalysis.decision ? (
-              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Decision Engine</p>
                   <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(enhancedAnalysis.decision.decision))}>{enhancedAnalysis.decision.decision}</span>
@@ -758,18 +758,18 @@ export function GoldResearchDesk() {
             ) : null}
 
             {enhancedAnalysis.categoryScores?.scores?.length ? (
-              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Category Scores</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {enhancedAnalysis.categoryScores.scores.map((score) => (
-                    <div key={score.categoryId} className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3">
+                    <div key={score.categoryId} className="rounded-md border border-border-subtle bg-surface-card px-4 py-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold uppercase text-stone-500">{score.categoryTitle}</p>
+                        <p className="text-xs font-bold uppercase text-text-primary0">{score.categoryTitle}</p>
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", autoBadgeClass(score.bias))}>{score.bias}</span>
                       </div>
-                      <p className="mt-2 text-lg font-bold text-white">{formatScore(score.weightedScore)}</p>
-                      <p className="mt-1 text-xs text-stone-500">{score.driverCount} drivers | {score.alignmentStrength} alignment | {formatScore(score.confidence)}% confidence</p>
-                      {score.reason ? <p className="mt-2 text-xs text-stone-400 line-clamp-2">{score.reason}</p> : null}
+                      <p className="mt-2 text-lg font-bold text-text-primary">{formatScore(score.weightedScore)}</p>
+                      <p className="mt-1 text-xs text-text-primary0">{score.driverCount} drivers | {score.alignmentStrength} alignment | {formatScore(score.confidence)}% confidence</p>
+                      {score.reason ? <p className="mt-2 text-xs text-text-muted line-clamp-2">{score.reason}</p> : null}
                     </div>
                   ))}
                 </div>
@@ -778,7 +778,7 @@ export function GoldResearchDesk() {
 
             <div className="grid gap-4 md:grid-cols-2">
               {enhancedAnalysis.technicalBias ? (
-                <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Technical Bias</p>
                   <div className="mt-4 grid gap-2 text-sm">
                     <ResultRow label="Overall Bias" value={enhancedAnalysis.technicalBias.technicalBias} />
@@ -800,7 +800,7 @@ export function GoldResearchDesk() {
               ) : null}
 
               {enhancedAnalysis.institutionalFlow ? (
-                <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+                <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Institutional Flow</p>
                   <div className="mt-4 grid gap-2 text-sm">
                     <ResultRow label="Overall Bias" value={enhancedAnalysis.institutionalFlow.institutionalBias} />
@@ -823,16 +823,16 @@ export function GoldResearchDesk() {
             </div>
 
             {enhancedAnalysis.diagnostics?.engines?.length ? (
-              <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Engine Diagnostics</p>
                 <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {enhancedAnalysis.diagnostics.engines.map((engine) => (
-                    <div key={engine.engine} className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3">
+                    <div key={engine.engine} className="rounded-md border border-border-subtle bg-surface-card px-4 py-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold uppercase text-stone-500">{engine.engine}</p>
+                        <p className="text-xs font-bold uppercase text-text-primary0">{engine.engine}</p>
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", engine.status === "success" ? "bg-emerald-400/10 text-emerald-300" : engine.status === "skipped" ? "bg-amber-300/10 text-amber-300" : "bg-red-400/10 text-red-300")}>{engine.status}</span>
                       </div>
-                      <p className="mt-1 text-xs text-stone-500">{engine.executionTimeMs}ms | {engine.inputFieldsAvailable}/{engine.inputFieldsRequired} fields</p>
+                      <p className="mt-1 text-xs text-text-primary0">{engine.executionTimeMs}ms | {engine.inputFieldsAvailable}/{engine.inputFieldsRequired} fields</p>
                       {engine.warnings.length > 0 ? <p className="mt-1 text-[10px] text-amber-300/80">{engine.warnings.join("; ")}</p> : null}
                     </div>
                   ))}
@@ -861,12 +861,12 @@ export function GoldResearchDesk() {
       />
 
       {showSetupAssistant ? (
-        <section className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5 text-stone-50 shadow-soft">
+        <section className="rounded-lg border border-border-subtle bg-surface-panel p-5 text-text-primary shadow-soft">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Execution Readiness Layer</p>
-              <h2 className="mt-1 text-xl font-bold tracking-tight text-white">GOLD TRADE SETUP ASSISTANT</h2>
-              <p className="mt-1 text-sm text-stone-400">Build a structured Buy, Sell, Pending Confirmation, or WAIT setup from research, liquidity, structure, strategy, and risk.</p>
+              <h2 className="mt-1 text-xl font-bold tracking-tight text-text-primary">GOLD TRADE SETUP ASSISTANT</h2>
+              <p className="mt-1 text-sm text-text-muted">Build a structured Buy, Sell, Pending Confirmation, or WAIT setup from research, liquidity, structure, strategy, and risk.</p>
             </div>
             <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(setupResearch.overallGoldBias))}>{setupResearch.overallGoldBias || "Mixed-Wait"}</span>
           </div>
@@ -918,7 +918,7 @@ export function GoldResearchDesk() {
 
           {setupInputs.mode === "Assisted" ? (
             <div className="mt-4 space-y-3">
-              <div className="rounded-md border border-stone-800 bg-stone-950 p-4 text-sm text-stone-200">
+              <div className="rounded-md border border-border-subtle bg-surface-card p-4 text-sm text-text-secondary">
                 <p>
                   Assisted Mode uses your latest Gold Research report, the liquidity/price levels you enter from your chart, and your Smart Journal strategy list. It does not invent liquidity levels. If current price, buy-side liquidity, sell-side liquidity, support, resistance, or structure are missing, the setup verdict must be WAIT or Pending Confirmation.
                 </p>
@@ -930,11 +930,11 @@ export function GoldResearchDesk() {
                 <SourceCard label="Risk Source" value="Entry, SL, and TP fields" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <button type="button" onClick={() => void loadLatestGoldResearch()} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-3 text-sm font-semibold text-stone-100 hover:bg-stone-900">
+                <button type="button" onClick={() => void loadLatestGoldResearch()} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-semibold text-text-primary hover:bg-surface-hover">
                   <RefreshCw className="h-4 w-4" />
                   Load Latest Gold Research
                 </button>
-                <p className="text-sm text-stone-400">
+                <p className="text-sm text-text-muted">
                   {activeDailyResearch ? `Report date used: ${activeDailyResearch.reportDate}` : "No saved daily research loaded yet."}
                 </p>
               </div>
@@ -977,21 +977,21 @@ export function GoldResearchDesk() {
             ))}
           </div>
 
-          <p className="mt-4 rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm font-medium text-stone-200">{GOLD_PERSONAL_RULE}</p>
+          <p className="mt-4 rounded-md border border-border-subtle bg-surface-card px-4 py-3 text-sm font-medium text-text-secondary">{GOLD_PERSONAL_RULE}</p>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={() => void generateGoldTradeSetup()} disabled={setupLoading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-5 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60">
               {setupLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {setupLoading ? "Generating..." : "Generate Gold Trade Setup"}
             </button>
-            <button type="button" onClick={() => void saveGoldTradeSetup()} disabled={!setupResult || setupSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-stone-700 px-5 py-3 text-sm font-semibold text-stone-100 disabled:opacity-60">
+            <button type="button" onClick={() => void saveGoldTradeSetup()} disabled={!setupResult || setupSaving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-border px-5 py-3 text-sm font-semibold text-text-primary disabled:opacity-60">
               <Save className="h-4 w-4" />
               {setupSaving ? "Saving..." : "Save Trade Setup"}
             </button>
             {setupResult ? <UseSetupLink setup={setupResult} savedSetup={savedSetup} /> : null}
           </div>
 
-          {setupMessage ? <p className="mt-3 rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm text-stone-300">{setupMessage}</p> : null}
+          {setupMessage ? <p className="mt-3 rounded-md border border-border-subtle bg-surface-card px-4 py-3 text-sm text-text-secondary">{setupMessage}</p> : null}
           {setupResult ? <GoldTradeSetupResultCard result={setupResult} /> : null}
         </section>
       ) : null}
@@ -1179,12 +1179,12 @@ function GoldTerminalHeader({
   priceProvider: string;
 }) {
   return (
-    <header className="overflow-hidden rounded-lg border border-stone-800 bg-[#0a0907] p-5 text-white shadow-soft">
+    <header className="overflow-hidden rounded-lg border border-border-subtle bg-surface-card p-5 text-text-primary shadow-soft">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">PRIMASTA Research Engine</p>
-          <h1 className="mt-2 max-w-4xl text-3xl font-bold tracking-tight text-white md:text-4xl">Gold Institutional Command Center</h1>
-          <p className="mt-2 max-w-3xl text-sm text-stone-400">Macro drivers, market data, chart confirmation, setup readiness, and risk control in one professional XAUUSD research workflow.</p>
+          <h1 className="mt-2 max-w-4xl text-3xl font-bold tracking-tight text-text-primary md:text-4xl">Gold Institutional Command Center</h1>
+          <p className="mt-2 max-w-3xl text-sm text-text-muted">Macro drivers, market data, chart confirmation, setup readiness, and risk control in one professional XAUUSD research workflow.</p>
         </div>
         <Link href="/gold-research/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-amber-400/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/15">
           <History className="h-4 w-4" />
@@ -1213,13 +1213,13 @@ function GoldTerminalHeader({
 
 function TerminalMetric({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: "success" | "warning" | "danger" | "neutral" }) {
   return (
-    <div className="rounded-md border border-stone-800 bg-stone-950/80 p-4">
+    <div className="rounded-md border border-border-subtle bg-surface-card/80 p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-primary0">{label}</p>
         <span className={cn("flex h-8 w-8 items-center justify-center rounded-md", terminalToneClass(tone))}>{icon}</span>
       </div>
-      <p className="mt-3 text-xl font-bold tracking-tight text-white">{value || "-"}</p>
-      <p className="mt-1 text-xs text-stone-500">{detail}</p>
+      <p className="mt-3 text-xl font-bold tracking-tight text-text-primary">{value || "-"}</p>
+      <p className="mt-1 text-xs text-text-primary0">{detail}</p>
     </div>
   );
 }
@@ -1343,18 +1343,18 @@ function SetupDecisionPanel({
   ] as const;
 
   return (
-    <div className="mt-5 rounded-lg border border-stone-800 bg-stone-950 p-4">
+    <div className="mt-5 rounded-lg border border-border-subtle bg-surface-card p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Decision Matrix</p>
-          <h3 className="mt-1 text-lg font-semibold text-white">Execution readiness summary</h3>
+          <h3 className="mt-1 text-lg font-semibold text-text-primary">Execution readiness summary</h3>
         </div>
         <span className={cn("rounded-md px-3 py-1 text-xs font-bold", autoBadgeClass(verdict))}>{verdict}</span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         {decisions.map((item) => (
-          <div key={item.label} className="rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">{item.label}</p>
+          <div key={item.label} className="rounded-md border border-border-subtle bg-surface-panel px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-primary0">{item.label}</p>
             <p className={cn("mt-2 text-sm font-semibold", decisionToneClass(item.tone))}>{item.value}</p>
           </div>
         ))}
@@ -1365,18 +1365,18 @@ function SetupDecisionPanel({
 
 function InfoBox({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-md border border-stone-800 bg-stone-950 p-4 text-sm">
-      <p className="font-semibold text-white">{title}</p>
-      <p className="mt-1 text-stone-400">{text}</p>
+    <div className="rounded-md border border-border-subtle bg-surface-card p-4 text-sm">
+      <p className="font-semibold text-text-primary">{title}</p>
+      <p className="mt-1 text-text-muted">{text}</p>
     </div>
   );
 }
 
 function SourceCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-stone-800 bg-stone-950 px-4 py-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className="mt-1 font-medium text-stone-100">{value}</p>
+    <div className="rounded-md border border-border-subtle bg-surface-card px-4 py-3 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-primary0">{label}</p>
+      <p className="mt-1 font-medium text-text-primary">{value}</p>
     </div>
   );
 }
@@ -1413,12 +1413,12 @@ function MarketDataSourcePanel({
   const connected = display.status === "success";
 
   return (
-    <div className="mt-5 rounded-lg border border-stone-800 bg-stone-950 p-5">
+    <div className="mt-5 rounded-lg border border-border-subtle bg-surface-card p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Market Data Source</p>
-          <h3 className="mt-1 text-base font-semibold text-white">Twelve Data XAUUSD levels</h3>
-          <p className="mt-1 text-sm text-stone-400">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
+          <h3 className="mt-1 text-base font-semibold text-text-primary">Twelve Data XAUUSD levels</h3>
+          <p className="mt-1 text-sm text-text-muted">Fetch suggested Gold price, liquidity, support, and resistance, then confirm them on the chart.</p>
         </div>
         <button type="button" onClick={onFetch} disabled={loading} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-4 py-3 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60">
           {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -1438,25 +1438,25 @@ function MarketDataSourcePanel({
         <MarketDataMetric label="Suggested resistance" value={display.suggestedResistance || "Not fetched"} tag={connected ? "Suggested from market data" : ""} />
       </div>
 
-      {message ? <p className="mt-3 rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm text-stone-200">{message}</p> : null}
+      {message ? <p className="mt-3 rounded-md border border-border-subtle bg-surface-panel px-4 py-3 text-sm text-text-secondary">{message}</p> : null}
 
       <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>Market data liquidity levels are suggestions. Confirm levels on your broker or TradingView chart before trading.</span>
       </div>
 
-      <label className="mt-4 flex items-start gap-3 rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm font-medium text-stone-200">
+      <label className="mt-4 flex items-start gap-3 rounded-md border border-border-subtle bg-surface-panel px-4 py-3 text-sm font-medium text-text-secondary">
         <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmChange(event.target.checked)} className="mt-1 h-4 w-4 rounded border-border text-gold" />
         <span>
           I confirm these liquidity levels on my chart.
-          {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-stone-500">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
+          {levelsFromMarketData && !confirmed ? <span className="block text-xs font-normal text-text-primary0">Until confirmed, generated setups must stay Pending Confirmation or WAIT.</span> : null}
         </span>
       </label>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-stone-800 bg-[#0d0c09]">
-        <div className="flex flex-col gap-1 border-b border-stone-800 px-4 py-3">
-          <p className="text-sm font-semibold text-white">TradingView confirmation chart</p>
-          <p className="text-xs text-stone-500">Use this chart to confirm the suggested liquidity levels before entering a trade.</p>
+      <div className="mt-5 overflow-hidden rounded-lg border border-border-subtle bg-surface-panel">
+        <div className="flex flex-col gap-1 border-b border-border-subtle px-4 py-3">
+          <p className="text-sm font-semibold text-text-primary">TradingView confirmation chart</p>
+          <p className="text-xs text-text-primary0">Use this chart to confirm the suggested liquidity levels before entering a trade.</p>
         </div>
         <iframe
           title="TradingView OANDA XAUUSD chart"
@@ -1472,9 +1472,9 @@ function MarketDataSourcePanel({
 
 function MarketDataMetric({ label, value, tag, tone = "neutral" }: { label: string; value: string; tag?: string; tone?: "success" | "neutral" }) {
   return (
-    <div className="rounded-md border border-stone-800 bg-[#0d0c09] px-4 py-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className={cn("mt-1 font-semibold", tone === "success" ? "text-emerald-300" : "text-stone-100")}>{value}</p>
+    <div className="rounded-md border border-border-subtle bg-surface-panel px-4 py-3 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-primary0">{label}</p>
+      <p className={cn("mt-1 font-semibold", tone === "success" ? "text-emerald-300" : "text-text-primary")}>{value}</p>
       {tag ? <p className="mt-2 text-[11px] font-bold uppercase text-amber-300/80">{tag}</p> : null}
     </div>
   );
@@ -1680,8 +1680,8 @@ function AutoFullSummaryPanel({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-gold">Institutional Research Summary</p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-white md:text-3xl">Full Gold Bias Report</h2>
-          <p className="mt-1 text-sm text-stone-400">{report.date} | {report.goldCurrentPrice ? `XAUUSD ${report.goldCurrentPrice}` : "Price not verified"} | {stats.totalDrivers} drivers analyzed</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-text-primary md:text-3xl">Full Gold Bias Report</h2>
+          <p className="mt-1 text-sm text-text-muted">{report.date} | {report.goldCurrentPrice ? `XAUUSD ${report.goldCurrentPrice}` : "Price not verified"} | {stats.totalDrivers} drivers analyzed</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {summary.engineDecisionUsed ? (
@@ -1706,17 +1706,17 @@ function AutoFullSummaryPanel({
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+        <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Driver Contribution Breakdown</p>
           <div className="mt-3 space-y-2 text-sm">
             <DriverListRow label="Bullish Drivers" drivers={summary.bullishDrivers} color="text-emerald-300" empty="None identified" />
             <DriverListRow label="Bearish Drivers" drivers={summary.bearishDrivers} color="text-red-300" empty="None identified" />
             <DriverListRow label="Mixed Drivers" drivers={summary.mixedDrivers} color="text-amber-300" empty="None identified" />
-            <DriverListRow label="Neutral Drivers" drivers={summary.neutralDrivers} color="text-stone-400" empty="None identified" />
+            <DriverListRow label="Neutral Drivers" drivers={summary.neutralDrivers} color="text-text-muted" empty="None identified" />
           </div>
         </div>
 
-        <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+        <div className="rounded-lg border border-border-subtle bg-surface-panel p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Key Drivers & Risks</p>
           <div className="mt-3 grid gap-2 text-sm">
             <ResultRow label="Strongest bullish driver" value={summary.strongestBullishDriver} />
@@ -1727,17 +1727,17 @@ function AutoFullSummaryPanel({
         </div>
       </div>
 
-      <div className="mt-5 rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+      <div className="mt-5 rounded-lg border border-border-subtle bg-surface-panel p-5">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Institutional Assessment</p>
-        <p className="mt-3 text-sm leading-relaxed text-stone-300">{summary.finalGuidance}</p>
+        <p className="mt-3 text-sm leading-relaxed text-text-secondary">{summary.finalGuidance}</p>
       </div>
 
       {decision ? (
-        <div className="mt-5 rounded-lg border border-stone-800 bg-[#0d0c09] p-5">
+        <div className="mt-5 rounded-lg border border-border-subtle bg-surface-panel p-5">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Engine Decision Alignment</p>
             <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", autoBadgeClass(decision.decision))}>{decision.decision}</span>
-            <span className="rounded-md bg-stone-800 px-2 py-0.5 text-[10px] font-bold text-stone-400">{decision.overallConfidence}% confidence</span>
+            <span className="rounded-md bg-surface-elevated px-2 py-0.5 text-[10px] font-bold text-text-muted">{decision.overallConfidence}% confidence</span>
           </div>
           <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
             <ResultRow label="Engine Bias" value={decision.overallBias} />
@@ -1754,7 +1754,7 @@ function AutoFullSummaryPanel({
             <p className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">Trade Recommendation</p>
             <p className={cn("mt-1 text-3xl font-black tracking-tight", rec.action === "BUY" ? "text-profit" : rec.action === "SELL" ? "text-loss" : "text-gold")}>{rec.action}</p>
           </div>
-          <div className="rounded-md bg-black/20 px-4 py-2 text-right">
+          <div className="rounded-md bg-foreground/20 px-4 py-2 text-right">
             <p className="text-xs font-bold uppercase opacity-70">Confidence</p>
             <p className="mt-1 text-xl font-bold">{rec.confidence}%</p>
           </div>
@@ -1771,8 +1771,8 @@ function AutoFullSummaryPanel({
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div className="rounded-lg border border-stone-800 bg-[#0d0c09] p-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">{label}</p>
+    <div className="rounded-lg border border-border-subtle bg-surface-panel p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-primary0">{label}</p>
       <p className={cn("mt-2 text-xl font-bold tracking-tight", tone)}>{value}</p>
     </div>
   );
@@ -1792,7 +1792,7 @@ function DriverListRow({ label, drivers, color, empty }: { label: string; driver
   return (
     <div>
       <p className={cn("text-xs font-bold uppercase", color)}>{label}</p>
-      <p className="mt-1 text-xs text-stone-400">{drivers.length ? drivers.join(" | ") : empty}</p>
+      <p className="mt-1 text-xs text-text-muted">{drivers.length ? drivers.join(" | ") : empty}</p>
     </div>
   );
 }
@@ -2096,14 +2096,14 @@ function terminalToneClass(tone: "success" | "warning" | "danger" | "neutral") {
   if (tone === "success") return "bg-emerald-400/10 text-emerald-300";
   if (tone === "danger") return "bg-red-400/10 text-red-300";
   if (tone === "warning") return "bg-amber-300/10 text-amber-300";
-  return "bg-stone-800 text-stone-300";
+  return "bg-surface-elevated text-text-secondary";
 }
 
 function decisionToneClass(tone: "success" | "warning" | "danger" | "neutral") {
   if (tone === "success") return "text-emerald-300";
   if (tone === "danger") return "text-red-300";
   if (tone === "warning") return "text-amber-300";
-  return "text-stone-200";
+  return "text-text-secondary";
 }
 
 function heatmapToneClass(impact: string) {

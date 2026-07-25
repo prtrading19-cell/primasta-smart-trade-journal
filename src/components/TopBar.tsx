@@ -18,8 +18,10 @@ interface TopBarProps {
 export function TopBar({ onMenuClick, metrics }: TopBarProps) {
   const [dark, setDark] = useState(true);
   const [time, setTime] = useState("");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const stored = window.localStorage.getItem("primasta-theme");
     const prefersDark = stored ? stored === "dark" : true;
     setDark(prefersDark);
