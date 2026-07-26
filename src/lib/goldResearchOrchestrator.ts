@@ -14,6 +14,9 @@ import {
   summarizeDiagnostics
 } from "./goldResearchDiagnostics";
 import { validateGoldResearchAnalysisInput } from "./goldResearchOrchestratorValidators";
+import { hasProfile } from "./research/ResearchRegistry";
+import { executeResearchEngine } from "./research/ResearchEngine";
+import "./research/initialize";
 
 const DEFAULT_OPTIONS: OrchestratorOptions = {
   continueOnEngineFailure: true
@@ -47,6 +50,54 @@ export function orchestrateGoldResearch(
 
   for (const warning of validation.warnings) {
     diagnostics.warnings.push(warning.message);
+  }
+
+  if (hasProfile("gold")) {
+    try {
+      const engineResult = executeResearchEngine(
+        {
+          asset: "gold",
+          driverAnalyses: input.driverAnalyses,
+          currentPrice: input.currentPrice,
+          timestamp,
+          options,
+          researchBias: input.researchBias,
+        },
+        input.technicalInput,
+        input.institutionalInput,
+        input.weightConfiguration,
+      );
+
+      const warnings: string[] = [...engineResult.warnings];
+      if (engineResult.categoryScores) {
+        warnings.push(...collectCategoryWarnings(engineResult.categoryScores));
+      }
+
+      return {
+        rawInputs: {
+          driverAnalyses: input.driverAnalyses,
+          technicalInput: input.technicalInput,
+          institutionalInput: input.institutionalInput,
+          weightConfiguration: input.weightConfiguration,
+          currentPrice: input.currentPrice
+        },
+        driverAnalyses: engineResult.driverAnalyses,
+        categoryScores: engineResult.categoryScores,
+        technicalBias: engineResult.technicalBias,
+        institutionalFlow: engineResult.institutionalFlow,
+        decision: engineResult.decision,
+        diagnostics: engineResult.diagnostics,
+        warnings,
+        executionTimeMs: engineResult.executionTimeMs,
+        pipelineStatus: engineResult.pipelineStatus,
+        schemaVersion: GOLD_RESEARCH_ANALYSIS_SCHEMA_VERSION,
+        timestamp
+      };
+    } catch (err) {
+      diagnostics.warnings.push(
+        `New research engine failed, falling back to legacy pipeline: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    }
   }
 
   const ctx: PipelineContext = {
