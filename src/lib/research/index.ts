@@ -70,3 +70,4 @@ export {
 } from "./ResearchAI";
 
 export { GOLD_PROFILE } from "./profiles/GoldProfile";
+export { US100_PROFILE } from "./profiles/US100Profile";

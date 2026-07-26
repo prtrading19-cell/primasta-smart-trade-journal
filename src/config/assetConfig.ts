@@ -23,8 +23,8 @@ export const ASSET_CONFIG: AssetMetadata[] = [
     name: "US100",
     displayName: "US100 (Nasdaq)",
     icon: "TrendingUp",
-    enabled: false,
-    description: "Nasdaq 100 index — Coming Soon",
+    enabled: true,
+    description: "Nasdaq-100 — Institutional research",
   },
   {
     id: "spx500",
