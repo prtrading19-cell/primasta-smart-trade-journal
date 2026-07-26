@@ -2,7 +2,7 @@ import type { DashboardMetrics } from "@/lib/calculations";
 import type { Trade } from "@/types/trade";
 import { getAPlusScore, getPlannedRiskReward, isRuleFollowed } from "@/lib/calculations";
 
-const APP_NAME = "PRIMASTA SMART TRADE JOURNAL";
+const APP_NAME = "TradeOS";
 type ExportRow = Record<string, string | number>;
 
 export function exportTradesCsv(trades: Trade[], filename = "primasta-trades.csv") {

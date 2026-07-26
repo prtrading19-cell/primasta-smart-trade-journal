@@ -1,7 +1,7 @@
 {
-  "name": "PRIMASTA SMART TRADE JOURNAL",
-  "short_name": "PRIMASTA Journal",
-  "description": "A simple cloud-synced Forex trading journal and performance dashboard.",
+  "name": "TradeOS",
+  "short_name": "TradeOS",
+  "description": "Institutional Trading Intelligence platform for professional traders.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#f8fafc",

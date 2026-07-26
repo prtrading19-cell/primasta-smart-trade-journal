@@ -41,8 +41,8 @@ export function AuthForm() {
             <ShieldCheck className="h-6 w-6 text-gold" />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-gold">Secure Journal</p>
-            <h1 className="text-xl font-bold text-text-primary">PRIMASTA SMART TRADE JOURNAL</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-gold">Welcome to TradeOS</p>
+            <h1 className="text-xl font-bold text-text-primary">Institutional Trading Intelligence</h1>
           </div>
         </div>
 

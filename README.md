@@ -1,6 +1,6 @@
-# PRIMASTA SMART TRADE JOURNAL
+# PRIMASTA TradeOS
 
-A clean, fully web-based Forex trading journal and performance dashboard built with Next.js, TypeScript, Tailwind CSS, Supabase authentication, and Supabase Postgres.
+Institutional Trading Intelligence platform for professional traders featuring AI-powered research, Gold Research Terminal, Economic Calendar, decision support, analytics, and performance tracking.
 
 The production data layer is Supabase. The app includes a local demo mode only for previewing the UI when Supabase env vars are missing.
 
@@ -14,7 +14,7 @@ The production data layer is Supabase. The app includes a local demo mode only f
 - Professional 15-point A+ SMC checklist with live A+ score, automatic setup grade, news-risk warning, and rule status
 - SMC execution fields for HTF bias, swept liquidity, entry POI, confirmation timeframe, setup grade, news risk, and trading rule status
 - No Trade / Setup Not Confirmed observations that can be saved without entry price, stop loss, take profit, or lot size
-- PRIMASTA Gold Research Desk for manual Gold/XAUUSD driver analysis, saved research reports, full bias summaries, pre-trade checklist, session guide, PDF/CSV exports, and optional research attachment to trades
+- PRIMASTA TradeOS Gold Research for manual Gold/XAUUSD driver analysis, saved research reports, full bias summaries, pre-trade checklist, session guide, PDF/CSV exports, and optional research attachment to trades
 - Close Trade flow for adding only the final result details later
 - Spreadsheet-style trading journal with tabs, filters, search, sorting, edit, delete, detail view, and per-trade PDF export
 - Dashboard metrics and charts based only on closed trades

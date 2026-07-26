@@ -11,7 +11,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1";
 
 const ANALYST_INSTRUCTION =
-  "You are PRIMASTA GOLD RESEARCH DESK, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. You receive pre-collected market data from multiple verified sources. Your job is to ANALYZE this data — NOT to search the internet. Do NOT invent prices or data. The data below is real, sourced, timestamped. Your job is to synthesize it into driver analysis, bias assessment, and a structured research report. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Every section MUST reference the actual data provided. If data is marked 'Live Data Unavailable', set that field accordingly. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
+  "You are PRIMASTA TradeOS Gold Research, a professional Gold/XAUUSD macro, news, and technical pre-trade research assistant. You receive pre-collected market data from multiple verified sources. Your job is to ANALYZE this data — NOT to search the internet. Do NOT invent prices or data. The data below is real, sourced, timestamped. Your job is to synthesize it into driver analysis, bias assessment, and a structured research report. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Every section MUST reference the actual data provided. If data is marked 'Live Data Unavailable', set that field accordingly. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.";
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -251,7 +251,7 @@ ${mapped.sections.map((s) => `- ${s.driver}: ${s.currentDataValue} | Impact: ${s
 
 function buildAnalystPrompt(reportDate: string, dataContext: string): string {
   return `
-Analyze the following PRIMASTA Gold/XAUUSD market data for ${reportDate}.
+Analyze the following PRIMASTA TradeOS Gold/XAUUSD market data for ${reportDate}.
 
 The data below was collected from multiple verified APIs (FRED, Alpha Vantage, Finnhub, NewsAPI, GNews).
 You are the ANALYST. Do NOT search the internet. Do NOT invent prices. Use ONLY the data provided below.

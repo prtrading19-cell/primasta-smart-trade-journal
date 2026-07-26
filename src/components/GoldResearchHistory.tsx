@@ -48,7 +48,7 @@ export function GoldResearchHistory() {
             Back to Gold Research
           </Link>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Gold Research History</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Saved PRIMASTA Gold driver reports.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Saved TradeOS Gold driver reports.</p>
         </div>
         <button type="button" onClick={() => exportGoldResearchCsv(filteredReports)} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">
           <Download className="h-4 w-4" />

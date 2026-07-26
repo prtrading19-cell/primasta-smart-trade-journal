@@ -109,7 +109,7 @@ export function LotMarginCalculator() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Trading calculator</p>
-          <h1 className="text-2xl font-bold tracking-tight">PRIMASTA LOT SIZE & MARGIN CALCULATOR</h1>
+          <h1 className="text-2xl font-bold tracking-tight">TradeOS Lot Size & Margin Calculator</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Calculate safest lot size, risk amount, risk-to-reward, and estimated margin before placing a trade.</p>
         </div>
         <Link href="/calculator/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">

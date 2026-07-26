@@ -84,7 +84,7 @@ export default function DashboardPage() {
                 <StatusPill icon={ShieldCheck} label="Institutional Analytics" />
               </div>
               <div className="mt-6 max-w-3xl">
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">PRIMASTA SMART TRADE JOURNAL</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">TradeOS Dashboard</p>
                 <h1 className="mt-3 text-3xl font-black tracking-tight text-text-primary sm:text-4xl">
                   Quant-Style Execution Dashboard
                 </h1>

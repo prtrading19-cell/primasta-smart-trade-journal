@@ -1,7 +1,7 @@
 import { buildGoldBiasSummary } from "@/lib/goldResearch";
 import { GOLD_PERSONAL_RULE, type GoldChecklistResult, type GoldResearchReport } from "@/types/goldResearch";
 
-const APP_NAME = "PRIMASTA GOLD RESEARCH DESK";
+const APP_NAME = "TradeOS";
 
 export function exportGoldResearchCsv(reports: GoldResearchReport[], filename = "primasta-gold-research.csv") {
   const rows: Array<Record<string, string | number>> = reports.map((report) => ({

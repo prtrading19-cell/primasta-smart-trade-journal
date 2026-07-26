@@ -102,8 +102,7 @@ export function Sidebar({
         <div className={cn("flex items-center border-b border-border-subtle px-4", collapsed ? "h-16 justify-center" : "h-16 justify-between")}>
           {!collapsed && (
             <Link href="/dashboard" onClick={onCloseMobile} className="block min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-gold">PRIMASTA</p>
-              <h1 className="mt-0.5 truncate text-sm font-bold text-text-primary">SMART TRADE JOURNAL</h1>
+              <h1 className="truncate text-sm font-bold text-text-primary tracking-[0.08em]">TradeOS</h1>
             </Link>
           )}
           {collapsed && (

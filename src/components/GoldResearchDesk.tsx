@@ -1182,7 +1182,7 @@ function GoldTerminalHeader({
     <header className="overflow-hidden rounded-lg border border-border-subtle bg-surface-card p-5 text-text-primary shadow-soft">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">PRIMASTA Research Engine</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">TradeOS</p>
           <h1 className="mt-2 max-w-4xl text-3xl font-bold tracking-tight text-text-primary md:text-4xl">Gold Institutional Command Center</h1>
           <p className="mt-2 max-w-3xl text-sm text-text-muted">Macro drivers, market data, chart confirmation, setup readiness, and risk control in one professional XAUUSD research workflow.</p>
         </div>

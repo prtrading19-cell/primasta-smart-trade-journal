@@ -1,4 +1,4 @@
-# PRIMASTA SMART TRADE JOURNAL — Current Project State
+# PRIMASTA TradeOS — Current Project State
 
 > Generated: 2026-07-14
 > Git branch: `main` | Working tree: clean

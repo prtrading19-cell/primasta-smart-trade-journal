@@ -34,7 +34,7 @@ export default function CalendarHeader({ source }: CalendarHeaderProps) {
   return (
     <div className="mb-6 pt-2">
       <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-gold">
-        PRIMASTA RESEARCH ENGINE
+        TradeOS
       </p>
       <h1 className="text-2xl font-bold text-text-primary mt-1">
         Institutional Economic Calendar

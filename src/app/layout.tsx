@@ -7,8 +7,8 @@ import { AppShell } from "@/components/AppShell";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PRIMASTA SMART TRADE JOURNAL",
-  description: "A clean cloud-synced Forex trading journal and performance dashboard.",
+  title: "TradeOS | Institutional Trading Intelligence",
+  description: "Institutional Trading Intelligence platform for professional traders featuring AI-powered research, Gold Research Terminal, Economic Calendar, decision support, analytics, and performance tracking.",
   manifest: "/manifest.json"
 };
 
