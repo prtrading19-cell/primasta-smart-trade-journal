@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
@@ -15,7 +16,6 @@ import {
   LogOut,
   Search,
   Settings,
-  Shield,
   TrendingUp,
   UserCircle,
   X,
@@ -99,21 +99,32 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className={cn("flex items-center border-b border-border-subtle px-4", collapsed ? "h-16 justify-center" : "h-16 justify-between")}>
-          {!collapsed && (
-            <Link href="/dashboard" onClick={onCloseMobile} className="block min-w-0">
-              <h1 className="truncate text-sm font-bold text-text-primary tracking-[0.08em]">TradeOS</h1>
-            </Link>
-          )}
-          {collapsed && (
-            <Link href="/dashboard" onClick={onCloseMobile} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/10">
-              <Shield className="h-5 w-5 text-gold" />
-            </Link>
-          )}
+        <div className={cn("flex items-center border-b border-border-subtle px-4", collapsed ? "h-16 justify-center" : "h-[72px] justify-center pt-5 pb-4")}>
+          <Link href="/dashboard" onClick={onCloseMobile} className={cn("flex items-center", collapsed ? "h-9 w-9 justify-center overflow-hidden" : "justify-center")}>
+            {!collapsed ? (
+              <Image
+                src="/branding/tradeos-logo.png"
+                alt="TradeOS"
+                width={190}
+                height={0}
+                className="h-auto w-[190px] object-contain"
+                priority
+              />
+            ) : (
+              <Image
+                src="/branding/tradeos-logo.png"
+                alt="TradeOS"
+                width={56}
+                height={0}
+                className="h-auto w-[56px] object-contain object-left"
+                priority
+              />
+            )}
+          </Link>
           <button
             type="button"
             onClick={onCloseMobile}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary lg:hidden"
+            className="absolute right-2 top-4 inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary lg:hidden"
             aria-label="Close navigation"
           >
             <X className="h-4 w-4" />
