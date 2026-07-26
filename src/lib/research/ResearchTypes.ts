@@ -5,7 +5,7 @@ import type { InstitutionalFlowInput, InstitutionalFlowResult } from "@/types/in
 import type { DecisionEngineResult, DecisionAction, RiskRating, DecisionQuality, Contributor, AlignmentBreakdown, ConflictBreakdown, DecisionExplanation } from "@/types/decisionEngine";
 import type { PipelineDiagnostics, EngineDiagnostic, PipelineStatus, EngineStatus, OrchestratorOptions } from "@/types/goldResearchAnalysis";
 
-export type ResearchAsset = "gold" | "us100" | "spx500" | "btc" | "forex";
+export type ResearchAsset = "gold" | "us100" | "spx500" | "btcusd" | "eurusd" | "gbpusd" | "silver" | "oil";
 
 export interface ResearchProfile {
   asset: ResearchAsset;

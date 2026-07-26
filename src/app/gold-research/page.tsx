@@ -1,5 +1,5 @@
-import { GoldResearchDesk } from "@/components/GoldResearchDesk";
+import { ResearchPageWrapper } from "@/components/research/ResearchPageWrapper";
 
 export default function GoldResearchPage() {
-  return <GoldResearchDesk />;
+  return <ResearchPageWrapper />;
 }
