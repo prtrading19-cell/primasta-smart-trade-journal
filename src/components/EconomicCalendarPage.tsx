@@ -11,7 +11,7 @@ import { EconomicCalendarTable } from "@/components/economicCalendar/EconomicCal
 import { EventDrawer } from "@/components/economicCalendar/EventDrawer";
 import { CalendarLoading } from "@/components/economicCalendar/CalendarLoading";
 import { CalendarEmptyState } from "@/components/economicCalendar/CalendarEmptyState";
-import type { EconomicEvent } from "@/types/economicCalendar";
+import type { EconomicEvent, CalendarSource } from "@/types/economicCalendar";
 
 export function EconomicCalendarPage() {
   const {
@@ -37,7 +37,7 @@ export function EconomicCalendarPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background px-4 py-6 lg:px-8">
-        <CalendarHeader />
+        <CalendarHeader source={source as CalendarSource} />
         <CalendarLoading />
       </div>
     );
@@ -46,7 +46,7 @@ export function EconomicCalendarPage() {
   if (error && filteredEvents.length === 0) {
     return (
       <div className="min-h-screen bg-background px-4 py-6 lg:px-8">
-        <CalendarHeader />
+        <CalendarHeader source={source as CalendarSource} />
         <div className="flex items-center justify-center py-20">
           <div className="text-center max-w-sm">
             <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-loss/10">
@@ -73,7 +73,7 @@ export function EconomicCalendarPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1600px] px-4 py-6 lg:px-8">
-        <CalendarHeader />
+        <CalendarHeader source={source as CalendarSource} />
 
         <div className="space-y-4">
           <CalendarStats stats={stats} />

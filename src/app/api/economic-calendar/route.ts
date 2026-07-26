@@ -73,6 +73,7 @@ export async function GET(request: Request) {
       lastSync: response.lastSync,
       source: response.source,
       stats: response.stats,
+      ...(response.debug ? { debug: response.debug } : {}),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal error";

@@ -21,7 +21,7 @@ export interface EconomicEvent {
   impact: EventBias;
 }
 
-export type CalendarSource = "fmp" | "unavailable";
+export type CalendarSource = "fmp" | "forexfactory" | "tradingeconomics" | "unavailable";
 
 export interface CalendarStats {
   totalEvents: number;
@@ -57,6 +57,12 @@ export interface EconomicCalendarResponse {
   lastSync: string;
   source: CalendarSource;
   stats: CalendarStats;
+  debug?: {
+    message: string;
+    status?: number;
+    url?: string;
+    body?: string;
+  };
 }
 
 export interface CurrencyInfo {
