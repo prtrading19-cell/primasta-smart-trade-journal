@@ -10,24 +10,27 @@ interface FMPSectorQuote {
 
 export async function fetchUS100Sectors(): Promise<US100SectorPerformance> {
   const timestamp = nowISO();
+  const symbols = Object.values(US100_SECTOR_ETF_MAP).join(",");
+  const startTime = Date.now();
 
   try {
-    const symbols = Object.values(US100_SECTOR_ETF_MAP).join(",");
     const data = await fmpFetch<FMPSectorQuote[]>("/quote", { symbol: symbols });
+    const durationMs = Date.now() - startTime;
 
-    if (!Array.isArray(data)) return buildUnavailableSectors(timestamp, "No data returned");
+    if (!Array.isArray(data)) {
+      console.log(`[FMP Sectors] Symbol: ${symbols} | Status: NO_DATA | Reason: Response is not an array | Duration: ${durationMs}ms`);
+      return buildUnavailableSectors(timestamp, "Response is not an array");
+    }
 
     const quoteMap = new Map<string, FMPSectorQuote>();
-    for (const q of data) {
-      quoteMap.set(q.symbol, q);
-    }
+    for (const q of data) quoteMap.set(q.symbol, q);
 
     const getChange = (etf: string): number => {
       const q = quoteMap.get(etf);
       return typeof q?.changesPercentage === "number" ? q.changesPercentage : 0;
     };
 
-    return {
+    const result = {
       technology: getChange(US100_SECTOR_ETF_MAP.technology),
       semiconductors: getChange(US100_SECTOR_ETF_MAP.semiconductors),
       healthcare: getChange(US100_SECTOR_ETF_MAP.healthcare),
@@ -40,8 +43,16 @@ export async function fetchUS100Sectors(): Promise<US100SectorPerformance> {
       realEstate: 0,
       meta: buildMeta("live", "FMP", timestamp),
     };
+
+    console.log(`[FMP Sectors] Symbol: ${symbols} | Status: LIVE | Quotes: ${data.length} | Duration: ${durationMs}ms`);
+    return result;
   } catch (err) {
+    const durationMs = Date.now() - startTime;
     const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";
+    let statusLabel = "ERROR";
+    if (message.includes("not configured")) statusLabel = "INVALID_KEY";
+    else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
+    console.log(`[FMP Sectors] Symbol: ${symbols} | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
     return buildUnavailableSectors(timestamp, message);
   }
 }

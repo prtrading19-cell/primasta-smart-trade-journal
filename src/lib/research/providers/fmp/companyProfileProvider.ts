@@ -16,11 +16,13 @@ interface FMPProfile {
 
 export async function fetchUS100CompanyProfiles(): Promise<US100CompanyProfile[]> {
   const timestamp = nowISO();
+  const startTime = Date.now();
+  const profiles: US100CompanyProfile[] = [];
 
   try {
-    const profiles: US100CompanyProfile[] = [];
-
     const batches = chunkArray([...US100_MEGA_CAP_SYMBOLS], 5);
+    let totalFetched = 0;
+
     for (const batch of batches) {
       const symbols = batch.join(",");
       const data = await fmpFetch<FMPProfile[]>("/profile/" + symbols);
@@ -40,12 +42,20 @@ export async function fetchUS100CompanyProfiles(): Promise<US100CompanyProfile[]
             meta: buildMeta("live", "FMP", timestamp),
           });
         }
+        totalFetched += data.length;
       }
     }
 
+    const durationMs = Date.now() - startTime;
+    console.log(`[FMP Profiles] Endpoint: /profile/* | Status: LIVE | Profiles: ${profiles.length} (from ${totalFetched} raw) | Batches: ${batches.length} | Duration: ${durationMs}ms`);
     return profiles;
   } catch (err) {
+    const durationMs = Date.now() - startTime;
     const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";
+    let statusLabel = "ERROR";
+    if (message.includes("not configured")) statusLabel = "INVALID_KEY";
+    else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
+    console.log(`[FMP Profiles] Endpoint: /profile/* | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
     return US100_MEGA_CAP_SYMBOLS.map((symbol) => ({
       symbol,
       name: symbol,

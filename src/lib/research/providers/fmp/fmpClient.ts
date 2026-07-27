@@ -20,6 +20,29 @@ function getApiKey(): string {
   return key;
 }
 
+function extractRequestedSymbol(endpoint: string, params: Record<string, string>): string {
+  if (params.symbol) return params.symbol;
+  const pathParts = endpoint.split("/");
+  const lastPart = pathParts[pathParts.length - 1];
+  if (lastPart && !lastPart.includes("?")) return lastPart;
+  return endpoint;
+}
+
+function detectFMPError(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const obj = body as Record<string, unknown>;
+  if (typeof obj["Error Message"] === "string" && obj["Error Message"].length > 0) {
+    return obj["Error Message"];
+  }
+  if (typeof obj.error === "string" && obj.error.length > 0) {
+    return obj.error;
+  }
+  if (typeof obj.code === "string" && obj.code !== "0") {
+    return `FMP error code: ${obj.code}`;
+  }
+  return null;
+}
+
 export async function fmpFetch<T>(
   endpoint: string,
   params: Record<string, string> = {},
@@ -32,11 +55,13 @@ export async function fmpFetch<T>(
     url.searchParams.set(key, value);
   }
 
+  const requestedSymbol = extractRequestedSymbol(endpoint, params);
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const startTime = Date.now();
 
     try {
       const response = await fetch(url.toString(), {
@@ -44,9 +69,14 @@ export async function fmpFetch<T>(
         signal: controller.signal,
       });
       clearTimeout(timeout);
+      const durationMs = Date.now() - startTime;
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
+        const payloadSize = body.length;
+        console.log(
+          `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: ${response.status} | Duration: ${durationMs}ms | Size: ${payloadSize}B | Attempt: ${attempt + 1}/${retries + 1}`
+        );
         if (/rate limit|credits|quota/i.test(body)) {
           throw new FMPError(`Rate limited on ${endpoint}`, endpoint, response.status);
         }
@@ -58,12 +88,30 @@ export async function fmpFetch<T>(
       }
 
       const text = await response.text();
+      const payloadSize = text.length;
+
       if (!text || text.trim() === "" || text.trim() === "[]") {
+        console.log(
+          `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | Empty response | Attempt: ${attempt + 1}/${retries + 1}`
+        );
         return [] as unknown as T;
       }
 
-      const data = JSON.parse(text) as T;
-      return data;
+      const data = JSON.parse(text);
+
+      const errorMsg = detectFMPError(data);
+      if (errorMsg) {
+        console.log(
+          `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | API Error: ${errorMsg} | Attempt: ${attempt + 1}/${retries + 1}`
+        );
+        throw new FMPError(`FMP API error on ${endpoint}: ${errorMsg}`, endpoint, 200);
+      }
+
+      console.log(
+        `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | OK | Attempt: ${attempt + 1}/${retries + 1}`
+      );
+
+      return data as T;
     } catch (err) {
       clearTimeout(timeout);
       lastError = err instanceof Error ? err : new Error(String(err));

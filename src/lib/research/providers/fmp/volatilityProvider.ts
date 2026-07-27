@@ -10,13 +10,16 @@ interface FMPQuote {
 
 export async function fetchUS100Volatility(): Promise<US100Volatility> {
   const timestamp = nowISO();
+  const startTime = Date.now();
 
   try {
-    const data = await fmpFetch<FMPQuote[]>("/quote", {
-      symbol: "^VIX,^VXN",
-    });
+    const data = await fmpFetch<FMPQuote[]>("/quote", { symbol: "^VIX,^VXN" });
+    const durationMs = Date.now() - startTime;
 
-    if (!Array.isArray(data)) return buildUnavailableVolatility(timestamp, "No data returned");
+    if (!Array.isArray(data)) {
+      console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: NO_DATA | Duration: ${durationMs}ms`);
+      return buildUnavailableVolatility(timestamp, "Response is not an array");
+    }
 
     const quoteMap = new Map<string, FMPQuote>();
     for (const q of data) quoteMap.set(q.symbol, q);
@@ -27,6 +30,11 @@ export async function fetchUS100Volatility(): Promise<US100Volatility> {
     const vix = vixQuote?.price ?? null;
     const vxn = vxnQuote?.price ?? null;
 
+    const hasValidData = vix !== null || vxn !== null;
+    const status = hasValidData ? "LIVE" : "NO_DATA";
+
+    console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: ${status} | VIX: ${vix ?? "N/A"} | VXN: ${vxn ?? "N/A"} | Duration: ${durationMs}ms`);
+
     return {
       vix,
       vixChange: vixQuote?.change ?? null,
@@ -36,10 +44,15 @@ export async function fetchUS100Volatility(): Promise<US100Volatility> {
       vxnChangePercent: vxnQuote?.changesPercentage ?? null,
       trend: deriveTrend(vix),
       riskRating: deriveRiskRating(vix),
-      meta: buildMeta("live", "FMP", timestamp),
+      meta: buildMeta(status === "LIVE" ? "live" : "unavailable", "FMP", timestamp),
     };
   } catch (err) {
+    const durationMs = Date.now() - startTime;
     const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";
+    let statusLabel = "ERROR";
+    if (message.includes("not configured")) statusLabel = "INVALID_KEY";
+    else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
+    console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
     return buildUnavailableVolatility(timestamp, message);
   }
 }

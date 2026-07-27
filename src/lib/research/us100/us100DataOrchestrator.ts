@@ -8,13 +8,6 @@ import type {
   US100CompanyProfile,
   US100DataMeta,
 } from "@/types/us100";
-import { fetchUS100Index } from "../providers/fmp/marketIndexProvider";
-import { fetchUS100StockQuotes } from "../providers/twelvedata/stockQuotesProvider";
-import { fetchUS100Earnings } from "../providers/fmp/earningsProvider";
-import { fetchUS100Sectors } from "../providers/fmp/sectorProvider";
-import { fetchUS100Movers } from "../providers/fmp/marketMoversProvider";
-import { fetchUS100Volatility } from "../providers/fmp/volatilityProvider";
-import { fetchUS100CompanyProfiles } from "../providers/fmp/companyProfileProvider";
 
 export interface US100FullDataset {
   index: US100Index;
@@ -29,60 +22,90 @@ export interface US100FullDataset {
   errors: string[];
 }
 
+const COLLECT_TIMEOUT_MS = 30000;
+
 export async function collectUS100Data(): Promise<US100FullDataset> {
-  const collectedAt = new Date().toISOString();
-  const errors: string[] = [];
-  const sourceSummary: string[] = [];
+  const startTime = Date.now();
+  console.log("[US100 Data] Fetching from /api/us100/data...");
 
-  const settle = <T>(label: string, promise: Promise<T>): Promise<{ data: T | null; error: string | null }> =>
-    promise
-      .then((data) => {
-        sourceSummary.push(label);
-        return { data, error: null };
-      })
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`${label}: ${msg}`);
-        return { data: null, error: msg };
-      });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), COLLECT_TIMEOUT_MS);
 
-  const [
-    indexResult,
-    stocksResult,
-    earningsResult,
-    sectorsResult,
-    moversResult,
-    volatilityResult,
-    profilesResult,
-  ] = await Promise.all([
-    settle("FMP Index", fetchUS100Index()),
-    settle("Twelve Data Stocks", fetchUS100StockQuotes()),
-    settle("FMP Earnings", fetchUS100Earnings()),
-    settle("FMP Sectors", fetchUS100Sectors()),
-    settle("FMP Movers", fetchUS100Movers()),
-    settle("FMP Volatility", fetchUS100Volatility()),
-    settle("FMP Profiles", fetchUS100CompanyProfiles()),
-  ]);
+  try {
+    const response = await fetch("/api/us100/data", {
+      cache: "no-store",
+      signal: controller.signal,
+    });
 
-  const index = indexResult.data ?? buildFallbackIndex(collectedAt);
-  const stocks = stocksResult.data ?? [];
-  const earnings = earningsResult.data ?? [];
-  const sectors = sectorsResult.data ?? buildFallbackSectors(collectedAt);
-  const movers = moversResult.data ?? buildFallbackMovers(collectedAt);
-  const volatility = volatilityResult.data ?? buildFallbackVolatility(collectedAt);
-  const profiles = profilesResult.data ?? [];
+    clearTimeout(timeout);
+    const durationMs = Date.now() - startTime;
 
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      console.log(
+        `[US100 Data] Status: ERROR | HTTP: ${response.status} | Duration: ${durationMs}ms | Body: ${body.slice(0, 200)}`
+      );
+      return buildFallbackDataset(new Date().toISOString(), `HTTP ${response.status}: ${body.slice(0, 100)}`);
+    }
+
+    const dataset: US100FullDataset = await response.json();
+
+    console.log(
+      `[US100 Data] Status: OK | Sources: ${dataset.sourceSummary.length} | Errors: ${dataset.errors.length} | Duration: ${durationMs}ms`
+    );
+
+    if (dataset.errors.length > 0) {
+      for (const err of dataset.errors) {
+        console.log(`[US100 Data] Provider Error: ${err}`);
+      }
+    }
+
+    return dataset;
+  } catch (err) {
+    clearTimeout(timeout);
+    const durationMs = Date.now() - startTime;
+    const message = err instanceof Error ? err.message : "Unknown error";
+
+    let statusLabel = "ERROR";
+    if (message.includes("AbortError") || message.includes("timed out")) statusLabel = "TIMEOUT";
+    else if (message.includes("Failed to fetch") || message.includes("NetworkError")) statusLabel = "NETWORK_ERROR";
+
+    console.log(
+      `[US100 Data] Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`
+    );
+
+    return buildFallbackDataset(new Date().toISOString(), message);
+  }
+}
+
+function buildFallbackDataset(ts: string, error: string): US100FullDataset {
   return {
-    index,
-    stocks,
-    earnings,
-    sectors,
-    movers,
-    volatility,
-    profiles,
-    collectedAt,
-    sourceSummary,
-    errors,
+    index: {
+      symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
+      open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
+      meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error },
+    },
+    stocks: [],
+    earnings: [],
+    sectors: {
+      technology: 0, semiconductors: 0, healthcare: 0, financials: 0,
+      industrials: 0, energy: 0, utilities: 0, consumer: 0, communication: 0, realEstate: 0,
+      meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error },
+    },
+    movers: {
+      topGainers: [], topLosers: [], mostActive: [],
+      meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error },
+    },
+    volatility: {
+      vix: null, vixChange: null, vixChangePercent: null,
+      vxn: null, vxnChange: null, vxnChangePercent: null,
+      trend: "Normal", riskRating: "Moderate",
+      meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error },
+    },
+    profiles: [],
+    collectedAt: ts,
+    sourceSummary: [],
+    errors: [error],
   };
 }
 
@@ -209,36 +232,4 @@ function formatVolume(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
   return String(v);
-}
-
-function buildFallbackIndex(ts: string): US100Index {
-  return {
-    symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
-    open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
-    meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
-  };
-}
-
-function buildFallbackSectors(ts: string): US100SectorPerformance {
-  return {
-    technology: 0, semiconductors: 0, healthcare: 0, financials: 0,
-    industrials: 0, energy: 0, utilities: 0, consumer: 0, communication: 0, realEstate: 0,
-    meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
-  };
-}
-
-function buildFallbackMovers(ts: string): US100Movers {
-  return {
-    topGainers: [], topLosers: [], mostActive: [],
-    meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
-  };
-}
-
-function buildFallbackVolatility(ts: string): US100Volatility {
-  return {
-    vix: null, vixChange: null, vixChangePercent: null,
-    vxn: null, vxnChange: null, vxnChangePercent: null,
-    trend: "Normal", riskRating: "Moderate",
-    meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
-  };
 }
