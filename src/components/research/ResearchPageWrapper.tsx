@@ -4,12 +4,17 @@ import { ResearchAssetProvider, useResearchAsset } from "@/context/ResearchAsset
 import { ResearchAssetSelector } from "@/components/research/ResearchAssetSelector";
 import { ResearchPlaceholder } from "@/components/research/ResearchPlaceholder";
 import { GoldResearchDesk } from "@/components/GoldResearchDesk";
+import { US100ResearchDesk } from "@/components/research/ResearchDesk";
 
 function ResearchContent() {
   const { selectedAsset } = useResearchAsset();
 
   if (selectedAsset === "gold") {
     return <GoldResearchDesk />;
+  }
+
+  if (selectedAsset === "us100") {
+    return <US100ResearchDesk />;
   }
 
   return <ResearchPlaceholder />;
