@@ -1,3 +1,5 @@
+import "./initialize";
+
 export type {
   ResearchAsset,
   ResearchProfile,
