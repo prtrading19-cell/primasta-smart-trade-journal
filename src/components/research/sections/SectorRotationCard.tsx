@@ -38,7 +38,7 @@ export function SectorRotationCard({ sectors }: SectorRotationCardProps) {
   const maxAbs = Math.max(...sorted.map((e) => Math.abs(e.change)), 1);
 
   return (
-    <ResearchSection title="Sector Rotation" icon={<Repeat size={16} />} badge={<SourceBadge source="FMP" />}>
+    <ResearchSection title="Sector Rotation" icon={<Repeat size={16} />} badge={<SourceBadge source={sectors.meta.source} />}>
       <div className="space-y-2">
         {sorted.map((s) => {
           const tone = s.change >= 0 ? "text-profit" : "text-loss";

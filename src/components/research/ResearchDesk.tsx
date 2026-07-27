@@ -126,12 +126,12 @@ export function US100ResearchDesk() {
   const dataSources = useMemo(() => {
     if (!dataset) return [];
     const sources: { name: string; status: "live" | "delayed" | "unavailable" | "error"; timestamp?: string; error?: string }[] = [];
-    sources.push({ name: "FMP Index", status: dataset.index.meta.status, timestamp: dataset.index.meta.lastUpdated, error: dataset.index.meta.error });
-    sources.push({ name: "Twelve Data Stocks", status: dataset.stocks.length > 0 ? "live" : "unavailable", timestamp: dataset.collectedAt });
-    sources.push({ name: "FMP Sectors", status: dataset.sectors.meta.status, timestamp: dataset.sectors.meta.lastUpdated, error: dataset.sectors.meta.error });
-    sources.push({ name: "FMP Earnings", status: dataset.earnings.length > 0 ? "live" : "unavailable", timestamp: dataset.collectedAt });
-    sources.push({ name: "FMP Movers", status: dataset.movers.meta.status, timestamp: dataset.movers.meta.lastUpdated, error: dataset.movers.meta.error });
-    sources.push({ name: "FMP Volatility", status: dataset.volatility.meta.status, timestamp: dataset.volatility.meta.lastUpdated, error: dataset.volatility.meta.error });
+    sources.push({ name: dataset.index.meta.source, status: dataset.index.meta.status, timestamp: dataset.index.meta.lastUpdated, error: dataset.index.meta.error });
+    sources.push({ name: "Twelve Data Stocks", status: dataset.stocks.some((s) => s.meta.status === "live") ? "live" : "unavailable", timestamp: dataset.collectedAt });
+    sources.push({ name: dataset.sectors.meta.source, status: dataset.sectors.meta.status, timestamp: dataset.sectors.meta.lastUpdated, error: dataset.sectors.meta.error });
+    sources.push({ name: dataset.earnings.length > 0 ? dataset.earnings[0].meta.source : "FMP Earnings", status: dataset.earnings.some((e) => e.meta.status === "live") ? "live" : "unavailable", timestamp: dataset.collectedAt });
+    sources.push({ name: dataset.movers.meta.source, status: dataset.movers.meta.status, timestamp: dataset.movers.meta.lastUpdated, error: dataset.movers.meta.error });
+    sources.push({ name: dataset.volatility.meta.source, status: dataset.volatility.meta.status, timestamp: dataset.volatility.meta.lastUpdated, error: dataset.volatility.meta.error });
     return sources;
   }, [dataset]);
 

@@ -24,7 +24,7 @@ export function EarningsCard({ earnings }: EarningsCardProps) {
   }
 
   return (
-    <ResearchSection title="Corporate Earnings" icon={<FileText size={16} />} badge={<SourceBadge source="FMP" />}>
+    <ResearchSection title="Corporate Earnings" icon={<FileText size={16} />} badge={<SourceBadge source={earnings[0]?.meta.source ?? "FMP"} />}>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead>
