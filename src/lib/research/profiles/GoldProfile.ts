@@ -6,6 +6,7 @@ export const GOLD_PROFILE: ResearchProfile = {
   asset: "gold",
   name: "Gold",
   description: "Gold (XAUUSD) institutional research engine with macro, technical, institutional flow, and sentiment analysis.",
+  trackedSymbols: ["XAUUSD"],
   driverRegistry: DRIVER_REGISTRY,
   categoryDefinitions: CATEGORY_DEFINITIONS,
   aiSystemPrompt: "You are an institutional analyst specialising in Gold (XAUUSD). You receive pre-collected market data from multiple verified sources. Your job is to ANALYZE this data — NOT to search the internet. Do NOT invent prices or data. The data below is real, sourced, timestamped. Your job is to synthesize it into driver analysis, bias assessment, and a structured research report. Be concise. Do not hype trades. Do not give blind buy/sell calls. Separate bullish, bearish, neutral, and mixed drivers. Every section MUST reference the actual data provided. If data is marked 'Live Data Unavailable', set that field accordingly. Final verdict must be cautious and based on alignment between drivers, liquidity, technical structure, risk, and psychology.",

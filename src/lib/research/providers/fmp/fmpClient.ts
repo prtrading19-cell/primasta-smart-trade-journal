@@ -1,4 +1,4 @@
-const FMP_BASE_URL = "https://financialmodelingprep.com/api/v3";
+const FMP_BASE_URL = "https://financialmodelingprep.com/stable";
 const REQUEST_TIMEOUT_MS = 12000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
@@ -97,15 +97,20 @@ export async function fmpFetch<T>(
         return [] as unknown as T;
       }
 
-      const data = JSON.parse(text);
+      const rawData = JSON.parse(text);
 
-      const errorMsg = detectFMPError(data);
+      const errorMsg = detectFMPError(rawData);
       if (errorMsg) {
         console.log(
           `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | API Error: ${errorMsg} | Attempt: ${attempt + 1}/${retries + 1}`
         );
         throw new FMPError(`FMP API error on ${endpoint}: ${errorMsg}`, endpoint, 200);
       }
+
+      const data: unknown =
+        rawData && typeof rawData === "object" && "value" in rawData && Array.isArray((rawData as Record<string, unknown>).value)
+          ? (rawData as Record<string, unknown>).value
+          : rawData;
 
       console.log(
         `[FMP] Endpoint: ${endpoint} | Symbol: ${requestedSymbol} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | OK | Attempt: ${attempt + 1}/${retries + 1}`

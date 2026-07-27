@@ -7,7 +7,9 @@ interface TechnicalCardProps {
 }
 
 export function TechnicalCard({ technicalBias }: TechnicalCardProps) {
+  console.log("[RUNTIME-AUDIT:TechnicalCard] received props:", JSON.stringify(technicalBias, null, 2));
   const hasData = technicalBias.confidence > 0 || technicalBias.strength !== "None";
+  console.log("[RUNTIME-AUDIT:TechnicalCard] hasData:", hasData, "confidence:", technicalBias.confidence, "strength:", technicalBias.strength);
 
   if (!hasData) {
     return (

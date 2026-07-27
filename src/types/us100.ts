@@ -105,12 +105,6 @@ export interface US100CompanyProfile {
   meta: US100DataMeta;
 }
 
-export const US100_MEGA_CAP_SYMBOLS = [
-  "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AVGO", "AMD", "NFLX",
-] as const;
-
-export type US100MegaCapSymbol = (typeof US100_MEGA_CAP_SYMBOLS)[number];
-
 export const US100_SECTOR_ETF_MAP: Record<string, string> = {
   technology: "XLK",
   semiconductors: "SMH",
@@ -123,4 +117,4 @@ export const US100_SECTOR_ETF_MAP: Record<string, string> = {
   communication: "XLC",
 };
 
-export const US100_FMP_INDEX_SYMBOL = "^NDX";
+export const US100_FMP_INDEX_SYMBOL = "^GSPC";

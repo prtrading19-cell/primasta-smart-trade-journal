@@ -1,5 +1,4 @@
 import type { US100Earnings, US100DataMeta } from "@/types/us100";
-import { US100_MEGA_CAP_SYMBOLS, type US100MegaCapSymbol } from "@/types/us100";
 import { fmpFetch, nowISO, FMPError } from "./fmpClient";
 
 interface FMPEarningsCalendar {
@@ -13,23 +12,20 @@ interface FMPEarningsCalendar {
   reportedDate: string;
 }
 
-const HIGH_IMPACT_SYMBOLS = new Set<US100MegaCapSymbol>([
-  "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AVGO",
-]);
-
-export async function fetchUS100Earnings(): Promise<US100Earnings[]> {
+export async function fetchEarnings(symbols: readonly string[]): Promise<US100Earnings[]> {
   const timestamp = nowISO();
   const startTime = Date.now();
   const from = getDateOffset(-7);
   const to = getDateOffset(30);
+  const symbolSet = new Set(symbols);
 
   try {
-    const data = await fmpFetch<FMPEarningsCalendar[]>("/earnings_calendar", { from, to });
+    const data = await fmpFetch<FMPEarningsCalendar[]>("/earnings-calendar", { from, to });
     const durationMs = Date.now() - startTime;
 
     if (!Array.isArray(data)) {
-      console.log(`[FMP Earnings] Endpoint: /earnings_calendar | DateRange: ${from}..${to} | Status: NO_DATA | Duration: ${durationMs}ms`);
-      return US100_MEGA_CAP_SYMBOLS.map((symbol) => ({
+      console.log(`[FMP Earnings] Endpoint: /earnings-calendar | DateRange: ${from}..${to} | Status: NO_DATA | Duration: ${durationMs}ms`);
+      return symbols.map((symbol) => ({
         symbol,
         company: symbol,
         earningsDate: "",
@@ -41,18 +37,18 @@ export async function fetchUS100Earnings(): Promise<US100Earnings[]> {
     }
 
     const earnings: US100Earnings[] = data
-      .filter((e) => US100_MEGA_CAP_SYMBOLS.includes(e.symbol as US100MegaCapSymbol))
+      .filter((e) => symbolSet.has(e.symbol))
       .map((e) => ({
         symbol: e.symbol,
         company: e.symbol,
         earningsDate: e.date,
         estimateEPS: e.epsEstimated,
         previousEPS: e.eps,
-        importance: HIGH_IMPACT_SYMBOLS.has(e.symbol as US100MegaCapSymbol) ? "High" as const : "Medium" as const,
+        importance: symbolSet.has(e.symbol) ? "High" as const : "Medium" as const,
         meta: buildMeta("live", "FMP", timestamp),
       }));
 
-    console.log(`[FMP Earnings] Endpoint: /earnings_calendar | DateRange: ${from}..${to} | Status: LIVE | Entries: ${earnings.length} (filtered from ${data.length}) | Duration: ${durationMs}ms`);
+    console.log(`[FMP Earnings] Endpoint: /earnings-calendar | DateRange: ${from}..${to} | Status: LIVE | Entries: ${earnings.length} (filtered from ${data.length}) | Duration: ${durationMs}ms`);
     return earnings;
   } catch (err) {
     const durationMs = Date.now() - startTime;
@@ -60,8 +56,8 @@ export async function fetchUS100Earnings(): Promise<US100Earnings[]> {
     let statusLabel = "ERROR";
     if (message.includes("not configured")) statusLabel = "INVALID_KEY";
     else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
-    console.log(`[FMP Earnings] Endpoint: /earnings_calendar | DateRange: ${from}..${to} | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
-    return US100_MEGA_CAP_SYMBOLS.map((symbol) => ({
+    console.log(`[FMP Earnings] Endpoint: /earnings-calendar | DateRange: ${from}..${to} | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
+    return symbols.map((symbol) => ({
       symbol,
       company: symbol,
       earningsDate: "",

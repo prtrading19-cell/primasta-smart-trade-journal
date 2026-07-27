@@ -12,6 +12,7 @@ export interface ResearchProfile {
   asset: ResearchAsset;
   name: string;
   description: string;
+  trackedSymbols: readonly string[];
   driverRegistry: DriverRegistryEntry[];
   categoryDefinitions: CategoryDefinition[];
   categoryWeights?: WeightConfiguration;

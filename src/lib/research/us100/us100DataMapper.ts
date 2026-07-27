@@ -1,6 +1,6 @@
 import type { DriverAnalysisObject, DriverBias, DriverStrength } from "@/types/goldResearchConfig";
 import type { US100FullDataset } from "./us100DataOrchestrator";
-import { US100_MEGA_CAP_SYMBOLS } from "@/types/us100";
+import { getProfile } from "@/lib/research";
 
 const nowISO = () => new Date().toISOString();
 
@@ -125,37 +125,40 @@ export function mapUS100DataToEngine(dataset: US100FullDataset): DriverAnalysisO
     }));
   }
 
-  // ─── Mega Cap Leadership (10 drivers) ──────────────────────────────────────────
-  const megaCapMap: Record<string, string> = {
-    AAPL: "us100-apple", MSFT: "us100-microsoft", NVDA: "us100-nvidia",
-    AMZN: "us100-amazon", META: "us100-meta", GOOGL: "us100-alphabet",
-    TSLA: "us100-tesla", AVGO: "us100-broadcom", AMD: "us100-amd", NFLX: "us100-netflix",
-  };
-  const nameMap: Record<string, string> = {
-    AAPL: "Apple", MSFT: "Microsoft", NVDA: "NVIDIA", AMZN: "Amazon",
-    META: "Meta", GOOGL: "Alphabet", TSLA: "Tesla", AVGO: "Broadcom", AMD: "AMD", NFLX: "Netflix",
-  };
+  // ─── Mega Cap Leadership (profile-driven) ────────────────────────────────────────
+  const profile = getProfile("us100");
+  const trackedSymbols = profile?.trackedSymbols ?? [];
 
-  for (const symbol of US100_MEGA_CAP_SYMBOLS) {
+  const megaCapDrivers = (profile?.driverRegistry ?? []).filter((d) => d.category === "mega-cap");
+  const megaCapMap = new Map<string, string>();
+  const nameMap = new Map<string, string>();
+  for (const driver of megaCapDrivers) {
+    megaCapMap.set(driver.shortTitle, driver.id);
+    nameMap.set(driver.shortTitle, driver.title);
+  }
+
+  for (const symbol of trackedSymbols) {
     const stock = dataset.stocks.find((s) => s.symbol === symbol);
+    const driverId = megaCapMap.get(symbol) ?? `us100-${symbol.toLowerCase()}`;
+    const driverTitle = nameMap.get(symbol) ?? symbol;
     if (stock && stock.meta.status === "live") {
       const stockBias = inferBiasFromChange(stock.changePercent);
       drivers.push(buildBase({
-        driverId: megaCapMap[symbol], driverTitle: nameMap[symbol], categoryId: "mega-cap",
+        driverId, driverTitle, categoryId: "mega-cap",
         bias: stockBias.bias, biasReason: stockBias.reason,
         strength: inferStrengthFromChange(stock.changePercent),
         confidence: 85, confidenceReason: "Live Twelve Data quote",
         technicalObservation: `${symbol}: $${stock.price.toFixed(2)} (${stock.changePercent >= 0 ? "+" : ""}${stock.changePercent.toFixed(2)}%)`,
-        source: "Twelve Data", weight: getDriverWeight(megaCapMap[symbol]),
+        source: "Twelve Data", weight: getDriverWeight(driverId),
         contribution: stock.changePercent,
         dataFields: { price: String(stock.price), change: `${stock.changePercent.toFixed(2)}%`, volume: String(stock.volume), marketCap: String(stock.marketCap) },
       }));
     } else {
       drivers.push(buildBase({
-        driverId: megaCapMap[symbol], driverTitle: nameMap[symbol], categoryId: "mega-cap",
+        driverId, driverTitle, categoryId: "mega-cap",
         bias: "Neutral", biasReason: "Live Data Unavailable",
         strength: "None", confidence: 0, confidenceReason: "No data received",
-        source: "Twelve Data", weight: getDriverWeight(megaCapMap[symbol]),
+        source: "Twelve Data", weight: getDriverWeight(driverId),
         dataFields: { status: "unavailable" },
       }));
     }

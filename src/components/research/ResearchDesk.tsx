@@ -56,6 +56,15 @@ export function US100ResearchDesk() {
       const driverAnalyses: DriverAnalysisObject[] = mapUS100DataToEngine(data);
       const technicalInput = buildUS100TechnicalInput(data);
       const institutionalInput = buildUS100InstitutionalInput(data);
+
+      console.log("[RUNTIME-AUDIT] buildUS100TechnicalInput output:", JSON.stringify(technicalInput, null, 2));
+      console.log("[RUNTIME-AUDIT] buildUS100InstitutionalInput output:", JSON.stringify(institutionalInput, null, 2));
+      console.log("[RUNTIME-AUDIT] dataset.index.meta.status:", data.index.meta.status);
+      console.log("[RUNTIME-AUDIT] dataset.stocks.length:", data.stocks.length, "live:", data.stocks.filter(s => s.meta.status === "live").length);
+      console.log("[RUNTIME-AUDIT] dataset.volatility.meta.status:", data.volatility.meta.status, "vix:", data.volatility.vix);
+      console.log("[RUNTIME-AUDIT] dataset.sectors.meta.status:", data.sectors.meta.status);
+      console.log("[RUNTIME-AUDIT] driverAnalyses count:", driverAnalyses.length);
+
       const result = analyzeResearchAsset({
         asset: "us100",
         driverAnalyses,
@@ -65,7 +74,15 @@ export function US100ResearchDesk() {
         timestamp: data.collectedAt,
       });
 
+      console.log("[RUNTIME-AUDIT] analyzeResearchAsset result.success:", result.success);
+      console.log("[RUNTIME-AUDIT] analyzeResearchAsset result.error:", result.error);
+
       if (result.success && result.analysis) {
+        console.log("[RUNTIME-AUDIT] engineResult.categoryScores:", JSON.stringify(result.analysis.categoryScores, null, 2));
+        console.log("[RUNTIME-AUDIT] engineResult.technicalBias:", JSON.stringify(result.analysis.technicalBias, null, 2));
+        console.log("[RUNTIME-AUDIT] engineResult.institutionalFlow:", JSON.stringify(result.analysis.institutionalFlow, null, 2));
+        console.log("[RUNTIME-AUDIT] engineResult.decision:", JSON.stringify(result.analysis.decision, null, 2));
+        console.log("[RUNTIME-AUDIT] engineResult.institutionalDecision:", JSON.stringify(result.analysis.institutionalDecision, null, 2));
         setEngineResult(result.analysis);
         const sections: ResearchSection[] = driverAnalyses.map((d) => ({
           driver: d.driverTitle,

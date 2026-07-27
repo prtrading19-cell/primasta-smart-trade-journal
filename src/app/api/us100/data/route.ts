@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { getProfile } from "@/lib/research";
 import { fetchUS100Index } from "@/lib/research/providers/fmp/marketIndexProvider";
-import { fetchUS100StockQuotes } from "@/lib/research/providers/twelvedata/stockQuotesProvider";
-import { fetchUS100Earnings } from "@/lib/research/providers/fmp/earningsProvider";
+import { fetchStockQuotes } from "@/lib/research/providers/twelvedata/stockQuotesProvider";
+import { fetchEarnings } from "@/lib/research/providers/fmp/earningsProvider";
 import { fetchUS100Sectors } from "@/lib/research/providers/fmp/sectorProvider";
 import { fetchUS100Movers } from "@/lib/research/providers/fmp/marketMoversProvider";
 import { fetchUS100Volatility } from "@/lib/research/providers/fmp/volatilityProvider";
-import { fetchUS100CompanyProfiles } from "@/lib/research/providers/fmp/companyProfileProvider";
+import { fetchCompanyProfiles } from "@/lib/research/providers/fmp/companyProfileProvider";
 import type { US100FullDataset } from "@/lib/research/us100/us100DataOrchestrator";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ export async function GET() {
   const collectedAt = new Date().toISOString();
   const errors: string[] = [];
   const sourceSummary: string[] = [];
+
+  const profile = getProfile("us100");
+  const symbols = profile?.trackedSymbols ?? [];
 
   const settle = <T>(label: string, promise: Promise<T>): Promise<{ data: T | null; error: string | null }> =>
     promise
@@ -27,7 +31,7 @@ export async function GET() {
         return { data: null, error: msg };
       });
 
-  console.log("[API /api/us100/data] Starting data collection...");
+  console.log(`[API /api/us100/data] Starting data collection... Tracked symbols: ${symbols.length}`);
 
   const [
     indexResult,
@@ -39,12 +43,12 @@ export async function GET() {
     profilesResult,
   ] = await Promise.all([
     settle("FMP Index", fetchUS100Index()),
-    settle("Twelve Data Stocks", fetchUS100StockQuotes()),
-    settle("FMP Earnings", fetchUS100Earnings()),
+    settle("Twelve Data Stocks", fetchStockQuotes(symbols)),
+    settle("FMP Earnings", fetchEarnings(symbols)),
     settle("FMP Sectors", fetchUS100Sectors()),
     settle("FMP Movers", fetchUS100Movers()),
     settle("FMP Volatility", fetchUS100Volatility()),
-    settle("FMP Profiles", fetchUS100CompanyProfiles()),
+    settle("FMP Profiles", fetchCompanyProfiles(symbols)),
   ]);
 
   const dataset: US100FullDataset = {
@@ -71,7 +75,7 @@ export async function GET() {
 
 function buildFallbackIndex(ts: string) {
   return {
-    symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
+    symbol: "^GSPC", name: "S&P 500", price: 0, change: 0, changePercent: 0,
     open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
     meta: { status: "unavailable" as const, source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
   };

@@ -1,166 +1,150 @@
 import type { US100MegaCapStock, US100DataMeta } from "@/types/us100";
-import { US100_MEGA_CAP_SYMBOLS, type US100MegaCapSymbol } from "@/types/us100";
 
-const TD_BASE_URL = "https://api.twelvedata.com";
-const REQUEST_TIMEOUT_MS = 12000;
+const GLOBAL_TIMEOUT_MS = 20000;
+const PER_REQUEST_TIMEOUT_MS = 10000;
+const TD_BASE = "https://api.twelvedata.com";
 
-export class TwelveDataError extends Error {
-  constructor(message: string, public readonly endpoint: string, public readonly statusCode?: number) {
-    super(message);
-    this.name = "TwelveDataError";
-  }
-}
-
-function getApiKey(): string {
-  const key = process.env.TWELVE_DATA_API_KEY;
-  if (!key) throw new TwelveDataError("TWELVE_DATA_API_KEY not configured", "config");
-  return key;
-}
-
-interface TDQuote {
+interface TDQuoteResponse {
   symbol: string;
   name: string;
   close: string;
-  change: string;
   percent_change: string;
+  change: string;
+  volume: string;
   high: string;
   low: string;
   open: string;
   previous_close: string;
-  volume: string;
+  meta?: { symbol?: string; exchange?: string };
 }
 
-function detectTDError(body: unknown): string | null {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
-  const obj = body as Record<string, unknown>;
-  if (obj.status === "error" && typeof obj.message === "string") {
-    return obj.message;
-  }
-  if (typeof obj.code === "number" && obj.code !== 200) {
-    return `Twelve Data error code: ${obj.code} — ${typeof obj.message === "string" ? obj.message : "Unknown"}`;
-  }
-  if (typeof obj.message === "string" && /api key|invalid|not found/i.test(obj.message)) {
-    return obj.message;
-  }
-  return null;
-}
-
-export async function fetchUS100StockQuotes(): Promise<US100MegaCapStock[]> {
+export async function fetchStockQuotes(symbols: readonly string[]): Promise<US100MegaCapStock[]> {
   const timestamp = new Date().toISOString();
-  const symbols = US100_MEGA_CAP_SYMBOLS.join(",");
   const startTime = Date.now();
+  const apiKey = process.env.TWELVE_DATA_API_KEY || "";
+
+  const globalTimer = new Promise<"timeout">((resolve) =>
+    setTimeout(() => resolve("timeout"), GLOBAL_TIMEOUT_MS)
+  );
+
+  const fetchPromise = (async () => {
+    if (!apiKey) {
+      return buildUnavailableQuotes(symbols, timestamp, "TWELVE_DATA_API_KEY not configured");
+    }
+
+    console.log(`[Twelve Data] Fetching ${symbols.length} symbols via Promise.all...`);
+
+    const individualPromises = symbols.map((symbol) =>
+      fetchSingleQuote(symbol, apiKey, timestamp).catch((err) =>
+        buildSingleUnavailable(symbol, timestamp, `Fetch failed: ${err instanceof Error ? err.message : String(err)}`)
+      )
+    );
+
+    const results = await Promise.all(individualPromises);
+
+    const quoteMap = new Map<string, US100MegaCapStock>();
+    for (const r of results) quoteMap.set(r.symbol, r);
+
+    return symbols.map((symbol) => {
+      const q = quoteMap.get(symbol);
+      if (!q) return buildSingleUnavailable(symbol, timestamp, "Missing from results");
+      return q;
+    });
+  })();
+
+  const result = await Promise.race([fetchPromise, globalTimer]);
+
+  const durationMs = Date.now() - startTime;
+
+  if (result === "timeout") {
+    console.log(`[Twelve Data] TIMEOUT | Duration: ${durationMs}ms | Target: ${symbols.length} symbols`);
+    return buildUnavailableQuotes(symbols, timestamp, "Stock quotes timed out");
+  }
+
+  const liveCount = result.filter((r) => r.meta.status === "live").length;
+  const failedSymbols = result.filter((r) => r.meta.status !== "live").map((r) => r.symbol);
+  const liveSymbols = result.filter((r) => r.meta.status === "live").map((r) => r.symbol);
+
+  console.log(
+    `[Twelve Data] Completed | Duration: ${durationMs}ms | Successful: ${liveCount} | Failed: ${failedSymbols.length} | Symbols: [${liveSymbols.join(", ")}]`
+  );
+  if (failedSymbols.length > 0) {
+    console.log(`[Twelve Data] Failed symbols: [${failedSymbols.join(", ")}]`);
+  }
+
+  return result;
+}
+
+async function fetchSingleQuote(
+  symbol: string,
+  apiKey: string,
+  timestamp: string
+): Promise<US100MegaCapStock> {
+  const url = `${TD_BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+  const reqStart = Date.now();
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PER_REQUEST_TIMEOUT_MS);
 
   try {
-    const apiKey = getApiKey();
-    const url = new URL(`${TD_BASE_URL}/quote`);
-    url.searchParams.set("symbol", symbols);
-    url.searchParams.set("apikey", apiKey);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    let response: Response;
-    try {
-      response = await fetch(url.toString(), { cache: "no-store", signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const durationMs = Date.now() - startTime;
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    clearTimeout(timeout);
+    const reqDuration = Date.now() - reqStart;
 
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      console.log(
-        `[Twelve Data] Endpoint: /quote | Symbol: ${symbols} | HTTP: ${response.status} | Duration: ${durationMs}ms | Size: ${body.length}B | Error: ${body.slice(0, 200)}`
-      );
-      throw new TwelveDataError(`Twelve Data returned ${response.status}: ${body.slice(0, 200)}`, "quote", response.status);
+      const errorText = await response.text().catch(() => "Unknown error");
+      console.log(`[Twelve Data] ${symbol} HTTP ${response.status} | Duration: ${reqDuration}ms | ${errorText.slice(0, 100)}`);
+      return buildSingleUnavailable(symbol, timestamp, `HTTP ${response.status}`);
     }
 
-    const text = await response.text();
-    const payloadSize = text.length;
-    const data = JSON.parse(text);
+    const json = await response.json();
+    const q: TDQuoteResponse = json;
+    const price = parseFloat(q.close);
 
-    const errorMsg = detectTDError(data);
-    if (errorMsg) {
-      console.log(
-        `[Twelve Data] Endpoint: /quote | Symbol: ${symbols} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | API Error: ${errorMsg}`
-      );
-      throw new TwelveDataError(`Twelve Data API error: ${errorMsg}`, "quote", 200);
+    if (isNaN(price) || price === 0) {
+      console.log(`[Twelve Data] ${symbol} No price | Duration: ${reqDuration}ms`);
+      return buildSingleUnavailable(symbol, timestamp, "Quote unavailable");
     }
 
-    const quotes: TDQuote[] = Array.isArray(data) ? data : data && typeof data === "object" ? [data] : [];
+    const change = parseFloat(q.change) || 0;
+    const changePercent = parseFloat(q.percent_change) || 0;
+    const volume = parseInt(q.volume) || 0;
+    const high = parseFloat(q.high) || 0;
+    const low = parseFloat(q.low) || 0;
+    const previousClose = parseFloat(q.previous_close) || 0;
 
-    if (quotes.length === 0) {
-      console.log(
-        `[Twelve Data] Endpoint: /quote | Symbol: ${symbols} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | Status: NO_DATA | Reason: Empty response`
-      );
-      return buildUnavailableQuotes(timestamp, "No data returned from Twelve Data");
-    }
+    console.log(`[Twelve Data] ${symbol} LIVE | Price: ${price} | Change: ${change >= 0 ? "+" : ""}${change} (${changePercent >= 0 ? "+" : ""}${changePercent}%) | Duration: ${reqDuration}ms`);
 
-    const quoteMap = new Map<string, TDQuote>();
-    for (const q of quotes) {
-      if (q.symbol) quoteMap.set(q.symbol, q);
-    }
-
-    const result = US100_MEGA_CAP_SYMBOLS.map((symbol) => {
-      const q = quoteMap.get(symbol);
-      if (!q) return buildSingleUnavailable(symbol, timestamp, "No quote data for symbol");
-
-      return {
-        symbol,
-        name: q.name || symbol,
-        price: parseNum(q.close),
-        change: parseNum(q.change),
-        changePercent: parseNum(q.percent_change),
-        marketCap: 0,
-        sector: "",
-        industry: "",
-        volume: parseNum(q.volume),
-        high: parseNum(q.high),
-        low: parseNum(q.low),
-        previousClose: parseNum(q.previous_close),
-        timestamp,
-        meta: buildMeta("live", "Twelve Data", timestamp),
-      };
-    });
-
-    const liveCount = result.filter((r) => r.meta.status === "live").length;
-    const unavailCount = result.filter((r) => r.meta.status === "unavailable").length;
-    console.log(
-      `[Twelve Data] Endpoint: /quote | Symbol: ${symbols} | HTTP: 200 | Duration: ${durationMs}ms | Size: ${payloadSize}B | Status: LIVE | Live: ${liveCount} | Unavailable: ${unavailCount}`
-    );
-
-    return result;
+    return {
+      symbol,
+      name: q.name || symbol,
+      price,
+      change,
+      changePercent,
+      marketCap: 0,
+      sector: "",
+      industry: "",
+      volume,
+      high,
+      low,
+      previousClose,
+      timestamp,
+      meta: buildMeta("live", "Twelve Data", timestamp),
+    };
   } catch (err) {
-    const durationMs = Date.now() - startTime;
-    const message = err instanceof TwelveDataError ? err.message : err instanceof Error ? err.message : "Unknown error";
-    const statusCode = err instanceof TwelveDataError ? err.statusCode : undefined;
-
-    let statusLabel = "ERROR";
-    if (message.includes("not configured")) statusLabel = "INVALID_KEY";
-    else if (message.includes("Rate limit") || message.includes("credits")) statusLabel = "RATE_LIMITED";
-    else if (message.includes("timed out") || message.includes("AbortError")) statusLabel = "TIMEOUT";
-    else if (message.includes("Invalid API KEY") || message.includes("invalid api key")) statusLabel = "INVALID_KEY";
-
-    console.log(
-      `[Twelve Data] Endpoint: /quote | Symbol: ${symbols} | Status: ${statusLabel} | HTTP: ${statusCode ?? "N/A"} | Error: ${message} | Duration: ${durationMs}ms`
-    );
-
-    return buildUnavailableQuotes(timestamp, message);
+    clearTimeout(timeout);
+    const reqDuration = Date.now() - reqStart;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.log(`[Twelve Data] ${symbol} ERROR | Duration: ${reqDuration}ms | ${errMsg}`);
+    return buildSingleUnavailable(symbol, timestamp, errMsg);
   }
 }
 
-function parseNum(value: string | number | undefined): number {
-  if (typeof value === "number") return value;
-  const parsed = parseFloat(value ?? "0");
-  return isNaN(parsed) ? 0 : parsed;
+function buildUnavailableQuotes(symbols: readonly string[], timestamp: string, error: string): US100MegaCapStock[] {
+  return symbols.map((symbol) => buildSingleUnavailable(symbol, timestamp, error));
 }
 
-function buildUnavailableQuotes(timestamp: string, error: string): US100MegaCapStock[] {
-  return US100_MEGA_CAP_SYMBOLS.map((symbol) => buildSingleUnavailable(symbol, timestamp, error));
-}
-
-function buildSingleUnavailable(symbol: US100MegaCapSymbol, timestamp: string, error: string): US100MegaCapStock {
+function buildSingleUnavailable(symbol: string, timestamp: string, error: string): US100MegaCapStock {
   return {
     symbol,
     name: symbol,

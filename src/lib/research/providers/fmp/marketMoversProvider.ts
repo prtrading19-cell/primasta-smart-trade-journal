@@ -15,26 +15,31 @@ export async function fetchUS100Movers(): Promise<US100Movers> {
   const startTime = Date.now();
 
   try {
-    const data = await fmpFetch<FMPMover[]>("/stock_market/nasdaq", { limit: "30" });
+    const [gainersData, losersData, activesData] = await Promise.all([
+      fmpFetch<FMPMover[]>("/biggest-gainers"),
+      fmpFetch<FMPMover[]>("/biggest-losers"),
+      fmpFetch<FMPMover[]>("/most-actives"),
+    ]);
     const durationMs = Date.now() - startTime;
 
-    if (!Array.isArray(data) || data.length === 0) {
-      console.log(`[FMP Movers] Endpoint: /stock_market/nasdaq | Status: NO_DATA | Duration: ${durationMs}ms`);
+    const gainers = Array.isArray(gainersData) ? gainersData : [];
+    const losers = Array.isArray(losersData) ? losersData : [];
+    const actives = Array.isArray(activesData) ? activesData : [];
+
+    const totalItems = gainers.length + losers.length + actives.length;
+    if (totalItems === 0) {
+      console.log(`[FMP Movers] Endpoints: /biggest-gainers, /biggest-losers, /most-actives | Status: NO_DATA | Duration: ${durationMs}ms`);
       return buildUnavailableMovers(timestamp, "No data returned from FMP");
     }
 
-    const sorted = [...data].sort((a, b) => b.changesPercentage - a.changesPercentage);
-    const topGainers = sorted.slice(0, 10).map(normalizeMover);
-    const topLosers = [...sorted].reverse().slice(0, 10).map(normalizeMover);
-    const mostActive = [...data]
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 10)
-      .map(normalizeMover);
+    const topGainers = gainers.slice(0, 10).map(normalizeMover);
+    const topLosers = losers.slice(0, 10).map(normalizeMover);
+    const mostActive = actives.slice(0, 10).map(normalizeMover);
 
     const hasValidData = topGainers.some((m) => m.price > 0) || topLosers.some((m) => m.price > 0);
     const status = hasValidData ? "LIVE" : "NO_DATA";
 
-    console.log(`[FMP Movers] Endpoint: /stock_market/nasdaq | Status: ${status} | Movers: ${data.length} | Duration: ${durationMs}ms`);
+    console.log(`[FMP Movers] Endpoints: /biggest-gainers, /biggest-losers, /most-actives | Status: ${status} | Gainers: ${gainers.length} | Losers: ${losers.length} | Actives: ${actives.length} | Duration: ${durationMs}ms`);
     return {
       topGainers,
       topLosers,
@@ -47,7 +52,7 @@ export async function fetchUS100Movers(): Promise<US100Movers> {
     let statusLabel = "ERROR";
     if (message.includes("not configured")) statusLabel = "INVALID_KEY";
     else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
-    console.log(`[FMP Movers] Endpoint: /stock_market/nasdaq | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
+    console.log(`[FMP Movers] Endpoints: /biggest-gainers, /biggest-losers, /most-actives | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
     return buildUnavailableMovers(timestamp, message);
   }
 }

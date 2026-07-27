@@ -98,6 +98,7 @@ export const US100_PROFILE: ResearchProfile = {
   asset: "us100",
   name: "US100",
   description: "Nasdaq-100 Institutional Research — mega cap leadership, macro environment, sector rotation, technical analysis, and institutional flow.",
+  trackedSymbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AVGO", "TSLA"],
   driverRegistry: US100_DRIVER_REGISTRY,
   categoryDefinitions: US100_CATEGORY_DEFINITIONS,
   categoryWeights: US100_CATEGORY_WEIGHTS,

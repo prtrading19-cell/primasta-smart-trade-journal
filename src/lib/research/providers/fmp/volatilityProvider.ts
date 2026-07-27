@@ -13,11 +13,11 @@ export async function fetchUS100Volatility(): Promise<US100Volatility> {
   const startTime = Date.now();
 
   try {
-    const data = await fmpFetch<FMPQuote[]>("/quote", { symbol: "^VIX,^VXN" });
+    const data = await fmpFetch<FMPQuote[]>("/quote", { symbol: "^VIX" });
     const durationMs = Date.now() - startTime;
 
     if (!Array.isArray(data)) {
-      console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: NO_DATA | Duration: ${durationMs}ms`);
+      console.log(`[FMP Volatility] Endpoint: /quote (^VIX) | Status: NO_DATA | Duration: ${durationMs}ms`);
       return buildUnavailableVolatility(timestamp, "Response is not an array");
     }
 
@@ -33,7 +33,7 @@ export async function fetchUS100Volatility(): Promise<US100Volatility> {
     const hasValidData = vix !== null || vxn !== null;
     const status = hasValidData ? "LIVE" : "NO_DATA";
 
-    console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: ${status} | VIX: ${vix ?? "N/A"} | VXN: ${vxn ?? "N/A"} | Duration: ${durationMs}ms`);
+    console.log(`[FMP Volatility] Endpoint: /quote (^VIX) | Status: ${status} | VIX: ${vix ?? "N/A"} | VXN: N/A (premium) | Duration: ${durationMs}ms`);
 
     return {
       vix,
@@ -52,7 +52,7 @@ export async function fetchUS100Volatility(): Promise<US100Volatility> {
     let statusLabel = "ERROR";
     if (message.includes("not configured")) statusLabel = "INVALID_KEY";
     else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
-    console.log(`[FMP Volatility] Endpoint: /quote (^VIX,^VXN) | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
+    console.log(`[FMP Volatility] Endpoint: /quote (^VIX) | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
     return buildUnavailableVolatility(timestamp, message);
   }
 }

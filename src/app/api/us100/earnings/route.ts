@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { fetchUS100Earnings } from "@/lib/research/providers/fmp/earningsProvider";
+import { getProfile } from "@/lib/research";
+import { fetchEarnings } from "@/lib/research/providers/fmp/earningsProvider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const earnings = await fetchUS100Earnings();
+    const profile = getProfile("us100");
+    const symbols = profile?.trackedSymbols ?? [];
+    const earnings = await fetchEarnings(symbols);
     return NextResponse.json(earnings);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

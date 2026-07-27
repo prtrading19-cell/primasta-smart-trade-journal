@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { fetchUS100StockQuotes } from "@/lib/research/providers/twelvedata/stockQuotesProvider";
+import { getProfile } from "@/lib/research";
+import { fetchStockQuotes } from "@/lib/research/providers/twelvedata/stockQuotesProvider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const stocks = await fetchUS100StockQuotes();
+    const profile = getProfile("us100");
+    const symbols = profile?.trackedSymbols ?? [];
+    const stocks = await fetchStockQuotes(symbols);
     return NextResponse.json(stocks);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

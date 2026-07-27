@@ -48,7 +48,7 @@ export async function fetchUS100Index(): Promise<US100Index> {
 
     return {
       symbol: US100_FMP_INDEX_SYMBOL,
-      name: "NASDAQ-100",
+      name: "S&P 500",
       price: quote.price,
       change: quote.change,
       changePercent: quote.changesPercentage,
@@ -81,7 +81,7 @@ export async function fetchUS100Index(): Promise<US100Index> {
 function buildUnavailableIndex(timestamp: string, error: string): US100Index {
   return {
     symbol: US100_FMP_INDEX_SYMBOL,
-    name: "NASDAQ-100",
+    name: "S&P 500",
     price: 0,
     change: 0,
     changePercent: 0,
