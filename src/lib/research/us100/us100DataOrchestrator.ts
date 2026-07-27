@@ -19,6 +19,7 @@ export interface US100FullDataset {
   volatility: US100Volatility;
   profiles: US100CompanyProfile[];
   marketBreadth: US100MarketBreadth;
+  derivedIndex: US100Index;
   collectedAt: string;
   sourceSummary: string[];
   errors: string[];
@@ -111,6 +112,11 @@ function buildFallbackDataset(ts: string, error: string): US100FullDataset {
       newLows: 0,
       breadthScore: 0,
       overallHealth: "Critical",
+      meta: { status: "unavailable", source: "composite", timestamp: ts, lastUpdated: ts, error },
+    },
+    derivedIndex: {
+      symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
+      open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
       meta: { status: "unavailable", source: "composite", timestamp: ts, lastUpdated: ts, error },
     },
     collectedAt: ts,

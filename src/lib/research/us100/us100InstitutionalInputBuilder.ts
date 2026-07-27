@@ -3,7 +3,8 @@ import type { US100FullDataset } from "./us100DataOrchestrator";
 
 export function buildUS100InstitutionalInput(dataset: US100FullDataset): InstitutionalFlowInput {
   const timestamp = dataset.collectedAt;
-  const currentPrice = dataset.index.meta.status === "live" ? dataset.index.price : undefined;
+  const effectiveIndex = dataset.index.meta.status === "live" ? dataset.index : dataset.derivedIndex;
+  const currentPrice = effectiveIndex.meta.status === "live" ? effectiveIndex.price : undefined;
 
   return {
     currentPrice,

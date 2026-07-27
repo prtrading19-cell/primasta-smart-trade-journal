@@ -126,4 +126,4 @@ export const US100_SECTOR_ETF_MAP: Record<string, string> = {
   communication: "XLC",
 };
 
-export const US100_FMP_INDEX_SYMBOL = "^GSPC";
+export const US100_FMP_INDEX_SYMBOL = "^NDX";

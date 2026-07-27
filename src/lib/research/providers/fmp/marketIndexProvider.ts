@@ -19,69 +19,75 @@ interface FMPQuote {
 export async function fetchUS100Index(): Promise<US100Index> {
   const timestamp = nowISO();
   const startTime = Date.now();
+  const candidates = [
+    { symbol: US100_FMP_INDEX_SYMBOL, name: "NASDAQ-100" },
+    { symbol: "NASDAQ", name: "NASDAQ Composite" },
+  ];
 
-  try {
-    const data = await fmpFetch<FMPQuote[]>("/quote", {
-      symbol: US100_FMP_INDEX_SYMBOL,
-    });
+  for (const candidate of candidates) {
+    try {
+      const data = await fmpFetch<FMPQuote[]>("/quote", {
+        symbol: candidate.symbol,
+      });
 
-    const durationMs = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
 
-    if (!Array.isArray(data)) {
+      if (!Array.isArray(data)) {
+        console.log(
+          `[FMP Index] Symbol: ${candidate.symbol} | Status: UNAVAILABLE | Reason: Response is not an array | Duration: ${durationMs}ms`
+        );
+        continue;
+      }
+
+      const quote = data[0];
+      if (!quote || typeof quote.price !== "number" || quote.price === 0) {
+        console.log(
+          `[FMP Index] Symbol: ${candidate.symbol} | Status: NO_DATA | Reason: No valid quote in response (${data.length} items) | Duration: ${durationMs}ms`
+        );
+        continue;
+      }
+
       console.log(
-        `[FMP Index] Symbol: ${US100_FMP_INDEX_SYMBOL} | Status: UNAVAILABLE | Reason: Response is not an array | Duration: ${durationMs}ms`
+        `[FMP Index] Symbol: ${candidate.symbol} | Status: LIVE | Price: ${quote.price} | Duration: ${durationMs}ms`
       );
-      return buildUnavailableIndex(timestamp, "Response is not an array");
-    }
 
-    const quote = data[0];
-    if (!quote || typeof quote.price !== "number" || quote.price === 0) {
+      return {
+        symbol: candidate.symbol,
+        name: candidate.name,
+        price: quote.price,
+        change: quote.change,
+        changePercent: quote.changesPercentage,
+        open: quote.open,
+        high: quote.high,
+        low: quote.low,
+        previousClose: quote.previousClose,
+        volume: quote.volume,
+        timestamp: new Date(quote.timestamp * 1000).toISOString(),
+        meta: buildMeta("live", "FMP", timestamp),
+      };
+    } catch (err) {
+      const durationMs = Date.now() - startTime;
+      const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";
+      const statusCode = err instanceof FMPError ? err.statusCode : undefined;
+
+      let statusLabel = "ERROR";
+      if (message.includes("not configured")) statusLabel = "INVALID_KEY";
+      else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
+      else if (message.includes("timed out") || message.includes("AbortError")) statusLabel = "TIMEOUT";
+
       console.log(
-        `[FMP Index] Symbol: ${US100_FMP_INDEX_SYMBOL} | Status: NO_DATA | Reason: No valid quote in response (${data.length} items) | Duration: ${durationMs}ms`
+        `[FMP Index] Symbol: ${candidate.symbol} | Status: ${statusLabel} | HTTP: ${statusCode ?? "N/A"} | Error: ${message} | Duration: ${durationMs}ms`
       );
-      return buildUnavailableIndex(timestamp, "No valid quote data in response");
     }
-
-    console.log(
-      `[FMP Index] Symbol: ${US100_FMP_INDEX_SYMBOL} | Status: LIVE | Price: ${quote.price} | Duration: ${durationMs}ms`
-    );
-
-    return {
-      symbol: US100_FMP_INDEX_SYMBOL,
-      name: "S&P 500",
-      price: quote.price,
-      change: quote.change,
-      changePercent: quote.changesPercentage,
-      open: quote.open,
-      high: quote.high,
-      low: quote.low,
-      previousClose: quote.previousClose,
-      volume: quote.volume,
-      timestamp: new Date(quote.timestamp * 1000).toISOString(),
-      meta: buildMeta("live", "FMP", timestamp),
-    };
-  } catch (err) {
-    const durationMs = Date.now() - startTime;
-    const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";
-    const statusCode = err instanceof FMPError ? err.statusCode : undefined;
-
-    let statusLabel = "ERROR";
-    if (message.includes("not configured")) statusLabel = "INVALID_KEY";
-    else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
-    else if (message.includes("timed out") || message.includes("AbortError")) statusLabel = "TIMEOUT";
-
-    console.log(
-      `[FMP Index] Symbol: ${US100_FMP_INDEX_SYMBOL} | Status: ${statusLabel} | HTTP: ${statusCode ?? "N/A"} | Error: ${message} | Duration: ${durationMs}ms`
-    );
-
-    return buildUnavailableIndex(timestamp, message);
   }
+
+  return buildUnavailableIndex(timestamp, "No live US100/NASDAQ index quote available");
 }
 
 function buildUnavailableIndex(timestamp: string, error: string): US100Index {
   return {
     symbol: US100_FMP_INDEX_SYMBOL,
-    name: "S&P 500",
+    name: "NASDAQ-100",
     price: 0,
     change: 0,
     changePercent: 0,

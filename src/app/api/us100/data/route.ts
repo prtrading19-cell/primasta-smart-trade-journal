@@ -61,6 +61,7 @@ export async function GET() {
     volatility: volatilityResult.data ?? buildFallbackVolatility(collectedAt),
     profiles: profilesResult.data ?? [],
     marketBreadth: buildFallbackMarketBreadth(collectedAt),
+    derivedIndex: buildFallbackDerivedIndex(collectedAt),
     collectedAt,
     sourceSummary,
     errors,
@@ -79,9 +80,17 @@ export async function GET() {
 
 function buildFallbackIndex(ts: string) {
   return {
-    symbol: "^GSPC", name: "S&P 500", price: 0, change: 0, changePercent: 0,
+    symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
     open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
     meta: { status: "unavailable" as const, source: "FMP", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
+  };
+}
+
+function buildFallbackDerivedIndex(ts: string) {
+  return {
+    symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
+    open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
+    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
   };
 }
 
@@ -126,26 +135,23 @@ type EnrichedDataset = US100FullDataset & {
   movers: US100Movers;
   volatility: US100Volatility;
   marketBreadth: US100MarketBreadth;
+  derivedIndex: US100Index;
 };
 
 function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset {
   const liveStocks = (dataset.stocks as US100MegaCapStock[]).filter((s) => s.meta.status === "live");
-  if (liveStocks.length === 0) {
-    return dataset as EnrichedDataset;
-  }
+  const derivedIndex = liveStocks.length > 0 ? deriveIndex(liveStocks, dataset.collectedAt) : buildFallbackIndex(dataset.collectedAt);
 
   const enriched: EnrichedDataset = {
     ...dataset,
-    index: dataset.index.meta.status === "live" ? dataset.index : deriveIndex(liveStocks, dataset.collectedAt),
+    index: dataset.index,
     sectors: dataset.sectors.meta.status === "live" ? dataset.sectors : deriveSectors(liveStocks, dataset.collectedAt),
     movers: dataset.movers.meta.status === "live" ? dataset.movers : deriveMovers(liveStocks, dataset.collectedAt),
     volatility: dataset.volatility.meta.status === "live" ? dataset.volatility : deriveVolatility(liveStocks, dataset.collectedAt),
     marketBreadth: dataset.marketBreadth.meta.status === "live" ? dataset.marketBreadth : deriveMarketBreadth(liveStocks, dataset.collectedAt),
+    derivedIndex,
   };
 
-  if (enriched.index.meta.source !== dataset.index.meta.source) {
-    enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Index"];
-  }
   if (enriched.sectors.meta.source !== dataset.sectors.meta.source) {
     enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Sectors"];
   }
@@ -157,6 +163,9 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
   }
   if (enriched.marketBreadth.meta.source !== dataset.marketBreadth.meta.source) {
     enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Breadth"];
+  }
+  if (derivedIndex.meta.status === "live" && dataset.index.meta.status !== "live") {
+    enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Index"];
   }
 
   return enriched;
