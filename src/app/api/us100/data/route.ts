@@ -90,7 +90,7 @@ function buildFallbackDerivedIndex(ts: string) {
   return {
     symbol: "^NDX", name: "NASDAQ-100", price: 0, change: 0, changePercent: 0,
     open: 0, high: 0, low: 0, previousClose: 0, volume: 0, timestamp: ts,
-    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
+    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Source data unavailable" },
   };
 }
 
@@ -125,7 +125,7 @@ function buildFallbackMarketBreadth(ts: string) {
     newLows: 0,
     breadthScore: 0,
     overallHealth: "Critical" as const,
-    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
+    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Source data unavailable" },
   };
 }
 
@@ -140,7 +140,7 @@ type EnrichedDataset = US100FullDataset & {
 
 function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset {
   const liveStocks = (dataset.stocks as US100MegaCapStock[]).filter((s) => s.meta.status === "live");
-  const derivedIndex = liveStocks.length > 0 ? deriveIndex(liveStocks, dataset.collectedAt) : buildFallbackIndex(dataset.collectedAt);
+  const derivedIndex = liveStocks.length > 0 ? deriveIndex(liveStocks, dataset.collectedAt) : buildFallbackDerivedIndex(dataset.collectedAt);
 
   const enriched: EnrichedDataset = {
     ...dataset,
@@ -172,6 +172,23 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
 }
 
 function deriveIndex(liveStocks: US100MegaCapStock[], timestamp: string): US100Index {
+  if (liveStocks.length === 0) {
+    return {
+      symbol: "^NDX",
+      name: "NASDAQ-100 Composite (Derived)",
+      price: 0,
+      change: 0,
+      changePercent: 0,
+      open: 0,
+      high: 0,
+      low: 0,
+      previousClose: 0,
+      volume: 0,
+      timestamp,
+      meta: { status: "unavailable" as const, source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp, error: "Source data unavailable" },
+    };
+  }
+
   const avgPrice = liveStocks.reduce((sum, s) => sum + s.price, 0) / liveStocks.length;
   const avgChange = liveStocks.reduce((sum, s) => sum + s.change, 0) / liveStocks.length;
   const avgPrevClose = liveStocks.reduce((sum, s) => sum + s.previousClose, 0) / liveStocks.length;
@@ -203,6 +220,14 @@ function deriveIndex(liveStocks: US100MegaCapStock[], timestamp: string): US100I
 }
 
 function deriveSectors(liveStocks: US100MegaCapStock[], timestamp: string): US100SectorPerformance {
+  if (liveStocks.length === 0) {
+    return {
+      technology: 0, semiconductors: 0, healthcare: 0, financials: 0,
+      industrials: 0, energy: 0, utilities: 0, consumer: 0, communication: 0, realEstate: 0,
+      meta: { status: "unavailable" as const, source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp, error: "Source data unavailable" },
+    };
+  }
+
   const sectorChanges: Record<string, number[]> = {
     technology: liveStocks.filter((s) => ["AAPL", "MSFT"].includes(s.symbol)).map((s) => s.changePercent),
     semiconductors: liveStocks.filter((s) => ["NVDA", "AVGO"].includes(s.symbol)).map((s) => s.changePercent),
@@ -234,6 +259,13 @@ function deriveSectors(liveStocks: US100MegaCapStock[], timestamp: string): US10
 }
 
 function deriveMovers(liveStocks: US100MegaCapStock[], timestamp: string): US100Movers {
+  if (liveStocks.length === 0) {
+    return {
+      topGainers: [], topLosers: [], mostActive: [],
+      meta: { status: "unavailable" as const, source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp, error: "Source data unavailable" },
+    };
+  }
+
   const gainers = [...liveStocks].sort((a, b) => b.changePercent - a.changePercent).slice(0, 10);
   const losers = [...liveStocks].sort((a, b) => a.changePercent - b.changePercent).slice(0, 10);
   const actives = [...liveStocks].sort((a, b) => b.volume - a.volume).slice(0, 10);
@@ -256,6 +288,15 @@ function deriveMovers(liveStocks: US100MegaCapStock[], timestamp: string): US100
 }
 
 function deriveVolatility(liveStocks: US100MegaCapStock[], timestamp: string): US100Volatility {
+  if (liveStocks.length === 0) {
+    return {
+      vix: null, vixChange: null, vixChangePercent: null,
+      vxn: null, vxnChange: null, vxnChangePercent: null,
+      trend: "Normal" as const, riskRating: "Moderate" as const,
+      meta: { status: "unavailable" as const, source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp, error: "Source data unavailable" },
+    };
+  }
+
   const avgRange = liveStocks.reduce((sum, s) => {
     if (s.previousClose > 0) return sum + ((s.high - s.low) / s.previousClose) * 100;
     return sum;
@@ -280,6 +321,17 @@ function deriveVolatility(liveStocks: US100MegaCapStock[], timestamp: string): U
 }
 
 function deriveMarketBreadth(liveStocks: US100MegaCapStock[], timestamp: string): US100MarketBreadth {
+  if (liveStocks.length === 0) {
+    return {
+      advanceDecline: "0-0",
+      newHighs: 0,
+      newLows: 0,
+      breadthScore: 0,
+      overallHealth: "Critical" as const,
+      meta: { status: "unavailable" as const, source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp, error: "Source data unavailable" },
+    };
+  }
+
   const bullishCount = liveStocks.filter((s) => s.changePercent > 0.5).length;
   const bearishCount = liveStocks.filter((s) => s.changePercent < -0.5).length;
   const total = liveStocks.length;
