@@ -93,7 +93,7 @@ export function getResearchProfile(asset: ResearchAsset): ResearchProfile | unde
 }
 
 export function healthCheck(): Record<ResearchAsset, boolean> {
-  const assets: ResearchAsset[] = ["gold"];
+  const assets: ResearchAsset[] = ["gold", "us100"];
   const result: Record<string, boolean> = {};
   for (const asset of assets) {
     result[asset] = hasProfile(asset);

@@ -380,6 +380,7 @@ function buildFallbackAnalysis(
         "technical-bias": 0,
         "institutional-flow": 0,
         "decision-engine": 0,
+        "institutional-decision": 0,
         diagnostics: 0,
         complete: 0
       },

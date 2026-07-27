@@ -12,7 +12,7 @@ export function InstitutionalSummaryCard({ institutionalFlow }: InstitutionalSum
   if (!hasData) {
     return (
       <ResearchSection title="Institutional Flow" icon={<Layers3 size={16} />}>
-        <EmptyState icon={<AlertTriangle size={24} />} title="No Institutional Data" description="Run auto-fill to generate institutional flow analysis." />
+        <EmptyState icon={<AlertTriangle size={24} />} title="Institutional Flow Unavailable" description="Institutional flow unavailable. Waiting for: Market Breadth, Sector Rotation, Volatility, Mega Cap Leadership." />
       </ResearchSection>
     );
   }

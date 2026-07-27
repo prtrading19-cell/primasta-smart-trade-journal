@@ -12,7 +12,7 @@ export function TechnicalCard({ technicalBias }: TechnicalCardProps) {
   if (!hasData) {
     return (
       <ResearchSection title="Technical Analysis" icon={<TrendingUp size={16} />}>
-        <EmptyState icon={<AlertTriangle size={24} />} title="No Technical Data" description="Run auto-fill to generate technical analysis." />
+        <EmptyState icon={<AlertTriangle size={24} />} title="Technical Data Unavailable" description="Technical data unavailable. Waiting for: Price history, Technical indicators, Trend analysis." />
       </ResearchSection>
     );
   }

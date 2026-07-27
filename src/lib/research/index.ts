@@ -63,6 +63,10 @@ export {
 } from "./ResearchDecisionEngine";
 
 export {
+  calculateInstitutionalDecision,
+} from "./InstitutionalDecisionEngine";
+
+export {
   buildAssetAnalystInstruction,
   buildAssetAnalystPrompt,
   buildAssetDataContext,

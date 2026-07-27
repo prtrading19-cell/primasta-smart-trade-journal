@@ -12,12 +12,14 @@ import type { TechnicalInput, TechnicalBiasResult } from "@/types/technicalBias"
 import type { InstitutionalFlowInput, InstitutionalFlowResult } from "@/types/institutionalFlow";
 import type { CategoryScoreBatchResult } from "@/lib/categoryScoreEngine";
 import type { DecisionEngineResult } from "@/types/decisionEngine";
+import type { InstitutionalDecisionResult } from "./InstitutionalDecisionTypes";
 import type { OrchestratorOptions } from "@/types/goldResearchAnalysis";
 import { getProfile } from "./ResearchRegistry";
 import { calculateCategoryScoresBatch } from "@/lib/categoryScoreEngine";
 import { calculateTechnicalBias } from "@/lib/technicalBiasEngine";
 import { calculateInstitutionalFlow } from "@/lib/institutionalFlowEngine";
 import { calculateResearchDecision } from "./ResearchDecisionEngine";
+import { calculateInstitutionalDecision } from "./InstitutionalDecisionEngine";
 import {
   createEngineDiagnostic,
   startStageTiming,
@@ -188,6 +190,39 @@ export function executeResearchEngine(
     ));
   }
 
+  // Stage 5: Institutional Decision (enhanced)
+  let institutionalDecision: InstitutionalDecisionResult | undefined;
+  if (!options.skipDecisionEngine && profile) {
+    if (categoryScores.scores.length > 0 || technicalBias.technicalScore > 0 || institutionalFlow.institutionalScore > 0) {
+      const stopTiming = startStageTiming(diagnostics, "institutional-decision");
+      const startTime = performance.now();
+      try {
+        institutionalDecision = calculateInstitutionalDecision({
+          asset: input.asset,
+          profile,
+          driverAnalyses,
+          categoryScores,
+          technicalBias,
+          institutionalFlow,
+          researchBias: input.researchBias,
+          currentPrice: input.currentPrice,
+        });
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "InstitutionalDecisionEngine", "success", elapsed, 3, 3, undefined, []
+        ));
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "InstitutionalDecisionEngine", "failed", elapsed, 3, 3,
+          err instanceof Error ? err.message : "Unknown error"
+        ));
+      }
+    }
+  }
+
   finalizeDiagnostics(diagnostics, pipelineStartTime);
 
   const executionTimeMs = Math.round(performance.now() - pipelineStartTime);
@@ -202,6 +237,7 @@ export function executeResearchEngine(
     technicalBias,
     institutionalFlow,
     decision,
+    institutionalDecision,
     diagnostics,
     warnings: diagnostics.warnings,
     executionTimeMs,
@@ -371,7 +407,7 @@ function buildEmptyResult(asset: ResearchAsset, error: string): ResearchEngineRe
       totalExecutionTimeMs: 0,
       stageTimings: {
         validation: 0, "category-scoring": 0, "technical-bias": 0,
-        "institutional-flow": 0, "decision-engine": 0, diagnostics: 0, complete: 0,
+        "institutional-flow": 0, "decision-engine": 0, "institutional-decision": 0, diagnostics: 0, complete: 0,
       },
       engines: [],
       overallStatus: "failed",

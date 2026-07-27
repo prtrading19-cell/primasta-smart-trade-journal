@@ -10,6 +10,7 @@ export type PipelineStage =
   | "technical-bias"
   | "institutional-flow"
   | "decision-engine"
+  | "institutional-decision"
   | "diagnostics"
   | "complete";
 

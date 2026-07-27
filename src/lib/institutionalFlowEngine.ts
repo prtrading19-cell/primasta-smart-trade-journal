@@ -115,7 +115,7 @@ export function analyzeEtfFlows(
 ): InstitutionalFactor[] {
   if (!etf || etf.direction === "Unknown") {
     return [{
-      name: "Gold ETF Flows",
+      name: "ETF Flows",
       direction: "Neutral",
       strength: "None",
       weight,
@@ -139,7 +139,7 @@ export function analyzeEtfFlows(
   ].filter(Boolean).join(" ");
 
   return [{
-    name: "Gold ETF Flows",
+    name: "ETF Flows",
     direction: direction as "Bullish" | "Bearish",
     strength,
     weight,

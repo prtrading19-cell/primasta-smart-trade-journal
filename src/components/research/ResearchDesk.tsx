@@ -5,7 +5,7 @@ import { RefreshCw, AlertTriangle } from "lucide-react";
 import { useResearchAsset } from "@/context/ResearchAssetContext";
 import { getProfile } from "@/lib/research/ResearchRegistry";
 import { analyzeResearchAsset, buildAutoFillSummary } from "@/lib/research/ResearchService";
-import { collectUS100Data, mapUS100DataToEngine, buildUS100MacroContext } from "@/lib/research/us100";
+import { collectUS100Data, mapUS100DataToEngine, buildUS100MacroContext, buildUS100TechnicalInput, buildUS100InstitutionalInput } from "@/lib/research/us100";
 import type { US100FullDataset } from "@/lib/research/us100";
 import type { ResearchEngineResult, ResearchSummary, ResearchSection } from "@/lib/research/ResearchTypes";
 import type { DriverAnalysisObject } from "@/types/goldResearchConfig";
@@ -54,9 +54,13 @@ export function US100ResearchDesk() {
       setDataset(data);
 
       const driverAnalyses: DriverAnalysisObject[] = mapUS100DataToEngine(data);
+      const technicalInput = buildUS100TechnicalInput(data);
+      const institutionalInput = buildUS100InstitutionalInput(data);
       const result = analyzeResearchAsset({
         asset: "us100",
         driverAnalyses,
+        technicalInput,
+        institutionalInput,
         currentPrice: data.index.meta.status === "live" ? data.index.price : undefined,
         timestamp: data.collectedAt,
       });
@@ -155,7 +159,7 @@ export function US100ResearchDesk() {
           {/* Decision + Market Overview — top row */}
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <MarketOverviewCard index={dataset.index} />
-            {engineResult && <DecisionCard decision={engineResult.decision} />}
+            {engineResult && <DecisionCard decision={engineResult.decision} institutionalDecision={engineResult.institutionalDecision} />}
           </div>
 
           {/* Mega Cap Leadership — full width */}
@@ -175,7 +179,7 @@ export function US100ResearchDesk() {
 
           {/* Market Breadth + Technical — two column */}
           <div className="grid gap-6 md:grid-cols-2">
-            <MarketBreadthCard available={false} />
+            <MarketBreadthCard available={engineResult?.categoryScores.scores.some(s => s.categoryId === "breadth" && s.driverCount > 0 && s.confidence > 20) ?? false} />
             {engineResult && <TechnicalCard technicalBias={engineResult.technicalBias} />}
           </div>
 

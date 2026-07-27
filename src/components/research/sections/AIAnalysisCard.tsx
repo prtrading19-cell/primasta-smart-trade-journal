@@ -10,7 +10,7 @@ export function AIAnalysisCard({ summary }: AIAnalysisCardProps) {
   if (!summary) {
     return (
       <ResearchSection title="AI Summary" icon={<BrainCircuit size={16} />}>
-        <EmptyState icon={<AlertTriangle size={24} />} title="No AI Analysis" description="Run auto-fill to generate AI-powered research summary." />
+        <EmptyState icon={<AlertTriangle size={24} />} title="AI Summary Unavailable" description="AI summary unavailable. Waiting for sufficient market data." />
       </ResearchSection>
     );
   }

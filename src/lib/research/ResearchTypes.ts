@@ -4,6 +4,7 @@ import type { TechnicalInput, TechnicalBiasResult } from "@/types/technicalBias"
 import type { InstitutionalFlowInput, InstitutionalFlowResult } from "@/types/institutionalFlow";
 import type { DecisionEngineResult, DecisionAction, RiskRating, DecisionQuality, Contributor, AlignmentBreakdown, ConflictBreakdown, DecisionExplanation } from "@/types/decisionEngine";
 import type { PipelineDiagnostics, EngineDiagnostic, PipelineStatus, EngineStatus, OrchestratorOptions } from "@/types/goldResearchAnalysis";
+import type { InstitutionalDecisionResult } from "./InstitutionalDecisionTypes";
 
 export type ResearchAsset = "gold" | "us100" | "spx500" | "btcusd" | "eurusd" | "gbpusd" | "silver" | "oil";
 
@@ -112,6 +113,7 @@ export interface ResearchEngineResult {
   technicalBias: TechnicalBiasResult;
   institutionalFlow: InstitutionalFlowResult;
   decision: DecisionEngineResult;
+  institutionalDecision?: InstitutionalDecisionResult;
   diagnostics: PipelineDiagnostics;
   warnings: string[];
   executionTimeMs: number;
@@ -190,3 +192,4 @@ export { CategoryScoreBatchResult };
 export { TechnicalInput, TechnicalBiasResult };
 export { InstitutionalFlowInput, InstitutionalFlowResult };
 export { DecisionEngineResult, DecisionAction, RiskRating, DecisionQuality, Contributor, AlignmentBreakdown, ConflictBreakdown, DecisionExplanation };
+export type { InstitutionalDecisionResult, CategoryBreakdown, InstitutionalExplanation, InstitutionalMarketBias, InstitutionalRiskRating, TradeRecommendation, CategoryStatus } from "./InstitutionalDecisionTypes";
