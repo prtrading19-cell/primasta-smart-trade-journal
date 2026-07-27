@@ -33,6 +33,9 @@ export function DataStatusCard({ sources, collectedAt, errors }: DataStatusCardP
                 <span className="text-[10px] text-text-muted">{s.status}</span>
                 {s.timestamp && <TimestampBadge timestamp={s.timestamp} />}
               </div>
+              {s.status !== "live" && s.error && (
+                <div className="mt-0.5 truncate text-[10px] text-loss" title={s.error}>{s.error}</div>
+              )}
             </div>
           </div>
         ))}
