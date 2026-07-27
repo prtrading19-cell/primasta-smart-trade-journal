@@ -71,9 +71,9 @@ export function mapUS100DataToEngine(dataset: US100FullDataset): DriverAnalysisO
       driverId: "us100-price", driverTitle: "US100 Price", categoryId: "market-overview",
       bias: priceBias.bias, biasReason: priceBias.reason,
       strength: inferStrengthFromChange(idx.changePercent),
-      confidence: 85, confidenceReason: "Live FMP data",
+      confidence: 85, confidenceReason: "Live derived data",
       technicalObservation: `Current: ${idx.price.toFixed(2)}, Range: ${idx.low.toFixed(2)}–${idx.high.toFixed(2)}`,
-      source: "FMP", weight: 1.0, contribution: priceBias.bias.includes("Bullish") ? 1.0 : priceBias.bias.includes("Bearish") ? -1.0 : 0,
+      source: idx.meta.source, weight: 1.0, contribution: priceBias.bias.includes("Bullish") ? 1.0 : priceBias.bias.includes("Bearish") ? -1.0 : 0,
       dataFields: { price: String(idx.price), open: String(idx.open), high: String(idx.high), low: String(idx.low), previousClose: String(idx.previousClose) },
     }));
     const dailyBias = inferBiasFromChange(idx.changePercent);
@@ -81,39 +81,39 @@ export function mapUS100DataToEngine(dataset: US100FullDataset): DriverAnalysisO
       driverId: "us100-daily-pct", driverTitle: "Daily %", categoryId: "market-overview",
       bias: dailyBias.bias, biasReason: dailyBias.reason,
       strength: inferStrengthFromChange(idx.changePercent),
-      confidence: 90, confidenceReason: "Live calculation from FMP data",
+      confidence: 90, confidenceReason: "Live calculation from derived data",
       technicalObservation: `Daily change: ${idx.changePercent >= 0 ? "+" : ""}${idx.changePercent.toFixed(2)}%`,
-      source: "FMP", weight: 1.0, contribution: idx.changePercent,
+      source: idx.meta.source, weight: 1.0, contribution: idx.changePercent,
       dataFields: { dailyChange: `${idx.changePercent.toFixed(2)}%`, dailyChangeAbs: String(idx.change) },
     }));
     drivers.push(buildBase({
       driverId: "us100-weekly-pct", driverTitle: "Weekly %", categoryId: "market-overview",
       bias: dailyBias.bias, biasReason: "Derived from daily movement",
       strength: "Weak", confidence: 50, confidenceReason: "Estimated from daily data",
-      source: "FMP", weight: 1.0, contribution: 0,
+      source: idx.meta.source, weight: 1.0, contribution: 0,
       dataFields: { weeklyChange: "Estimated" },
     }));
     drivers.push(buildBase({
       driverId: "us100-session-high", driverTitle: "Session High", categoryId: "market-overview",
       bias: idx.price >= idx.high * 0.99 ? "Bullish" : "Neutral",
       biasReason: `Session high: ${idx.high.toFixed(2)}`,
-      strength: "Weak", confidence: 80, confidenceReason: "Live FMP data",
-      source: "FMP", weight: 1.0, contribution: 0,
+      strength: "Weak", confidence: 80, confidenceReason: "Live derived data",
+      source: idx.meta.source, weight: 1.0, contribution: 0,
       dataFields: { sessionHigh: String(idx.high) },
     }));
     drivers.push(buildBase({
       driverId: "us100-session-low", driverTitle: "Session Low", categoryId: "market-overview",
       bias: idx.price <= idx.low * 1.01 ? "Bearish" : "Neutral",
       biasReason: `Session low: ${idx.low.toFixed(2)}`,
-      strength: "Weak", confidence: 80, confidenceReason: "Live FMP data",
-      source: "FMP", weight: 1.0, contribution: 0,
+      strength: "Weak", confidence: 80, confidenceReason: "Live derived data",
+      source: idx.meta.source, weight: 1.0, contribution: 0,
       dataFields: { sessionLow: String(idx.low) },
     }));
     drivers.push(buildBase({
       driverId: "us100-volume", driverTitle: "Volume", categoryId: "market-overview",
       bias: "Neutral", biasReason: `Volume: ${idx.volume}`,
-      strength: "None", confidence: 70, confidenceReason: "Live FMP data",
-      source: "FMP", weight: 1.0, contribution: 0,
+      strength: "None", confidence: 70, confidenceReason: "Live derived data",
+      source: idx.meta.source, weight: 1.0, contribution: 0,
       dataFields: { volume: String(idx.volume) },
     }));
     drivers.push(buildBase({
@@ -250,19 +250,19 @@ export function mapUS100DataToEngine(dataset: US100FullDataset): DriverAnalysisO
     const vixBias: DriverBias = (vol.vix ?? 0) > 25 ? "Bearish" : (vol.vix ?? 0) > 20 ? "Mixed-Wait" as unknown as DriverBias : "Bullish";
     drivers.push(buildBase({
       driverId: "us100-vix", driverTitle: "VIX", categoryId: "volatility",
-      bias: vixBias, biasReason: `VIX at ${vol.vix ?? "N/A"}, trend: ${vol.trend}`,
+      bias: vixBias, biasReason: `VIX at ${vol.vix !== null ? vol.vix.toFixed(2) : "N/A"}, trend: ${vol.trend}`,
       strength: vol.riskRating === "Extreme" || vol.riskRating === "High" ? "Strong" : "Moderate",
-      confidence: 85, confidenceReason: "Live FMP VIX data",
-      source: "FMP", weight: 1.0, contribution: vixBias.includes("Bearish") ? -1.5 : 1.0,
+      confidence: 85, confidenceReason: "Live derived volatility",
+      source: vol.meta.source, weight: 1.0, contribution: vixBias.includes("Bearish") ? -1.5 : 1.0,
       dataFields: { vix: String(vol.vix), vixChange: String(vol.vixChange), trend: vol.trend },
     }));
     const vxnBias: DriverBias = (vol.vxn ?? 0) > 28 ? "Bearish" : (vol.vxn ?? 0) > 22 ? "Mixed-Wait" as unknown as DriverBias : "Bullish";
     drivers.push(buildBase({
       driverId: "us100-vxn", driverTitle: "VXN", categoryId: "volatility",
-      bias: vxnBias, biasReason: `VXN at ${vol.vxn ?? "N/A"}, trend: ${vol.trend}`,
+      bias: vxnBias, biasReason: `VXN at ${vol.vxn !== null ? vol.vxn.toFixed(2) : "N/A"}, trend: ${vol.trend}`,
       strength: vol.riskRating === "Extreme" || vol.riskRating === "High" ? "Strong" : "Moderate",
-      confidence: 85, confidenceReason: "Live FMP VXN data",
-      source: "FMP", weight: 1.0, contribution: vxnBias.includes("Bearish") ? -1.5 : 1.0,
+      confidence: 85, confidenceReason: "Live derived volatility",
+      source: vol.meta.source, weight: 1.0, contribution: vxnBias.includes("Bearish") ? -1.5 : 1.0,
       dataFields: { vxn: String(vol.vxn), vxnChange: String(vol.vxnChange), trend: vol.trend },
     }));
     const riskBias: DriverBias = vol.riskRating === "Extreme" || vol.riskRating === "High" ? "Bearish" : vol.riskRating === "Moderate" ? "Neutral" : "Bullish";
@@ -313,8 +313,8 @@ export function mapUS100DataToEngine(dataset: US100FullDataset): DriverAnalysisO
         driverId, driverTitle: sectorKey.charAt(0).toUpperCase() + sectorKey.slice(1), categoryId: "sector-rotation",
         bias: sectorBias.bias, biasReason: sectorBias.reason,
         strength: inferStrengthFromChange(change),
-        confidence: 80, confidenceReason: "FMP sector ETF data",
-        source: "FMP", weight, contribution: change,
+        confidence: 80, confidenceReason: "Derived from Twelve Data stocks",
+        source: dataset.sectors.meta.source, weight, contribution: change,
         dataFields: { dailyChange: `${change.toFixed(2)}%`, etf: dataset.sectors.meta.source },
       }));
     }
@@ -354,10 +354,11 @@ export function buildUS100MacroContext(dataset: US100FullDataset): string {
   const idx = dataset.index;
   if (idx.meta.status === "live") {
     lines.push(`US100 Price: ${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? "+" : ""}${idx.changePercent.toFixed(2)}%)`);
+    lines.push(`Open: ${idx.open.toFixed(2)} | High: ${idx.high.toFixed(2)} | Low: ${idx.low.toFixed(2)} | Prev Close: ${idx.previousClose.toFixed(2)}`);
   }
   const vol = dataset.volatility;
   if (vol.meta.status === "live") {
-    lines.push(`VIX: ${vol.vix ?? "N/A"} | VXN: ${vol.vxn ?? "N/A"} | Risk: ${vol.riskRating}`);
+    lines.push(`VIX: ${vol.vix !== null ? vol.vix.toFixed(2) : "N/A"} | VXN: ${vol.vxn !== null ? vol.vxn.toFixed(2) : "N/A"} | Risk: ${vol.riskRating}`);
   }
   if (dataset.stocks.length > 0) {
     const topGainer = [...dataset.stocks].filter((s) => s.meta.status === "live").sort((a, b) => b.changePercent - a.changePercent)[0];

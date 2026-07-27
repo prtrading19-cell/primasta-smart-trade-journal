@@ -18,7 +18,7 @@ export function EarningsCard({ earnings }: EarningsCardProps) {
   if (liveEarnings.length === 0) {
     return (
       <ResearchSection title="Corporate Earnings" icon={<FileText size={16} />}>
-        <EmptyState icon={<AlertTriangle size={24} />} title="No Upcoming Earnings" description="No earnings data available from providers." />
+        <EmptyState icon={<AlertTriangle size={24} />} title="Earnings Data Unavailable" description="FMP earnings provider is currently unavailable due to quota/rate limiting. Please retry later." />
       </ResearchSection>
     );
   }

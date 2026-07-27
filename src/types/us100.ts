@@ -105,6 +105,15 @@ export interface US100CompanyProfile {
   meta: US100DataMeta;
 }
 
+export interface US100MarketBreadth {
+  advanceDecline: string;
+  newHighs: number;
+  newLows: number;
+  breadthScore: number;
+  overallHealth: "Healthy" | "Mixed" | "Weak" | "Critical";
+  meta: US100DataMeta;
+}
+
 export const US100_SECTOR_ETF_MAP: Record<string, string> = {
   technology: "XLK",
   semiconductors: "SMH",

@@ -5,10 +5,11 @@ import { RefreshCw, AlertTriangle } from "lucide-react";
 import { useResearchAsset } from "@/context/ResearchAssetContext";
 import { getProfile } from "@/lib/research/ResearchRegistry";
 import { analyzeResearchAsset, buildAutoFillSummary } from "@/lib/research/ResearchService";
-import { collectUS100Data, mapUS100DataToEngine, buildUS100MacroContext, buildUS100TechnicalInput, buildUS100InstitutionalInput } from "@/lib/research/us100";
+import { collectUS100Data, mapUS100DataToEngine, buildUS100TechnicalInput, buildUS100InstitutionalInput } from "@/lib/research/us100";
 import type { US100FullDataset } from "@/lib/research/us100";
 import type { ResearchEngineResult, ResearchSummary, ResearchSection } from "@/lib/research/ResearchTypes";
 import type { DriverAnalysisObject } from "@/types/goldResearchConfig";
+import type { InstitutionalFlowResult } from "@/types/institutionalFlow";
 
 import {
   MarketOverviewCard,
@@ -32,6 +33,46 @@ interface MacroDriver {
   impact: string;
   reason: string;
   source: string;
+}
+
+const US100_INSTITUTIONAL_TERM_MAP: Record<string, string> = {
+  "Central Bank Demand": "Large Trader Positioning",
+  "COT Positioning": "Market Participant Positioning",
+  "Open Interest": "Derivatives Exposure",
+};
+
+function refineUS100InstitutionalFlow(flow: InstitutionalFlowResult): InstitutionalFlowResult {
+  const renamedFactors = flow.factors.map((factor) => {
+    const name = US100_INSTITUTIONAL_TERM_MAP[factor.name] ?? factor.name;
+    const reason = factor.reason
+      .replace(/central bank/gi, "large trader")
+      .replace(/COT/gi, "market participant")
+      .replace(/open interest/gi, "derivatives exposure");
+    return { ...factor, name, reason };
+  });
+
+  const renamedAvailable = flow.dataQuality.availableDrivers.map((d) =>
+    US100_INSTITUTIONAL_TERM_MAP[d] ?? d
+  );
+  const renamedMissing = flow.dataQuality.missingDrivers.map((d) =>
+    US100_INSTITUTIONAL_TERM_MAP[d] ?? d
+  );
+
+  const summary = flow.summary
+    .replace(/central bank/gi, "large trader")
+    .replace(/COT/gi, "market participant")
+    .replace(/open interest/gi, "derivatives exposure");
+
+  return {
+    ...flow,
+    factors: renamedFactors,
+    summary,
+    dataQuality: {
+      ...flow.dataQuality,
+      availableDrivers: renamedAvailable,
+      missingDrivers: renamedMissing,
+    },
+  };
 }
 
 export function US100ResearchDesk() {
@@ -83,7 +124,14 @@ export function US100ResearchDesk() {
         console.log("[RUNTIME-AUDIT] engineResult.institutionalFlow:", JSON.stringify(result.analysis.institutionalFlow, null, 2));
         console.log("[RUNTIME-AUDIT] engineResult.decision:", JSON.stringify(result.analysis.decision, null, 2));
         console.log("[RUNTIME-AUDIT] engineResult.institutionalDecision:", JSON.stringify(result.analysis.institutionalDecision, null, 2));
-        setEngineResult(result.analysis);
+
+        const refinedInstitutionalFlow = refineUS100InstitutionalFlow(result.analysis.institutionalFlow);
+        const refinedAnalysis = {
+          ...result.analysis,
+          institutionalFlow: refinedInstitutionalFlow,
+        };
+
+        setEngineResult(refinedAnalysis);
         const sections: ResearchSection[] = driverAnalyses.map((d) => ({
           driver: d.driverTitle,
           currentDataValue: d.dataFields?.price ?? d.dataFields?.status ?? "",
@@ -95,7 +143,7 @@ export function US100ResearchDesk() {
           impact: d.bias,
           reason: d.reason || d.biasReason,
         }));
-        const decisionForSummary = result.analysis.decision;
+        const decisionForSummary = refinedAnalysis.decision;
         const s = buildAutoFillSummary("us100", sections, decisionForSummary);
         setSummary(s);
       } else {
@@ -117,10 +165,53 @@ export function US100ResearchDesk() {
 
   const macroDrivers: MacroDriver[] = useMemo(() => {
     if (!dataset) return [];
-    const ctx = buildUS100MacroContext(dataset);
-    return [
-      { label: "Market Snapshot", value: ctx || "N/A", impact: "Neutral", reason: "Derived from live data", source: "FMP / Twelve Data" },
-    ];
+    const drivers: MacroDriver[] = [];
+
+    if (dataset.index.meta.status === "live") {
+      drivers.push({
+        label: "Market Snapshot",
+        value: `${dataset.index.price.toFixed(2)} (${dataset.index.changePercent >= 0 ? "+" : ""}${dataset.index.changePercent.toFixed(2)}%)`,
+        impact: dataset.index.changePercent >= 0 ? "Bullish" : "Bearish",
+        reason: "Derived from live data",
+        source: dataset.index.meta.source,
+      });
+    }
+
+    if (dataset.volatility.meta.status === "live") {
+      const vol = dataset.volatility;
+      drivers.push({
+        label: "Volatility Environment",
+        value: `VIX ${vol.vix !== null ? vol.vix.toFixed(2) : "N/A"} | Risk: ${vol.riskRating}`,
+        impact: vol.riskRating === "Extreme" || vol.riskRating === "High" ? "Bearish" : "Neutral",
+        reason: "Derived from Twelve Data stocks",
+        source: vol.meta.source,
+      });
+    }
+
+    if (dataset.movers.meta.status === "live") {
+      if (dataset.movers.topGainers.length > 0) {
+        const top = dataset.movers.topGainers[0];
+        drivers.push({
+          label: "Top Gainer",
+          value: `${top.symbol} $${top.price.toFixed(2)} (+${top.changePercent.toFixed(2)}%)`,
+          impact: "Bullish",
+          reason: "Leading momentum",
+          source: dataset.movers.meta.source,
+        });
+      }
+      if (dataset.movers.topLosers.length > 0) {
+        const bottom = dataset.movers.topLosers[0];
+        drivers.push({
+          label: "Top Loser",
+          value: `${bottom.symbol} $${bottom.price.toFixed(2)} (${bottom.changePercent.toFixed(2)}%)`,
+          impact: "Bearish",
+          reason: "Weakest momentum",
+          source: dataset.movers.meta.source,
+        });
+      }
+    }
+
+    return drivers;
   }, [dataset]);
 
   const dataSources = useMemo(() => {
@@ -196,7 +287,7 @@ export function US100ResearchDesk() {
 
           {/* Market Breadth + Technical — two column */}
           <div className="grid gap-6 md:grid-cols-2">
-            <MarketBreadthCard available={engineResult?.categoryScores.scores.some(s => s.categoryId === "breadth" && s.driverCount > 0 && s.confidence > 20) ?? false} />
+            <MarketBreadthCard breadth={dataset.marketBreadth} />
             {engineResult && <TechnicalCard technicalBias={engineResult.technicalBias} />}
           </div>
 

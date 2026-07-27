@@ -8,7 +8,7 @@ import { fetchUS100Movers } from "@/lib/research/providers/fmp/marketMoversProvi
 import { fetchUS100Volatility } from "@/lib/research/providers/fmp/volatilityProvider";
 import { fetchCompanyProfiles } from "@/lib/research/providers/fmp/companyProfileProvider";
 import type { US100FullDataset } from "@/lib/research/us100/us100DataOrchestrator";
-import type { US100Index, US100SectorPerformance, US100Movers, US100Volatility, US100MegaCapStock, US100MarketMover } from "@/types/us100";
+import type { US100Index, US100SectorPerformance, US100Movers, US100Volatility, US100MarketBreadth, US100MegaCapStock, US100MarketMover } from "@/types/us100";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +60,7 @@ export async function GET() {
     movers: moversResult.data ?? buildFallbackMovers(collectedAt),
     volatility: volatilityResult.data ?? buildFallbackVolatility(collectedAt),
     profiles: profilesResult.data ?? [],
+    marketBreadth: buildFallbackMarketBreadth(collectedAt),
     collectedAt,
     sourceSummary,
     errors,
@@ -108,11 +109,23 @@ function buildFallbackVolatility(ts: string) {
   };
 }
 
+function buildFallbackMarketBreadth(ts: string) {
+  return {
+    advanceDecline: "0-0",
+    newHighs: 0,
+    newLows: 0,
+    breadthScore: 0,
+    overallHealth: "Critical" as const,
+    meta: { status: "unavailable" as const, source: "composite", timestamp: ts, lastUpdated: ts, error: "Provider unavailable" },
+  };
+}
+
 type EnrichedDataset = US100FullDataset & {
   index: US100Index;
   sectors: US100SectorPerformance;
   movers: US100Movers;
   volatility: US100Volatility;
+  marketBreadth: US100MarketBreadth;
 };
 
 function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset {
@@ -127,6 +140,7 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
     sectors: dataset.sectors.meta.status === "live" ? dataset.sectors : deriveSectors(liveStocks, dataset.collectedAt),
     movers: dataset.movers.meta.status === "live" ? dataset.movers : deriveMovers(liveStocks, dataset.collectedAt),
     volatility: dataset.volatility.meta.status === "live" ? dataset.volatility : deriveVolatility(liveStocks, dataset.collectedAt),
+    marketBreadth: dataset.marketBreadth.meta.status === "live" ? dataset.marketBreadth : deriveMarketBreadth(liveStocks, dataset.collectedAt),
   };
 
   if (enriched.index.meta.source !== dataset.index.meta.source) {
@@ -141,6 +155,9 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
   if (enriched.volatility.meta.source !== dataset.volatility.meta.source) {
     enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Volatility"];
   }
+  if (enriched.marketBreadth.meta.source !== dataset.marketBreadth.meta.source) {
+    enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Breadth"];
+  }
 
   return enriched;
 }
@@ -151,15 +168,24 @@ function deriveIndex(liveStocks: US100MegaCapStock[], timestamp: string): US100I
   const avgPrevClose = liveStocks.reduce((sum, s) => sum + s.previousClose, 0) / liveStocks.length;
   const changePercent = avgPrevClose > 0 ? (avgChange / avgPrevClose) * 100 : 0;
 
+  const open = avgPrevClose;
+  const avgIntradayRangePct = liveStocks.reduce((sum, s) => {
+    if (s.previousClose > 0) return sum + ((s.high - s.low) / s.previousClose) * 100;
+    return sum;
+  }, 0) / liveStocks.length;
+
+  const high = avgPrevClose * (1 + (changePercent + avgIntradayRangePct / 2) / 100);
+  const low = avgPrevClose * (1 + (changePercent - avgIntradayRangePct / 2) / 100);
+
   return {
     symbol: "^NDX",
     name: "NASDAQ-100 Composite (Derived)",
     price: avgPrice,
     change: avgChange,
     changePercent,
-    open: avgPrice - avgChange,
-    high: Math.max(...liveStocks.map((s) => s.high)),
-    low: Math.min(...liveStocks.map((s) => s.low)),
+    open,
+    high,
+    low,
     previousClose: avgPrevClose,
     volume: liveStocks.reduce((sum, s) => sum + s.volume, 0),
     timestamp,
@@ -240,6 +266,32 @@ function deriveVolatility(liveStocks: US100MegaCapStock[], timestamp: string): U
     vxnChangePercent: null,
     trend: trend as US100Volatility["trend"],
     riskRating: riskRating as US100Volatility["riskRating"],
+    meta: { status: "live", source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp },
+  };
+}
+
+function deriveMarketBreadth(liveStocks: US100MegaCapStock[], timestamp: string): US100MarketBreadth {
+  const bullishCount = liveStocks.filter((s) => s.changePercent > 0.5).length;
+  const bearishCount = liveStocks.filter((s) => s.changePercent < -0.5).length;
+  const total = liveStocks.length;
+  const advanceDecline = `${bullishCount}-${bearishCount}`;
+
+  const newHighs = liveStocks.filter((s) => s.changePercent >= 1.0).length;
+  const newLows = liveStocks.filter((s) => s.changePercent <= -1.0).length;
+  const breadthScore = total > 0 ? Math.round((bullishCount / total) * 100) : 0;
+
+  let overallHealth: US100MarketBreadth["overallHealth"];
+  if (breadthScore >= 70) overallHealth = "Healthy";
+  else if (breadthScore >= 50) overallHealth = "Mixed";
+  else if (breadthScore >= 30) overallHealth = "Weak";
+  else overallHealth = "Critical";
+
+  return {
+    advanceDecline,
+    newHighs,
+    newLows,
+    breadthScore,
+    overallHealth,
     meta: { status: "live", source: "Derived from Twelve Data", timestamp, lastUpdated: timestamp },
   };
 }

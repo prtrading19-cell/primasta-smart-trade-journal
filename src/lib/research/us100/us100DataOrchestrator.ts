@@ -6,6 +6,7 @@ import type {
   US100Movers,
   US100Volatility,
   US100CompanyProfile,
+  US100MarketBreadth,
   US100DataMeta,
 } from "@/types/us100";
 
@@ -17,6 +18,7 @@ export interface US100FullDataset {
   movers: US100Movers;
   volatility: US100Volatility;
   profiles: US100CompanyProfile[];
+  marketBreadth: US100MarketBreadth;
   collectedAt: string;
   sourceSummary: string[];
   errors: string[];
@@ -103,6 +105,14 @@ function buildFallbackDataset(ts: string, error: string): US100FullDataset {
       meta: { status: "unavailable", source: "FMP", timestamp: ts, lastUpdated: ts, error },
     },
     profiles: [],
+    marketBreadth: {
+      advanceDecline: "0-0",
+      newHighs: 0,
+      newLows: 0,
+      breadthScore: 0,
+      overallHealth: "Critical",
+      meta: { status: "unavailable", source: "composite", timestamp: ts, lastUpdated: ts, error },
+    },
     collectedAt: ts,
     sourceSummary: [],
     errors: [error],

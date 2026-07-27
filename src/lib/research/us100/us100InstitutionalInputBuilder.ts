@@ -48,7 +48,7 @@ function deriveEtfFlows(dataset: US100FullDataset): InstitutionalFlowInput["etfF
   return {
     direction,
     magnitude,
-    source: "FMP",
+    source: dataset.sectors.meta.source,
     notes: `Derived from ${sectorChanges.length} sector ETFs. Positive: ${positiveCount}, Negative: ${negativeCount}, Avg: ${avgChange >= 0 ? "+" : ""}${avgChange.toFixed(2)}%`,
   };
 }
@@ -96,7 +96,7 @@ function derivePositionRisk(dataset: US100FullDataset): InstitutionalFlowInput["
 
   return {
     level,
-    source: "FMP",
+    source: vol.meta.source,
     notes: `VIX: ${vix.toFixed(2)} | VXN: ${vol.vxn?.toFixed(2) ?? "N/A"} | Risk Rating: ${vol.riskRating}`,
   };
 }
