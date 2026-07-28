@@ -144,7 +144,7 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
 
   const enriched: EnrichedDataset = {
     ...dataset,
-    index: dataset.index,
+    index: dataset.index.meta.status === "live" ? dataset.index : derivedIndex,
     sectors: dataset.sectors.meta.status === "live" ? dataset.sectors : deriveSectors(liveStocks, dataset.collectedAt),
     movers: dataset.movers.meta.status === "live" ? dataset.movers : deriveMovers(liveStocks, dataset.collectedAt),
     volatility: dataset.volatility.meta.status === "live" ? dataset.volatility : deriveVolatility(liveStocks, dataset.collectedAt),

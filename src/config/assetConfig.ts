@@ -76,7 +76,7 @@ export const ASSET_CONFIG: AssetMetadata[] = [
   },
 ];
 
-export const DEFAULT_ASSET: ResearchAsset = "gold";
+export const DEFAULT_ASSET: ResearchAsset = "us100";
 
 export function getAssetMetadata(id: ResearchAsset): AssetMetadata {
   return ASSET_CONFIG.find((a) => a.id === id) ?? ASSET_CONFIG[0];

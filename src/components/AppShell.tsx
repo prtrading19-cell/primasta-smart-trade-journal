@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  if (authLoading) {
+  if (false && authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-base">
         <div className="space-y-4 text-center">
