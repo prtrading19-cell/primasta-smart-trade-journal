@@ -144,7 +144,7 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
 
   const enriched: EnrichedDataset = {
     ...dataset,
-    index: dataset.index.meta.status === "live" ? dataset.index : derivedIndex,
+    index: dataset.index,
     sectors: dataset.sectors.meta.status === "live" ? dataset.sectors : deriveSectors(liveStocks, dataset.collectedAt),
     movers: dataset.movers.meta.status === "live" ? dataset.movers : deriveMovers(liveStocks, dataset.collectedAt),
     volatility: dataset.volatility.meta.status === "live" ? dataset.volatility : deriveVolatility(liveStocks, dataset.collectedAt),
@@ -164,9 +164,9 @@ function enrichUnavailableProviders(dataset: US100FullDataset): EnrichedDataset 
   if (enriched.marketBreadth.meta.source !== dataset.marketBreadth.meta.source) {
     enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Breadth"];
   }
-  if (derivedIndex.meta.status === "live" && dataset.index.meta.status !== "live") {
-    enriched.sourceSummary = [...enriched.sourceSummary, "Derived Twelve Data Index"];
-  }
+  // Note: derivedIndex is NOT promoted to dataset.index because neither FMP free tier nor
+  // Twelve Data free tier supports the real NASDAQ-100 index (^NDX) — both require paid plans.
+  // The derivedIndex field remains available for AI input builders that tolerate approximate values.
 
   return enriched;
 }
