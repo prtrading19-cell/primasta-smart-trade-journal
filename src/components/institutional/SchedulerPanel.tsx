@@ -1,4 +1,7 @@
-import { Pause, Play, RotateCw, Settings2 } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Pause, Play, RotateCw, Settings2, Square, Undo2 } from "lucide-react";
 import type { InstitutionalScheduler } from "./types";
 import { Panel, formatClock, formatDuration } from "./primitives";
 import { cn } from "@/lib/format";
@@ -9,18 +12,41 @@ const STATUS_STYLE: Record<string, string> = {
   stopped: "bg-loss/10 text-loss",
 };
 
-async function schedulerAction(action: string, mutate: () => void) {
+async function schedulerAction(action: string, payload: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
   try {
-    await fetch(`/api/admin/scheduler?action=${action}`, { method: "POST" });
-  } catch {
-    /* noop */
+    const response = await fetch("/api/admin/scheduler", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return { ok: false, error: (data as { error?: string }).error ?? `Request failed (${response.status})` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Network error" };
   }
-  mutate();
 }
 
 export function SchedulerPanel({ scheduler, onMutate }: { scheduler: InstitutionalScheduler; onMutate?: () => void }) {
   const mutate = onMutate ?? (() => {});
   const isRunning = scheduler.status === "running";
+  const isPaused = scheduler.status === "paused";
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const runAction = async (action: string, payload: Record<string, string> = {}) => {
+    setBusyAction(action);
+    setActionError(null);
+    const result = await schedulerAction(action, payload);
+    setBusyAction(null);
+    if (result.ok) {
+      mutate();
+    } else {
+      setActionError(result.error ?? "Action failed");
+    }
+  };
 
   const stats = [
     { label: "Uptime", value: formatDuration(scheduler.uptimeMs), sub: `since ${formatClock(scheduler.startedAt)}` },
@@ -38,24 +64,49 @@ export function SchedulerPanel({ scheduler, onMutate }: { scheduler: Institution
       icon={Settings2}
       badge={<span className={cn("rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", STATUS_STYLE[scheduler.status] ?? STATUS_STYLE.stopped)}>{scheduler.status}</span>}
     >
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => schedulerAction(isRunning ? "pause" : "start", mutate)}
+          disabled={busyAction !== null}
+          onClick={() => runAction(isRunning ? "pause" : isPaused ? "resume" : "start")}
           className={cn(
-            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
             isRunning ? "bg-warning/15 text-warning hover:bg-warning/25" : "bg-profit/15 text-profit hover:bg-profit/25"
           )}
         >
           {isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          {isRunning ? "Pause" : "Start"}
+          {isRunning ? "Pause" : isPaused ? "Resume" : "Start"}
         </button>
         <button
-          onClick={() => schedulerAction("refresh-all", mutate)}
-          className="flex items-center gap-1.5 rounded-lg bg-gold/15 px-3 py-1.5 text-xs font-bold text-gold transition-colors hover:bg-gold/25"
+          disabled={busyAction !== null || !isRunning}
+          onClick={() => runAction("stop")}
+          className="flex items-center gap-1.5 rounded-lg bg-loss/15 px-3 py-1.5 text-xs font-bold text-loss transition-colors hover:bg-loss/25 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RotateCw className="h-3.5 w-3.5" /> Refresh All
+          <Square className="h-3.5 w-3.5" /> Stop
         </button>
-        {scheduler.lastError && (
+        <button
+          disabled={busyAction !== null}
+          onClick={() => runAction("runOnce")}
+          className="flex items-center gap-1.5 rounded-lg bg-gold/15 px-3 py-1.5 text-xs font-bold text-gold transition-colors hover:bg-gold/25 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Undo2 className="h-3.5 w-3.5" /> Run Once
+        </button>
+        <button
+          disabled={busyAction !== null}
+          onClick={() => runAction("refreshAll")}
+          className="flex items-center gap-1.5 rounded-lg bg-gold/15 px-3 py-1.5 text-xs font-bold text-gold transition-colors hover:bg-gold/25 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RotateCw className={cn("h-3.5 w-3.5", busyAction === "refreshAll" && "animate-spin")} /> Refresh All
+        </button>
+        {busyAction && (
+          <span className="ml-auto flex items-center gap-2 text-[10px] text-text-muted">
+            <span className="h-3 w-3 animate-spin rounded-full border border-gold border-t-transparent" />
+            {busyAction}...
+          </span>
+        )}
+        {actionError && (
+          <span className="ml-auto truncate text-[10px] text-loss">Error: {actionError}</span>
+        )}
+        {!actionError && scheduler.lastError && (
           <span className="ml-auto truncate text-[10px] text-loss">Last error: {scheduler.lastError}</span>
         )}
       </div>

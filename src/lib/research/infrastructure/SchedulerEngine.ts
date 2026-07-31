@@ -113,19 +113,19 @@ export class SchedulerEngine {
   /* ── Manual Refresh Controls ── */
 
   async runOnce(): Promise<void> {
-    await this.processQueue();
+    await this.processQueue(true);
   }
 
   async runProvider(providerId: string, priority: RefreshPriority = "normal"): Promise<void> {
     this.queue.enqueue("provider", providerId, priority);
     this.events.emit({ type: "refreshStart", timestamp: Date.now(), providerId });
-    await this.processQueue();
+    await this.processQueue(true);
   }
 
   async runAsset(assetId: string, priority: RefreshPriority = "normal"): Promise<void> {
     this.queue.enqueue("asset", assetId, priority);
     this.events.emit({ type: "refreshStart", timestamp: Date.now(), assetId });
-    await this.processQueue();
+    await this.processQueue(true);
   }
 
   async runAllAssets(priority: RefreshPriority = "normal"): Promise<void> {
@@ -136,7 +136,7 @@ export class SchedulerEngine {
     for (const assetClass of assetClasses) {
       this.queue.enqueue("asset", assetClass, priority);
     }
-    await this.processQueue();
+    await this.processQueue(true);
   }
 
   /* ── Queue Processing ── */
@@ -162,8 +162,8 @@ export class SchedulerEngine {
     }
   }
 
-  private async processQueue(): Promise<void> {
-    while (this.status === "running") {
+  private async processQueue(force = false): Promise<void> {
+    while (force || this.status === "running") {
       const item = this.queue.dequeue();
       if (!item) break;
 

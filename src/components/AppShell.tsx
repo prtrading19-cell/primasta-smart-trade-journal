@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         isCloudSync={isCloudSync}
       />
 
-      <div className={cn("flex min-h-screen flex-1 flex-col transition-all duration-300", collapsed ? "lg:ml-[72px]" : "lg:ml-[260px]")}>
+      <div className={cn("flex min-h-screen min-w-0 flex-1 flex-col transition-all duration-300", collapsed ? "lg:ml-[72px]" : "lg:ml-[260px]")}>
         <TopBar
           onMenuClick={() => setMobileOpen(true)}
           metrics={{
@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           }}
         />
 
-        <main className="flex-1 px-4 py-6 lg:px-8">
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 lg:px-8">
           {dataError && (
             <div className="mb-4 rounded-lg border border-loss/20 bg-loss/5 px-4 py-3 text-sm text-loss animate-fade-in">
               {dataError}

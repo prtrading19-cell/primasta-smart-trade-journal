@@ -139,9 +139,9 @@ export function Panel({ eyebrow, title, icon, badge, children, className }: {
   className?: string;
 }) {
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border-subtle bg-surface-card", className)}>
+    <div className={cn("min-w-0 overflow-hidden rounded-xl border border-border-subtle bg-surface-card", className)}>
       <PanelHeader eyebrow={eyebrow} title={title} icon={icon} badge={badge} />
-      <div className="p-5">{children}</div>
+      <div className="min-w-0 p-5">{children}</div>
     </div>
   );
 }

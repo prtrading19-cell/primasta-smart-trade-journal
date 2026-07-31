@@ -19,7 +19,11 @@ export async function POST(req: NextRequest) {
   const engine = SchedulerEngine.getInstance();
 
   const body = await req.json().catch(() => ({}));
-  const { action, providerId, assetId, priority } = body;
+  const searchParams = req.nextUrl.searchParams;
+  const action = body.action ?? searchParams.get("action");
+  const providerId = body.providerId ?? searchParams.get("providerId");
+  const assetId = body.assetId ?? searchParams.get("assetId");
+  const priority = body.priority ?? searchParams.get("priority");
 
   try {
     switch (action) {
