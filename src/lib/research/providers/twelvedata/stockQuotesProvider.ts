@@ -1,6 +1,6 @@
 import type { US100MegaCapStock, US100DataMeta } from "@/types/us100";
+import { RequestManager } from "@/lib/research/infrastructure/RequestManager";
 
-const GLOBAL_TIMEOUT_MS = 20000;
 const PER_REQUEST_TIMEOUT_MS = 10000;
 const TD_BASE = "https://api.twelvedata.com";
 
@@ -23,47 +23,33 @@ export async function fetchStockQuotes(symbols: readonly string[]): Promise<US10
   const startTime = Date.now();
   const apiKey = process.env.TWELVE_DATA_API_KEY || "";
 
-  const globalTimer = new Promise<"timeout">((resolve) =>
-    setTimeout(() => resolve("timeout"), GLOBAL_TIMEOUT_MS)
-  );
-
-  const fetchPromise = (async () => {
-    if (!apiKey) {
-      return buildUnavailableQuotes(symbols, timestamp, "TWELVE_DATA_API_KEY not configured");
-    }
-
-    console.log(`[Twelve Data] Fetching ${symbols.length} symbols via Promise.all...`);
-
-    const individualPromises = symbols.map((symbol) =>
-      fetchSingleQuote(symbol, apiKey, timestamp).catch((err) =>
-        buildSingleUnavailable(symbol, timestamp, `Fetch failed: ${err instanceof Error ? err.message : String(err)}`)
-      )
-    );
-
-    const results = await Promise.all(individualPromises);
-
-    const quoteMap = new Map<string, US100MegaCapStock>();
-    for (const r of results) quoteMap.set(r.symbol, r);
-
-    return symbols.map((symbol) => {
-      const q = quoteMap.get(symbol);
-      if (!q) return buildSingleUnavailable(symbol, timestamp, "Missing from results");
-      return q;
-    });
-  })();
-
-  const result = await Promise.race([fetchPromise, globalTimer]);
-
-  const durationMs = Date.now() - startTime;
-
-  if (result === "timeout") {
-    console.log(`[Twelve Data] TIMEOUT | Duration: ${durationMs}ms | Target: ${symbols.length} symbols`);
-    return buildUnavailableQuotes(symbols, timestamp, "Stock quotes timed out");
+  if (!apiKey) {
+    return buildUnavailableQuotes(symbols, timestamp, "TWELVE_DATA_API_KEY not configured");
   }
 
-  const liveCount = result.filter((r) => r.meta.status === "live").length;
-  const failedSymbols = result.filter((r) => r.meta.status !== "live").map((r) => r.symbol);
-  const liveSymbols = result.filter((r) => r.meta.status === "live").map((r) => r.symbol);
+  console.log(`[Twelve Data] Fetching ${symbols.length} symbols via Promise.all...`);
+
+  const individualPromises = symbols.map((symbol) =>
+    fetchSingleQuote(symbol, apiKey, timestamp).catch((err) =>
+      buildSingleUnavailable(symbol, timestamp, `Fetch failed: ${err instanceof Error ? err.message : String(err)}`)
+    )
+  );
+
+  const results = await Promise.all(individualPromises);
+
+  const quoteMap = new Map<string, US100MegaCapStock>();
+  for (const r of results) quoteMap.set(r.symbol, r);
+
+  const ordered = symbols.map((symbol) => {
+    const q = quoteMap.get(symbol);
+    if (!q) return buildSingleUnavailable(symbol, timestamp, "Missing from results");
+    return q;
+  });
+
+  const durationMs = Date.now() - startTime;
+  const liveCount = ordered.filter((r) => r.meta.status === "live").length;
+  const failedSymbols = ordered.filter((r) => r.meta.status !== "live").map((r) => r.symbol);
+  const liveSymbols = ordered.filter((r) => r.meta.status === "live").map((r) => r.symbol);
 
   console.log(
     `[Twelve Data] Completed | Duration: ${durationMs}ms | Successful: ${liveCount} | Failed: ${failedSymbols.length} | Symbols: [${liveSymbols.join(", ")}]`
@@ -72,7 +58,7 @@ export async function fetchStockQuotes(symbols: readonly string[]): Promise<US10
     console.log(`[Twelve Data] Failed symbols: [${failedSymbols.join(", ")}]`);
   }
 
-  return result;
+  return ordered;
 }
 
 async function fetchSingleQuote(
@@ -83,12 +69,10 @@ async function fetchSingleQuote(
   const url = `${TD_BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
   const reqStart = Date.now();
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PER_REQUEST_TIMEOUT_MS);
-
   try {
-    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
-    clearTimeout(timeout);
+    const response = await RequestManager.getInstance().fetch(url, `twelve-data-${symbol}`, {
+      timeoutMs: PER_REQUEST_TIMEOUT_MS,
+    });
     const reqDuration = Date.now() - reqStart;
 
     if (!response.ok) {
@@ -132,7 +116,6 @@ async function fetchSingleQuote(
       meta: buildMeta("live", "Twelve Data", timestamp),
     };
   } catch (err) {
-    clearTimeout(timeout);
     const reqDuration = Date.now() - reqStart;
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(`[Twelve Data] ${symbol} ERROR | Duration: ${reqDuration}ms | ${errMsg}`);

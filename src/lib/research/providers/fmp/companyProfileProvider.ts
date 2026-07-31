@@ -16,32 +16,49 @@ interface FMPProfile {
 export async function fetchCompanyProfiles(symbols: readonly string[]): Promise<US100CompanyProfile[]> {
   const timestamp = nowISO();
   const startTime = Date.now();
-  const profiles: US100CompanyProfile[] = [];
 
   try {
-    for (const symbol of symbols) {
-      const data = await fmpFetch<FMPProfile[]>("/profile", { symbol });
-
-      if (Array.isArray(data) && data.length > 0) {
-        const p = data[0];
-        profiles.push({
-          symbol: p.symbol,
-          name: p.companyName,
-          marketCap: p.mktCap,
-          sector: p.sector,
-          industry: p.industry,
-          description: p.description,
-          website: p.website,
-          ceo: p.ceo,
-          employees: p.fullTimeEmployees,
-          meta: buildMeta("live", "FMP", timestamp),
-        });
-      }
-    }
+    const results = await Promise.all(
+      symbols.map(async (symbol) => {
+        try {
+          const data = await fmpFetch<FMPProfile[]>("/profile", { symbol });
+          if (Array.isArray(data) && data.length > 0) {
+            const p = data[0];
+            return {
+              symbol: p.symbol,
+              name: p.companyName,
+              marketCap: p.mktCap,
+              sector: p.sector,
+              industry: p.industry,
+              description: p.description,
+              website: p.website,
+              ceo: p.ceo,
+              employees: p.fullTimeEmployees,
+              meta: buildMeta("live", "FMP", timestamp),
+            } as US100CompanyProfile;
+          }
+        } catch {
+          // per-symbol failure handled below
+        }
+        return {
+          symbol,
+          name: symbol,
+          marketCap: 0,
+          sector: "",
+          industry: "",
+          description: "",
+          website: "",
+          ceo: "",
+          employees: 0,
+          meta: buildMeta("unavailable", "FMP", timestamp, "Profile fetch failed"),
+        } as US100CompanyProfile;
+      })
+    );
 
     const durationMs = Date.now() - startTime;
-    console.log(`[FMP Profiles] Endpoint: /profile/* | Status: ${profiles.length > 0 ? "LIVE" : "NO_DATA"} | Profiles: ${profiles.length} | Duration: ${durationMs}ms`);
-    return profiles;
+    const liveProfiles = results.filter((r) => r.meta.status === "live");
+    console.log(`[FMP Profiles] Endpoint: /profile/* | Status: ${liveProfiles.length > 0 ? "LIVE" : "NO_DATA"} | Profiles: ${liveProfiles.length}/${symbols.length} | Duration: ${durationMs}ms`);
+    return results;
   } catch (err) {
     const durationMs = Date.now() - startTime;
     const message = err instanceof FMPError ? err.message : err instanceof Error ? err.message : "Unknown error";

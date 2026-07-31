@@ -49,6 +49,10 @@ import {
   getDriverSpecificFields,
   getAutoSectionFields
 } from "@/config/driverFormFields";
+import { collectGoldData } from "@/lib/research/gold";
+import type { GoldFullDataset } from "@/lib/research/gold";
+import { EtfFlowsCard, OpenInterestCard, MacroEnvironmentCard, DataStatusCard } from "@/components/research/sections";
+import { InstitutionalCompact } from "@/components/institutional";
 
 interface XauusdMarketData {
   status: "success" | "error";
@@ -183,6 +187,8 @@ export function GoldResearchDesk() {
   const [sections, setSections] = useState<GoldAutoResearchSection[]>(createEmptyAutoFillResponse().sections);
   const [enhancedAnalysis, setEnhancedAnalysis] = useState<GoldResearchAnalysis | null>(null);
   const [enhancing, setEnhancing] = useState(false);
+  const [goldDataset, setGoldDataset] = useState<GoldFullDataset | null>(null);
+  const [goldDataLoading, setGoldDataLoading] = useState(false);
 
   const formConfig = DRIVER_FORM_CONFIG[selectedDriver];
   const driverSpecificFields = formConfig.fields.filter((fieldConfig) => !CORE_FIELD_KEYS.has(fieldConfig.key));
@@ -562,6 +568,22 @@ export function GoldResearchDesk() {
     }
   }
 
+  async function fetchGoldInstitutionalData() {
+    setGoldDataLoading(true);
+    try {
+      const data = await collectGoldData();
+      setGoldDataset(data);
+    } catch {
+      // handled by collectGoldData
+    } finally {
+      setGoldDataLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchGoldInstitutionalData();
+  }, []);
+
   async function rerunEngines() {
     setEnhancing(true);
 
@@ -645,6 +667,8 @@ export function GoldResearchDesk() {
         setupResult={setupResult}
         riskRewardPasses={setupRiskReward.passes}
       />
+
+      <InstitutionalCompact asset="gold" />
 
       <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -847,6 +871,12 @@ export function GoldResearchDesk() {
           </div>
         )}
       </section>
+
+      <GoldInstitutionalDataPanel
+        dataset={goldDataset}
+        loading={goldDataLoading}
+        onRefresh={() => void fetchGoldInstitutionalData()}
+      />
 
       <GoldDriverHeatmap
         report={autoReport}
@@ -1573,6 +1603,175 @@ function AutoMeta({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold uppercase text-text-muted">{label}</p>
       <p className="mt-1 font-semibold text-text-primary">{value}</p>
     </div>
+  );
+}
+
+function GoldInstitutionalDataPanel({
+  dataset,
+  loading,
+  onRefresh,
+}: {
+  dataset: GoldFullDataset | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const live = dataset?.meta.status === "live";
+
+  const dataSources = dataset
+    ? [
+        { name: "Gold Price", status: dataset.meta.status === "live" ? "live" as const : "unavailable" as const, timestamp: dataset.collectedAt, error: dataset.meta.error },
+        { name: dataset.volatilityInstitutional?.meta.source ?? "GVZ", status: (dataset.volatilityInstitutional?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.volatilityInstitutional?.meta.timestamp, error: dataset.volatilityInstitutional?.meta.error },
+        { name: dataset.macro?.meta.source ?? "Macro", status: (dataset.macro?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.macro?.meta.timestamp, error: dataset.macro?.meta.error },
+        { name: dataset.etf?.meta.source ?? "ETF Flows", status: (dataset.etf?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.etf?.meta.timestamp, error: dataset.etf?.meta.error },
+        { name: dataset.cot?.[0]?.meta.source ?? "COT", status: (dataset.cot?.some((c) => c.meta.status === "live") ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.cot?.[0]?.meta.timestamp },
+        { name: dataset.openInterest?.[0]?.meta.source ?? "Open Interest", status: (dataset.openInterest?.some((o) => o.meta.status === "live") ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.openInterest?.[0]?.meta.timestamp },
+        { name: "Market Breadth", status: (dataset.breadth?.some((b) => b.meta.status === "live") ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.collectedAt },
+      ]
+    : [];
+
+  const vol = dataset?.volatilityInstitutional;
+  const hasVol = vol?.meta.status === "live" && vol.gvz !== null;
+  const goldCOT = dataset?.cot?.find((c) => c.contractName?.includes("GOLD") || c.contractName?.includes("GC"));
+  const hasCOT = goldCOT?.meta.status === "live";
+  const breadthLive = dataset?.breadth?.filter((b) => b.meta.status === "live");
+
+  return (
+    <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Live Institutional Data</p>
+          <h2 className="mt-1 text-lg font-semibold text-text-primary">Gold Provider Pipeline</h2>
+          <p className="mt-1 text-sm text-text-secondary">Real-time data feeds from all 7 institutional providers. Status reflects the most recent fetch.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-gold/30 bg-gold/10 px-4 py-2 text-sm font-semibold text-gold hover:bg-gold/20 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {loading ? "Fetching..." : "Refresh"}
+        </button>
+      </div>
+
+      {!dataset && loading ? (
+        <div className="mt-4 rounded-md border border-border-subtle bg-surface-panel p-8 text-center">
+          <RefreshCw className="mx-auto h-6 w-6 animate-spin text-text-muted" />
+          <p className="mt-2 text-sm text-text-secondary">Fetching institutional provider data...</p>
+        </div>
+      ) : !live && dataset ? (
+        <div className="mt-4 rounded-md border border-border-subtle bg-surface-panel p-8 text-center">
+          <AlertTriangle className="mx-auto h-6 w-6 text-gold" />
+          <p className="mt-2 text-sm text-text-secondary">Institutional provider data is currently unavailable. Providers may be rate-limited or offline.</p>
+          {dataset.errors.length > 0 && (
+            <div className="mt-3 space-y-1">
+              {dataset.errors.map((err, i) => (
+                <p key={i} className="text-xs text-text-muted">{err}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : dataset ? (
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {hasVol ? (
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-text-muted">GVZ (Gold Volatility)</p>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">GVZ</span>
+                    <span className={`text-sm font-bold ${(vol!.gvz ?? 0) > 25 ? "text-loss" : (vol!.gvz ?? 0) > 18 ? "text-gold" : "text-profit"}`}>
+                      {vol!.gvz?.toFixed(2) ?? "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Change</span>
+                    <span className={`text-xs font-medium ${(vol!.gvzChange ?? 0) >= 0 ? "text-profit" : "text-loss"}`}>
+                      {vol!.gvzChange !== null ? `${vol!.gvzChange >= 0 ? "+" : ""}${vol!.gvzChange.toFixed(2)}` : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Trend</span>
+                    <span className="text-xs font-medium text-text-primary">{vol!.trend}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Risk</span>
+                    <span className={`text-xs font-medium ${vol!.riskRating === "Extreme" || vol!.riskRating === "High" ? "text-loss" : vol!.riskRating === "Moderate" ? "text-gold" : "text-profit"}`}>{vol!.riskRating}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {hasCOT ? (
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-text-muted">COT Positioning</p>
+                <p className="mt-1 text-[10px] text-text-muted">{goldCOT!.contractName}</p>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Commercials Net</span>
+                    <span className={`text-xs font-medium ${goldCOT!.commercials.netLong >= 0 ? "text-profit" : "text-loss"}`}>
+                      {goldCOT!.commercials.netLong >= 0 ? "+" : ""}{goldCOT!.commercials.netLong}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Non-Commercials Net</span>
+                    <span className={`text-xs font-medium ${goldCOT!.nonCommercials.netLong >= 0 ? "text-profit" : "text-loss"}`}>
+                      {goldCOT!.nonCommercials.netLong >= 0 ? "+" : ""}{goldCOT!.nonCommercials.netLong}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-secondary">Open Interest</span>
+                    <span className="text-xs font-medium text-text-primary">{goldCOT!.totalOpenInterest.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {breadthLive && breadthLive.length > 0 ? (
+              <div className="rounded-lg border border-border-subtle bg-surface-panel p-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-text-muted">Market Breadth</p>
+                {breadthLive.map((b) => (
+                  <div key={b.exchange} className="mt-3 space-y-2">
+                    <p className="text-[10px] text-text-muted">{b.exchange}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">Advances</span>
+                      <span className="text-xs font-medium text-profit">{b.advances}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">Declines</span>
+                      <span className="text-xs font-medium text-loss">{b.declines}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">A/D Ratio</span>
+                      <span className="text-xs font-medium text-text-primary">{b.aDRatio.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">Score</span>
+                      <span className="text-xs font-medium text-text-primary">{b.breadthScore}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <MacroEnvironmentCard drivers={[]} macroData={dataset.macro} />
+            <EtfFlowsCard etf={dataset.etf} title="Gold ETF Flows" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <OpenInterestCard records={dataset.openInterest} title="Gold Open Interest" />
+          </div>
+
+          <DataStatusCard
+            sources={dataSources}
+            collectedAt={dataset.collectedAt}
+            errors={dataset.errors}
+          />
+        </div>
+      ) : null}
+    </section>
   );
 }
 

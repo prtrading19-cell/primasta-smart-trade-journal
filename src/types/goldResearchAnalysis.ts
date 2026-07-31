@@ -11,6 +11,14 @@ export type PipelineStage =
   | "institutional-flow"
   | "decision-engine"
   | "institutional-decision"
+  | "decision-context"
+  | "confidence"
+  | "alignment"
+  | "risk"
+  | "decision-v2"
+  | "evidence"
+  | "explainability"
+  | "decision-report"
   | "diagnostics"
   | "complete";
 

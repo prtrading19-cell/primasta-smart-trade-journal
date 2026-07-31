@@ -1,5 +1,6 @@
 import { Globe, AlertTriangle } from "lucide-react";
 import { ResearchSection, MetricRow, EmptyState, SourceBadge } from "../shared";
+import type { MacroData } from "@/types/institutional";
 
 interface MacroDriver {
   label: string;
@@ -11,10 +12,24 @@ interface MacroDriver {
 
 interface MacroEnvironmentCardProps {
   drivers: MacroDriver[];
+  macroData?: MacroData;
 }
 
-export function MacroEnvironmentCard({ drivers }: MacroEnvironmentCardProps) {
-  const hasData = drivers.length > 0 && drivers.some((d) => d.value !== "N/A" && d.value !== "Live Data Unavailable");
+function buildMacroDrivers(macroData: MacroData): MacroDriver[] {
+  if (macroData.meta.status !== "live") return [];
+  return macroData.indicators.map((ind) => ({
+    label: ind.name,
+    value: `${ind.value} ${ind.unit}`,
+    impact: ind.trend === "Improving" ? "Bullish" : ind.trend === "Deteriorating" ? "Bearish" : "Neutral",
+    reason: `Trend: ${ind.trend} | Change: ${ind.change >= 0 ? "+" : ""}${ind.change} | Impact: ${ind.impact}`,
+    source: macroData.meta.source,
+  }));
+}
+
+export function MacroEnvironmentCard({ drivers, macroData }: MacroEnvironmentCardProps) {
+  const macroDrivers = macroData ? buildMacroDrivers(macroData) : [];
+  const allDrivers = macroDrivers.length > 0 ? macroDrivers : drivers;
+  const hasData = allDrivers.length > 0 && allDrivers.some((d) => d.value !== "N/A" && d.value !== "Live Data Unavailable");
 
   if (!hasData) {
     return (
@@ -27,7 +42,7 @@ export function MacroEnvironmentCard({ drivers }: MacroEnvironmentCardProps) {
   return (
     <ResearchSection title="Macro Environment" icon={<Globe size={16} />} badge={<SourceBadge source="Multi-source" />}>
       <div className="grid gap-3 md:grid-cols-2">
-        {drivers.map((d) => {
+        {allDrivers.map((d) => {
           const impactLower = d.impact.toLowerCase();
           const tone = impactLower.includes("bullish") ? "profit" : impactLower.includes("bearish") ? "loss" : "neutral";
           return (

@@ -27,6 +27,7 @@ import {
   finalizeDiagnostics,
   createEmptyDiagnostics,
 } from "@/lib/goldResearchDiagnostics";
+import { buildDecisionContext, calculateConfidence, calculateAlignment, calculateRisk, calculateDecisionV2, buildExplainability, buildEvidence, buildDecisionReport } from "./engines";
 
 export function executeResearchEngine(
   input: ResearchEngineInput,
@@ -257,6 +258,201 @@ export function executeResearchEngine(
 
   console.log("[RUNTIME-AUDIT:Engine] After Stage 5 - institutionalDecision:", institutionalDecision ? JSON.stringify(institutionalDecision, null, 2) : "undefined");
 
+  // V2 Engines (optional — run when decisionContextRaw is provided)
+  let decisionContext;
+  let confidenceResult;
+  let alignmentResult;
+  let riskResult;
+  let decisionV2;
+  let explainabilityResult;
+  let evidenceRecords;
+  let decisionReport;
+
+  const v2EnginesActive = Boolean(input.decisionContextRaw);
+
+  if (input.decisionContextRaw) {
+    // Stage 6: Decision Context Engine
+    let stopTiming = startStageTiming(diagnostics, "decision-context");
+    let startTime = performance.now();
+    try {
+      decisionContext = buildDecisionContext(input.decisionContextRaw);
+      const elapsed = Math.round(performance.now() - startTime);
+      stopTiming();
+      addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+        "DecisionContextEngine", "success", elapsed, 1, 1, undefined, []
+      ));
+    } catch (err) {
+      const elapsed = Math.round(performance.now() - startTime);
+      stopTiming();
+      addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+        "DecisionContextEngine", "failed", elapsed, 1, 1,
+        err instanceof Error ? err.message : "Unknown error"
+      ));
+    }
+
+    if (decisionContext) {
+      // Stage 7: Confidence Engine
+      stopTiming = startStageTiming(diagnostics, "confidence");
+      startTime = performance.now();
+      try {
+        confidenceResult = calculateConfidence(decisionContext);
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "ConfidenceEngine", "success", elapsed, 1, 1, undefined, []
+        ));
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "ConfidenceEngine", "failed", elapsed, 1, 1,
+          err instanceof Error ? err.message : "Unknown error"
+        ));
+      }
+
+      // Stage 8: Alignment Engine
+      stopTiming = startStageTiming(diagnostics, "alignment");
+      startTime = performance.now();
+      try {
+        alignmentResult = calculateAlignment(decisionContext);
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "AlignmentEngine", "success", elapsed, 1, 1, undefined, []
+        ));
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "AlignmentEngine", "failed", elapsed, 1, 1,
+          err instanceof Error ? err.message : "Unknown error"
+        ));
+      }
+
+      // Stage 9: Risk Engine
+      stopTiming = startStageTiming(diagnostics, "risk");
+      startTime = performance.now();
+      try {
+        riskResult = calculateRisk(decisionContext);
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "RiskEngine", "success", elapsed, 1, 1, undefined, []
+        ));
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "RiskEngine", "failed", elapsed, 1, 1,
+          err instanceof Error ? err.message : "Unknown error"
+        ));
+      }
+
+      // Stage 10: Decision Engine V2
+      if (confidenceResult && alignmentResult && riskResult) {
+        stopTiming = startStageTiming(diagnostics, "decision-v2");
+        startTime = performance.now();
+        try {
+          decisionV2 = calculateDecisionV2({
+            context: decisionContext,
+            confidence: confidenceResult,
+            alignment: alignmentResult,
+            risk: riskResult,
+          });
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "DecisionEngineV2", "success", elapsed, 4, 4, undefined, []
+          ));
+        } catch (err) {
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "DecisionEngineV2", "failed", elapsed, 4, 4,
+            err instanceof Error ? err.message : "Unknown error"
+          ));
+        }
+      }
+
+      // Stage 11: Evidence Engine
+      stopTiming = startStageTiming(diagnostics, "evidence");
+      startTime = performance.now();
+      try {
+        evidenceRecords = buildEvidence(decisionContext);
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "EvidenceEngine", "success", elapsed, 1, 1, undefined, []
+        ));
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        stopTiming();
+        addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+          "EvidenceEngine", "failed", elapsed, 1, 1,
+          err instanceof Error ? err.message : "Unknown error"
+        ));
+      }
+
+      // Stage 12: Explainability Engine
+      if (confidenceResult && alignmentResult && riskResult && decisionV2) {
+        stopTiming = startStageTiming(diagnostics, "explainability");
+        startTime = performance.now();
+        try {
+          explainabilityResult = buildExplainability({
+            context: decisionContext,
+            confidence: confidenceResult,
+            alignment: alignmentResult,
+            risk: riskResult,
+            decision: decisionV2,
+          });
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "ExplainabilityEngine", "success", elapsed, 5, 5, undefined, []
+          ));
+        } catch (err) {
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "ExplainabilityEngine", "failed", elapsed, 5, 5,
+            err instanceof Error ? err.message : "Unknown error"
+          ));
+        }
+      }
+
+      // Stage 13: Decision Report Builder
+      if (confidenceResult && alignmentResult && riskResult && decisionV2 && explainabilityResult && evidenceRecords) {
+        stopTiming = startStageTiming(diagnostics, "decision-report");
+        startTime = performance.now();
+        try {
+          decisionReport = buildDecisionReport({
+            context: decisionContext,
+            evidence: evidenceRecords,
+            confidence: confidenceResult,
+            alignment: alignmentResult,
+            risk: riskResult,
+            decision: decisionV2,
+            explainability: explainabilityResult,
+            assetLabel: input.asset,
+            generatedAt: new Date().toISOString(),
+          });
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "DecisionReportBuilder", "success", elapsed, 1, 1, undefined, []
+          ));
+        } catch (err) {
+          const elapsed = Math.round(performance.now() - startTime);
+          stopTiming();
+          addEngineDiagnostic(diagnostics, createEngineDiagnostic(
+            "DecisionReportBuilder", "failed", elapsed, 1, 1,
+            err instanceof Error ? err.message : "Unknown error"
+          ));
+        }
+      }
+    }
+  }
+
   finalizeDiagnostics(diagnostics, pipelineStartTime);
 
   const executionTimeMs = Math.round(performance.now() - pipelineStartTime);
@@ -277,12 +473,21 @@ export function executeResearchEngine(
     institutionalFlow,
     decision,
     institutionalDecision,
+    decisionContext,
+    confidenceResult,
+    alignmentResult,
+    riskResult,
+    decisionV2,
+    explainabilityResult,
+    evidence: evidenceRecords,
+    decisionReport,
     diagnostics,
     warnings: diagnostics.warnings,
     executionTimeMs,
     pipelineStatus,
     schemaVersion: "1.0.0",
     timestamp,
+    v2EnginesActive,
   };
 }
 
@@ -446,7 +651,10 @@ function buildEmptyResult(asset: ResearchAsset, error: string): ResearchEngineRe
       totalExecutionTimeMs: 0,
       stageTimings: {
         validation: 0, "category-scoring": 0, "technical-bias": 0,
-        "institutional-flow": 0, "decision-engine": 0, "institutional-decision": 0, diagnostics: 0, complete: 0,
+        "institutional-flow": 0, "decision-engine": 0, "institutional-decision": 0,
+        "decision-context": 0, confidence: 0, alignment: 0, risk: 0,
+        "decision-v2": 0, evidence: 0, explainability: 0, "decision-report": 0,
+        diagnostics: 0, complete: 0,
       },
       engines: [],
       overallStatus: "failed",
@@ -458,6 +666,7 @@ function buildEmptyResult(asset: ResearchAsset, error: string): ResearchEngineRe
     pipelineStatus: "failed",
     schemaVersion: "1.0.0",
     timestamp,
+    v2EnginesActive: false,
   };
 }
 

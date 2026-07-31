@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { fetchUS100Index } from "@/lib/research/providers/fmp/marketIndexProvider";
+import { initializeProviderRegistry } from "@/lib/research/infrastructure/registerProviders";
+import { executeUS100Index } from "@/lib/research/infrastructure/ProviderExecution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  initializeProviderRegistry();
   try {
-    const index = await fetchUS100Index();
+    const index = await executeUS100Index();
     return NextResponse.json(index);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/research";
-import { fetchEarnings } from "@/lib/research/providers/fmp/earningsProvider";
+import { initializeProviderRegistry } from "@/lib/research/infrastructure/registerProviders";
+import { executeEarnings } from "@/lib/research/infrastructure/ProviderExecution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  initializeProviderRegistry();
   try {
     const profile = getProfile("us100");
     const symbols = profile?.trackedSymbols ?? [];
-    const earnings = await fetchEarnings(symbols);
+    const earnings = await executeEarnings(symbols);
     return NextResponse.json(earnings);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

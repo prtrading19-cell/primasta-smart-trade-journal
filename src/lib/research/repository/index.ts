@@ -1,0 +1,11 @@
+export { ResearchRepository } from "./ResearchRepository";
+export { computeHistoricalAnalytics } from "./HistoricalAnalytics";
+export type { HistoricalAnalyticsResult, ConfidenceTimePoint, RiskTimePoint, ConflictTimePoint } from "./HistoricalAnalytics";
+export { computeProviderAnalytics } from "./ProviderAnalytics";
+export type { ProviderAnalyticsRecord } from "./ProviderAnalytics";
+export { computeDecisionAnalytics } from "./DecisionAnalytics";
+export type { DecisionAnalyticsResult } from "./DecisionAnalytics";
+export { computeEvidenceAnalytics } from "./EvidenceAnalytics";
+export type { EvidenceAnalyticsResult, CategoryBiasBreakdown, BiasAggregation } from "./EvidenceAnalytics";
+export { AssetHistory, globalAssetHistory } from "./AssetHistory";
+export type { ResearchSnapshot, SnapshotFilter, RepositoryStatistics, SnapshotOrigin, AssetOverview } from "./types";

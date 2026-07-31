@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { fetchUS100Volatility } from "@/lib/research/providers/fmp/volatilityProvider";
+import { initializeProviderRegistry } from "@/lib/research/infrastructure/registerProviders";
+import { executeUS100Volatility } from "@/lib/research/infrastructure/ProviderExecution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  initializeProviderRegistry();
   try {
-    const volatility = await fetchUS100Volatility();
+    const volatility = await executeUS100Volatility();
     return NextResponse.json(volatility);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -1,9 +1,18 @@
 import type { MarketData, MarketDataProviderResult, FREDData, AlphaVantageData, FinnhubData, NewsApiData, GNewsData } from "./types";
+import type { ProviderResult } from "@/lib/research/providers/shared";
+import type { SectorData, VolatilityData, BreadthData, MacroData, ETFData, COTReportData, OpenInterestRecord } from "@/types/institutional";
 import { fetchFRED } from "./fred";
 import { fetchAlphaVantage } from "./alphaVantage";
 import { fetchFinnhub } from "./finnhub";
 import { fetchNewsApi } from "./newsApi";
 import { fetchGNews } from "./gnews";
+import { fetchCOTReport } from "@/lib/research/providers/cot/cftcProvider";
+import { fetchETFData } from "@/lib/research/providers/etf/provider";
+import { fetchOpenInterest } from "@/lib/research/providers/openInterest/provider";
+import { fetchMarketBreadth } from "@/lib/research/providers/breadth/provider";
+import { fetchSectorData } from "@/lib/research/providers/sectors/provider";
+import { fetchVolatilityData } from "@/lib/research/providers/volatility/provider";
+import { fetchMacroData } from "@/lib/research/providers/macro/provider";
 import { normalizeMarketData } from "./normalizer";
 
 export async function collectMarketData(goldPrice: string): Promise<MarketData> {
@@ -78,6 +87,58 @@ export async function collectMarketData(goldPrice: string): Promise<MarketData> 
     gnewsResult = await runProvider<GNewsData>("GNews", () => fetchGNews(gnewsKey), providerResults);
   }
 
+  // STEP: Institutional providers (parallel batch)
+  interface InstitutionalResults {
+    cot: COTReportData[] | null;
+    etf: ETFData | null;
+    openInterest: OpenInterestRecord[] | null;
+    breadth: BreadthData[] | null;
+    sector: SectorData | null;
+    volatility: VolatilityData | null;
+    macro: MacroData | null;
+  }
+
+  const settleProvider = <T>(label: string, promise: Promise<ProviderResult<T>>): Promise<T | null> =>
+    promise
+      .then((result) => {
+        if (result.success && result.data !== null) {
+          providerResults.push({ provider: label, success: true, durationMs: 0 });
+          return result.data;
+        }
+        providerResults.push({ provider: label, success: false, durationMs: 0, error: result.error || "unavailable" });
+        return null;
+      })
+      .catch((err) => {
+        providerResults.push({ provider: label, success: false, durationMs: 0, error: err instanceof Error ? err.message : String(err) });
+        return null;
+      });
+
+  const institutionalStart = Date.now();
+  const [cotResult, etfResult, oiResult, breadthResult, sectorResult, volResult, macroResult] = await Promise.all([
+    settleProvider("COT", fetchCOTReport()),
+    settleProvider("ETF", fetchETFData()),
+    settleProvider("Open Interest", fetchOpenInterest()),
+    settleProvider("Market Breadth", fetchMarketBreadth()),
+    settleProvider("Sector Rotation", fetchSectorData()),
+    settleProvider("Volatility", fetchVolatilityData()),
+    settleProvider("Macro", fetchMacroData()),
+  ]);
+  const institutionalDuration = Date.now() - institutionalStart;
+  console.info("[market-data] institutional_providers_complete", `${institutionalDuration}ms`, {
+    successes: [cotResult, etfResult, oiResult, breadthResult, sectorResult, volResult, macroResult].filter(Boolean).length,
+    failures: [cotResult, etfResult, oiResult, breadthResult, sectorResult, volResult, macroResult].filter((r) => r === null).length,
+  });
+
+  const institutionalData: InstitutionalResults = {
+    cot: cotResult,
+    etf: etfResult,
+    openInterest: oiResult,
+    breadth: breadthResult,
+    sector: sectorResult,
+    volatility: volResult,
+    macro: macroResult,
+  };
+
   const totalDuration = Date.now() - startTime;
   console.info("[market-data] collection_complete", {
     totalDurationMs: totalDuration,
@@ -97,6 +158,7 @@ export async function collectMarketData(goldPrice: string): Promise<MarketData> 
     newsApi: newsApiResult,
     gnews: gnewsResult,
     providerResults,
+    institutionalData,
   });
 }
 

@@ -1,3 +1,8 @@
+import type {
+  SectorData, VolatilityData, BreadthData, MacroData,
+  ETFData, COTReportData, OpenInterestRecord,
+} from "@/types/institutional";
+
 export interface MarketDataProviderResult {
   provider: string;
   success: boolean;
@@ -93,6 +98,13 @@ export interface MarketData {
   sources: string[];
   errors: string[];
   providerResults: MarketDataProviderResult[];
+  cotData?: COTReportData[];
+  etfData?: ETFData;
+  openInterestData?: OpenInterestRecord[];
+  breadthData?: BreadthData[];
+  sectorData?: SectorData;
+  volatilityData?: VolatilityData;
+  macroData?: MacroData;
 }
 
 export interface MappedResearchSection {

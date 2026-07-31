@@ -244,6 +244,14 @@ ${marketData.positioningNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${
 LIQUIDITY NEWS:
 ${marketData.liquidityNews.slice(0, 3).map((n, i) => `${i + 1}. ${n.title} (${n.source})`).join("\n")}
 
+INSTITUTIONAL DATA:
+${marketData.cotData ? `COT: ${marketData.cotData.filter(c => c.meta.status === "live").map(c => `${c.contractName}: Commercials=${c.commercials.netLong >= 0 ? "+" : ""}${c.commercials.netLong}, Non-Commercials=${c.nonCommercials.netLong >= 0 ? "+" : ""}${c.nonCommercials.netLong}, OI=${c.totalOpenInterest}`).join(" | ")}` : "COT: Live Data Unavailable"}
+${marketData.etfData ? `ETF Flows: ${marketData.etfData.etfs.map(e => `${e.symbol}: ${e.flowDirection}, Assets=$${(e.totalAssets / 1e9).toFixed(2)}B`).join(" | ")}` : "ETF Flows: Live Data Unavailable"}
+${marketData.volatilityData ? `Volatility: VIX=${marketData.volatilityData.vix ?? "N/A"}, GVZ=${marketData.volatilityData.gvz ?? "N/A"}, Trend=${marketData.volatilityData.trend}, Risk=${marketData.volatilityData.riskRating}` : "Volatility: Live Data Unavailable"}
+${marketData.breadthData ? `Market Breadth: ${marketData.breadthData.filter(b => b.meta.status === "live").map(b => `${b.exchange}: Advances=${b.advances}, Declines=${b.declines}, A/D=${b.aDRatio}`).join(" | ")}` : "Market Breadth: Live Data Unavailable"}
+${marketData.sectorData ? `Sector Rotation: ${marketData.sectorData.sectors.map(s => `${s.sector}: ${s.changePercent >= 0 ? "+" : ""}${s.changePercent.toFixed(2)}%`).join(" | ")} | Strongest: ${marketData.sectorData.strongest}, Weakest: ${marketData.sectorData.weakest}` : "Sector Rotation: Live Data Unavailable"}
+${marketData.macroData ? `Macro: ${marketData.macroData.indicators.map(i => `${i.name}: ${i.value} (${i.impact})`).join(" | ")}` : "Macro: Live Data Unavailable"}
+
 PRE-MAPPED SECTIONS:
 ${mapped.sections.map((s) => `- ${s.driver}: ${s.currentDataValue} | Impact: ${s.goldImpact} | ${s.reason}`).join("\n")}
 `.trim();
@@ -253,7 +261,7 @@ function buildAnalystPrompt(reportDate: string, dataContext: string): string {
   return `
 Analyze the following PRIMASTA TradeOS Gold/XAUUSD market data for ${reportDate}.
 
-The data below was collected from multiple verified APIs (FRED, Alpha Vantage, Finnhub, NewsAPI, GNews).
+The data below was collected from verified institutional providers (COT, ETF Flows, Market Breadth, Sector Rotation, Volatility/GVZ, Macro Indicators) plus news/macro APIs (FRED, Alpha Vantage, Finnhub, NewsAPI, GNews, Twelve Data).
 You are the ANALYST. Do NOT search the internet. Do NOT invent prices. Use ONLY the data provided below.
 
 YOUR TASK:
@@ -277,6 +285,10 @@ Gold impact rules:
 - Weak jobs = Bullish Gold. Strong jobs = Bearish Gold.
 - ETF inflows + CB buying = Bullish Gold. Outflows = Bearish Gold.
 - Bullish technical structure = Bullish Gold. Bearish = Bearish Gold.
+- Falling GVZ (gold volatility) = Bullish Gold. Elevated GVZ = Caution.
+- High market breadth (strong broad market) = supportive. Weak breadth = caution.
+- Sector rotation toward defensive sectors = risk-off, supportive for Gold.
+- COT: Speculative net long crowded = contrarian bearish. Spec net short = contrarian bullish.
 
 DATA:
 ${dataContext}

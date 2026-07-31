@@ -8,6 +8,17 @@ import type {
   GNewsData,
   NewsItem,
 } from "./types";
+import type { SectorData, VolatilityData, BreadthData, MacroData, ETFData, COTReportData, OpenInterestRecord } from "@/types/institutional";
+
+interface InstitutionalResults {
+  cot: COTReportData[] | null;
+  etf: ETFData | null;
+  openInterest: OpenInterestRecord[] | null;
+  breadth: BreadthData[] | null;
+  sector: SectorData | null;
+  volatility: VolatilityData | null;
+  macro: MacroData | null;
+}
 
 export function normalizeMarketData(params: {
   goldPrice: string;
@@ -17,8 +28,9 @@ export function normalizeMarketData(params: {
   newsApi: NewsApiData | null;
   gnews: GNewsData | null;
   providerResults: MarketDataProviderResult[];
+  institutionalData?: InstitutionalResults;
 }): MarketData {
-  const { goldPrice, fred, alphaVantage, finnhub, newsApi, gnews, providerResults } = params;
+  const { goldPrice, fred, alphaVantage, finnhub, newsApi, gnews, providerResults, institutionalData } = params;
 
   const sources: string[] = [];
   const errors: string[] = [];
@@ -143,6 +155,13 @@ export function normalizeMarketData(params: {
     sources,
     errors,
     providerResults,
+    cotData: institutionalData?.cot ?? undefined,
+    etfData: institutionalData?.etf ?? undefined,
+    openInterestData: institutionalData?.openInterest ?? undefined,
+    breadthData: institutionalData?.breadth ?? undefined,
+    sectorData: institutionalData?.sector ?? undefined,
+    volatilityData: institutionalData?.volatility ?? undefined,
+    macroData: institutionalData?.macro ?? undefined,
   };
 }
 

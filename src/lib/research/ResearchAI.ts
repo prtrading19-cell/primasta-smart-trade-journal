@@ -6,6 +6,8 @@ import type {
   ResearchAISectionResult,
   ResearchAISummaryResult,
 } from "./ResearchTypes";
+import type { EvidenceRecord, ConfidenceResult, AlignmentResult, RiskResult, DecisionV2Result } from "./engines/types";
+import { buildAIPrompt } from "./engines/AIPromptBuilder";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1";
@@ -205,6 +207,122 @@ function extractParsedAIResult(responseBody: unknown): ResearchAIResult | null {
   }
 
   return null;
+}
+
+export async function requestAssetAIAnalysisWithEvidence(
+  apiKey: string,
+  profile: ResearchProfile,
+  evidence: EvidenceRecord[],
+  confidence: ConfidenceResult,
+  risk: RiskResult,
+  alignment: AlignmentResult,
+  decision?: DecisionV2Result,
+  reportDate?: string
+): Promise<ResearchAIResult | null> {
+  const { systemPrompt, userPrompt } = buildAIPrompt({
+    evidence,
+    confidence,
+    risk,
+    alignment,
+    decision,
+    assetLabel: profile.asset.toUpperCase(),
+    reportDate: reportDate ?? new Date().toISOString().split("T")[0],
+  });
+
+  const impactEnum = [
+    profile.impactLabels.bullish,
+    profile.impactLabels.bearish,
+    profile.impactLabels.neutral,
+    profile.impactLabels.mixed,
+  ];
+
+  const biasEnum = [
+    profile.overallBiasLabels.bullish,
+    profile.overallBiasLabels.bearish,
+    profile.overallBiasLabels.neutral,
+    profile.overallBiasLabels.mixed,
+  ];
+
+  const verdictEnum = [
+    profile.preTradeVerdictLabels.tradeAllowed,
+    profile.preTradeVerdictLabels.wait,
+    profile.preTradeVerdictLabels.avoidBeforeNews,
+    profile.preTradeVerdictLabels.manageExisting,
+  ];
+
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["sections", "fullSummary"],
+    properties: {
+      sections: {
+        type: "array",
+        minItems: 1,
+        maxItems: 30,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["driver", "impact", "reason", "newsHeadline", "newsSummary", "chartObservation", "sourceLink"],
+          properties: {
+            driver: { type: "string" },
+            impact: { type: "string", enum: impactEnum },
+            reason: { type: "string" },
+            newsHeadline: { type: "string" },
+            newsSummary: { type: "string" },
+            chartObservation: { type: "string" },
+            sourceLink: { type: "string" },
+          },
+        },
+      },
+      fullSummary: {
+        type: "object",
+        additionalProperties: false,
+        required: ["overallBias", "preTradeVerdict", "finalGuidance"],
+        properties: {
+          overallBias: { type: "string", enum: biasEnum },
+          preTradeVerdict: { type: "string", enum: verdictEnum },
+          finalGuidance: { type: "string" },
+        },
+      },
+    },
+  };
+
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+        max_output_tokens: 4000,
+        input: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: `${profile.asset}_research_analysis`,
+            strict: true,
+            schema,
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.info(`[${profile.asset}-ai-evidence] openai_error`, response.status);
+      return null;
+    }
+
+    const responseBody = await response.json();
+    return extractParsedAIResult(responseBody);
+  } catch (error) {
+    console.info(`[${profile.asset}-ai-evidence] openai_exception`, error instanceof Error ? error.message : "unknown");
+    return null;
+  }
 }
 
 function extractOutputText(value: unknown): string {

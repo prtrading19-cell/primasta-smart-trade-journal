@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
+  BrainCircuit,
   Calculator,
   Calendar,
   ChevronLeft,
@@ -37,6 +38,7 @@ export const sidebarNavItems: SidebarNavItem[] = [
   { href: "/journal", label: "Journal", icon: BookOpen, section: "Trading" },
   { href: "/gold-research", label: "Gold Research", icon: Search, section: "Research" },
   { href: "/economic-calendar", label: "Economic Calendar", icon: Calendar, section: "Research" },
+  { href: "/dashboard#institutional", label: "Institutional Intelligence", icon: BrainCircuit, section: "Research" },
   { href: "/calculator", label: "Calculator", icon: Calculator, section: "Tools" },
   { href: "/summary", label: "Analytics", icon: TrendingUp, section: "Performance" },
   { href: "/plan", label: "Trading Plan", icon: ListChecks, section: "Performance" },
@@ -75,8 +77,9 @@ export function Sidebar({
   }, {});
 
   function isActive(href: string) {
-    if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname === href || (href !== "#" && pathname.startsWith(href));
+    const clean = href.split("#")[0];
+    if (clean === "/dashboard") return pathname === "/dashboard";
+    return pathname === clean || (clean !== "#" && pathname.startsWith(clean));
   }
 
   const sidebarWidth = collapsed ? "w-[72px]" : "w-[260px]";

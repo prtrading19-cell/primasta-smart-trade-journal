@@ -5,6 +5,7 @@ import type { InstitutionalFlowInput, InstitutionalFlowResult } from "@/types/in
 import type { DecisionEngineResult, DecisionAction, RiskRating, DecisionQuality, Contributor, AlignmentBreakdown, ConflictBreakdown, DecisionExplanation } from "@/types/decisionEngine";
 import type { PipelineDiagnostics, EngineDiagnostic, PipelineStatus, EngineStatus, OrchestratorOptions } from "@/types/goldResearchAnalysis";
 import type { InstitutionalDecisionResult } from "./InstitutionalDecisionTypes";
+import type { DecisionContextRaw, DecisionContext, ConfidenceResult, AlignmentResult, RiskResult, DecisionV2Result, ExplainabilityResult, EvidenceRecord, DecisionReport } from "./engines/types";
 
 export type ResearchAsset = "gold" | "us100" | "spx500" | "btcusd" | "eurusd" | "gbpusd" | "silver" | "oil";
 
@@ -101,6 +102,7 @@ export interface ResearchEngineInput {
   timestamp?: string;
   options?: OrchestratorOptions;
   researchBias?: string;
+  decisionContextRaw?: DecisionContextRaw;
 }
 
 export interface ResearchEngineResult {
@@ -115,12 +117,21 @@ export interface ResearchEngineResult {
   institutionalFlow: InstitutionalFlowResult;
   decision: DecisionEngineResult;
   institutionalDecision?: InstitutionalDecisionResult;
+  decisionContext?: DecisionContext;
+  confidenceResult?: ConfidenceResult;
+  alignmentResult?: AlignmentResult;
+  riskResult?: RiskResult;
+  decisionV2?: DecisionV2Result;
+  explainabilityResult?: ExplainabilityResult;
+  evidence?: EvidenceRecord[];
+  decisionReport?: DecisionReport;
   diagnostics: PipelineDiagnostics;
   warnings: string[];
   executionTimeMs: number;
   pipelineStatus: PipelineStatus;
   schemaVersion: string;
   timestamp: string;
+  v2EnginesActive: boolean;
 }
 
 export interface ResearchServiceRequest {

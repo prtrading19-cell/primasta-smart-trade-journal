@@ -10,3 +10,5 @@ export { InstitutionalSummaryCard } from "./InstitutionalSummaryCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { DecisionCard } from "./DecisionCard";
 export { DataStatusCard } from "./DataStatusCard";
+export { EtfFlowsCard } from "./EtfFlowsCard";
+export { OpenInterestCard } from "./OpenInterestCard";

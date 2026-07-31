@@ -1,5 +1,6 @@
 import type { TechnicalInput, TrendDirection, TrendStrength, VolatilityLevel } from "@/types/technicalBias";
 import type { US100FullDataset } from "./us100DataOrchestrator";
+import type { VolatilityData } from "@/types/institutional";
 
 export function buildUS100TechnicalInput(dataset: US100FullDataset): TechnicalInput {
   const timestamp = dataset.collectedAt;
@@ -44,12 +45,32 @@ function deriveTrend(dataset: US100FullDataset): TechnicalInput["trend"] {
 }
 
 function deriveVolatility(dataset: US100FullDataset): TechnicalInput["volatility"] {
-  const vol = dataset.volatility;
+  const volInst = dataset.volatilityInstitutional;
+  const vol = volInst && volInst.meta.status === "live" ? volInst : dataset.volatility;
+
   if (vol.meta.status !== "live") {
     return { level: "Unknown" };
   }
 
-  const vix = vol.vix ?? 0;
+  let vix: number;
+  let vxn: number | null;
+  let trend: string;
+  let riskRating: string;
+
+  if ("vix" in vol && typeof (vol as VolatilityData).vix === "number") {
+    const vd = vol as VolatilityData;
+    vix = vd.vix ?? 0;
+    vxn = vd.vxn ?? null;
+    trend = vd.trend;
+    riskRating = vd.riskRating;
+  } else {
+    const lv = vol as typeof dataset.volatility;
+    vix = lv.vix ?? 0;
+    vxn = lv.vxn ?? null;
+    trend = lv.trend;
+    riskRating = lv.riskRating;
+  }
+
   let level: VolatilityLevel;
   if (vix > 30) level = "High";
   else if (vix > 20) level = "Moderate";
@@ -58,6 +79,6 @@ function deriveVolatility(dataset: US100FullDataset): TechnicalInput["volatility
   return {
     level,
     atrValue: vix,
-    description: `VIX: ${vix.toFixed(2)} | VXN: ${vol.vxn?.toFixed(2) ?? "N/A"} | Trend: ${vol.trend} | Risk: ${vol.riskRating}`,
+    description: `VIX: ${vix.toFixed(2)} | VXN: ${vxn?.toFixed(2) ?? "N/A"} | Trend: ${trend} | Risk: ${riskRating}`,
   };
 }

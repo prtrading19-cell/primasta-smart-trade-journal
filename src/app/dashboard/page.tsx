@@ -35,6 +35,7 @@ import {
   YAxis
 } from "recharts";
 import { ChartContainer, DashboardCard, EmptyChartPlaceholder, SectionHeader, StatusDot } from "@/components/DashboardCard";
+import { InstitutionalDashboard } from "@/components/institutional";
 import { JournalTable } from "@/components/JournalTable";
 import { useAppData } from "@/context/AppDataContext";
 import {
@@ -409,6 +410,27 @@ export default function DashboardPage() {
             <EmptyChartPlaceholder message="Close trades to see monthly performance." />
           )}
         </ChartContainer>
+      </section>
+
+      {/* Institutional Intelligence */}
+      <section id="institutional">
+        <SectionHeader
+          title="Institutional Intelligence"
+          eyebrow="Research Command Center"
+          action={
+            <Link
+              href="/research"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-card px-3 py-2 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold"
+            >
+              Research
+              <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          }
+        />
+        <p className="mt-1 mb-4 text-sm text-text-muted">
+          Live provider infrastructure, scheduler orchestration, decision intelligence, and persistent research analytics.
+        </p>
+        <InstitutionalDashboard />
       </section>
 
       {/* Open Trades */}

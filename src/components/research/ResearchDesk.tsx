@@ -24,8 +24,11 @@ import {
   AIAnalysisCard,
   DecisionCard,
   DataStatusCard,
+  EtfFlowsCard,
+  OpenInterestCard,
 } from "./sections";
 import { LoadingSkeleton } from "./shared";
+import { InstitutionalCompact } from "@/components/institutional";
 
 interface MacroDriver {
   label: string;
@@ -214,6 +217,8 @@ export function US100ResearchDesk() {
     return drivers;
   }, [dataset]);
 
+  const hasMacroProviderData = dataset?.macro?.meta.status === "live";
+
   const dataSources = useMemo(() => {
     if (!dataset) return [];
     const sources: { name: string; status: "live" | "delayed" | "unavailable" | "error"; timestamp?: string; error?: string }[] = [];
@@ -226,6 +231,14 @@ export function US100ResearchDesk() {
     sources.push({ name: earningsName, status: earningsLive ? "live" : "unavailable", timestamp: dataset.collectedAt, error: earningsError });
     sources.push({ name: dataset.movers.meta.source, status: dataset.movers.meta.status, timestamp: dataset.movers.meta.lastUpdated, error: dataset.movers.meta.error });
     sources.push({ name: dataset.volatility.meta.source, status: dataset.volatility.meta.status, timestamp: dataset.volatility.meta.lastUpdated, error: dataset.volatility.meta.error });
+    sources.push({ name: dataset.volatilityInstitutional?.meta.source ?? "Institutional Volatility", status: (dataset.volatilityInstitutional?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.volatilityInstitutional?.meta.timestamp, error: dataset.volatilityInstitutional?.meta.error });
+    sources.push({ name: dataset.etf?.meta.source ?? "ETF Flows", status: (dataset.etf?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.etf?.meta.timestamp, error: dataset.etf?.meta.error });
+    const cotLive = dataset.cot?.some((c) => c.meta.status === "live");
+    sources.push({ name: "COT", status: cotLive ? "live" : "unavailable", timestamp: dataset.cot?.[0]?.meta.timestamp });
+    const oiLive = dataset.openInterest?.some((o) => o.meta.status === "live");
+    sources.push({ name: "Open Interest", status: oiLive ? "live" : "unavailable", timestamp: dataset.openInterest?.[0]?.meta.timestamp });
+    const macroLive = dataset.macro?.meta.status === "live";
+    sources.push({ name: dataset.macro?.meta.source ?? "Macro", status: macroLive ? "live" : "unavailable", timestamp: dataset.macro?.meta.timestamp, error: dataset.macro?.meta.error });
     return sources;
   }, [dataset]);
 
@@ -248,6 +261,9 @@ export function US100ResearchDesk() {
           {loading ? "Fetching..." : "Refresh Data"}
         </button>
       </div>
+
+      {/* Institutional Intelligence strip */}
+      <InstitutionalCompact asset="us100" />
 
       {/* Error */}
       {error && (
@@ -278,7 +294,7 @@ export function US100ResearchDesk() {
 
           {/* Macro + Volatility — two column */}
           <div className="grid gap-6 md:grid-cols-2">
-            <MacroEnvironmentCard drivers={macroDrivers} />
+            <MacroEnvironmentCard drivers={macroDrivers} macroData={hasMacroProviderData ? dataset.macro : undefined} />
             <VolatilityCard volatility={dataset.volatility} />
           </div>
 
@@ -292,6 +308,49 @@ export function US100ResearchDesk() {
           <div className="grid gap-6 md:grid-cols-2">
             <MarketBreadthCard breadth={dataset.marketBreadth} />
             {engineResult && <TechnicalCard technicalBias={engineResult.technicalBias} />}
+          </div>
+
+          {/* Institutional Data: ETF, OI, GVZ — two column */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <EtfFlowsCard etf={dataset.etf} />
+            <div className="space-y-6">
+              <OpenInterestCard records={dataset.openInterest} />
+              {dataset.volatilityInstitutional?.meta.status === "live" && dataset.volatilityInstitutional.gvz !== null ? (
+                <div className="rounded-lg border border-border-subtle bg-surface-card shadow-soft">
+                  <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">GVZ (Gold Volatility)</span>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-text-secondary">GVZ</span>
+                        <span className={`font-medium ${dataset.volatilityInstitutional.gvz > 25 ? "text-loss" : dataset.volatilityInstitutional.gvz > 18 ? "text-gold" : "text-profit"}`}>
+                          {dataset.volatilityInstitutional.gvz.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-text-secondary">Change</span>
+                        <span className={`font-medium ${(dataset.volatilityInstitutional.gvzChange ?? 0) >= 0 ? "text-profit" : "text-loss"}`}>
+                          {dataset.volatilityInstitutional.gvzChange !== null ? `${dataset.volatilityInstitutional.gvzChange >= 0 ? "+" : ""}${dataset.volatilityInstitutional.gvzChange.toFixed(2)}` : "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-text-secondary">Trend</span>
+                        <span className="font-medium text-text-primary">{dataset.volatilityInstitutional.trend}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-text-secondary">Risk</span>
+                        <span className={`font-medium ${dataset.volatilityInstitutional.riskRating === "Extreme" || dataset.volatilityInstitutional.riskRating === "High" ? "text-loss" : dataset.volatilityInstitutional.riskRating === "Moderate" ? "text-gold" : "text-profit"}`}>
+                          {dataset.volatilityInstitutional.riskRating}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Institutional Flow — full width */}

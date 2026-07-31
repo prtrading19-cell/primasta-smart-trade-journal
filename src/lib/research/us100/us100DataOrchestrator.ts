@@ -9,6 +9,7 @@ import type {
   US100MarketBreadth,
   US100DataMeta,
 } from "@/types/us100";
+import type { SectorData, VolatilityData, BreadthData, MacroData, ETFData, COTReportData, OpenInterestRecord } from "@/types/institutional";
 
 export interface US100FullDataset {
   index: US100Index;
@@ -20,12 +21,19 @@ export interface US100FullDataset {
   profiles: US100CompanyProfile[];
   marketBreadth: US100MarketBreadth;
   derivedIndex: US100Index;
+  sectorRotation?: SectorData;
+  volatilityInstitutional?: VolatilityData;
+  breadth?: BreadthData[];
+  macro?: MacroData;
+  etf?: ETFData;
+  cot?: COTReportData[];
+  openInterest?: OpenInterestRecord[];
   collectedAt: string;
   sourceSummary: string[];
   errors: string[];
 }
 
-const COLLECT_TIMEOUT_MS = 30000;
+const COLLECT_TIMEOUT_MS = 45000;
 
 export async function collectUS100Data(): Promise<US100FullDataset> {
   const startTime = Date.now();
@@ -165,7 +173,14 @@ export function buildUS100AIContext(dataset: US100FullDataset): string {
   lines.push("");
 
   lines.push("## SECTOR ROTATION");
-  if (dataset.sectors.meta.status === "live") {
+  const sectorRotation = dataset.sectorRotation;
+  if (sectorRotation && sectorRotation.meta.status === "live") {
+    for (const s of sectorRotation.sectors) {
+      const dir = s.changePercent >= 0 ? "+" : "";
+      lines.push(`${s.sector}: ${dir}${s.changePercent.toFixed(2)}% (${s.etf})`);
+    }
+    lines.push(`Strongest: ${sectorRotation.strongest} | Weakest: ${sectorRotation.weakest}`);
+  } else if (dataset.sectors.meta.status === "live") {
     const s = dataset.sectors;
     const sectorEntries: [string, number][] = [
       ["Technology", s.technology], ["Semiconductors", s.semiconductors],
@@ -214,13 +229,73 @@ export function buildUS100AIContext(dataset: US100FullDataset): string {
   lines.push("");
 
   lines.push("## VOLATILITY");
-  if (dataset.volatility.meta.status === "live") {
+  const volInst = dataset.volatilityInstitutional;
+  if (volInst && volInst.meta.status === "live") {
+    lines.push(`VIX: ${volInst.vix ?? "N/A"} (${volInst.vixChange !== null ? (volInst.vixChange >= 0 ? "+" : "") + volInst.vixChange.toFixed(2) : "N/A"})`);
+    lines.push(`VXN: ${volInst.vxn ?? "N/A"} (${volInst.vxnChange !== null ? (volInst.vxnChange >= 0 ? "+" : "") + volInst.vxnChange.toFixed(2) : "N/A"})`);
+    lines.push(`GVZ: ${volInst.gvz ?? "N/A"} (${volInst.gvzChange !== null ? (volInst.gvzChange >= 0 ? "+" : "") + volInst.gvzChange.toFixed(2) : "N/A"})`);
+    lines.push(`Trend: ${volInst.trend} | Risk Rating: ${volInst.riskRating}`);
+  } else if (dataset.volatility.meta.status === "live") {
     const v = dataset.volatility;
     lines.push(`VIX: ${v.vix ?? "N/A"} (${v.vixChange !== null ? (v.vixChange >= 0 ? "+" : "") + v.vixChange.toFixed(2) : "N/A"})`);
     lines.push(`VXN: ${v.vxn ?? "N/A"} (${v.vxnChange !== null ? (v.vxnChange >= 0 ? "+" : "") + v.vxnChange.toFixed(2) : "N/A"})`);
     lines.push(`Trend: ${v.trend} | Risk Rating: ${v.riskRating}`);
   } else {
     lines.push("Live Data Unavailable — Volatility data not received.");
+  }
+  lines.push("");
+
+  lines.push("## INSTITUTIONAL DATA");
+  if (dataset.cot && dataset.cot.length > 0) {
+    lines.push("COT Positioning:");
+    for (const c of dataset.cot) {
+      if (c.meta.status === "live") {
+        lines.push(`  ${c.contractName} | Commercials: ${c.commercials.netLong >= 0 ? "+" : ""}${c.commercials.netLong} | Non-Commercials: ${c.nonCommercials.netLong >= 0 ? "+" : ""}${c.nonCommercials.netLong} | OI: ${c.totalOpenInterest}`);
+      }
+    }
+  } else {
+    lines.push("COT Positioning: Live Data Unavailable");
+  }
+
+  if (dataset.etf && dataset.etf.meta.status === "live") {
+    lines.push("ETF Flows:");
+    for (const h of dataset.etf.etfs) {
+      lines.push(`  ${h.symbol} | Direction: ${h.flowDirection} | Assets: $${(h.totalAssets / 1e9).toFixed(2)}B`);
+    }
+  } else {
+    lines.push("ETF Flows: Live Data Unavailable");
+  }
+
+  if (dataset.openInterest && dataset.openInterest.length > 0) {
+    lines.push("Open Interest:");
+    for (const oi of dataset.openInterest) {
+      if (oi.meta.status === "live") {
+        lines.push(`  ${oi.contractName} | OI: ${oi.currentLevel} | Change: ${oi.changeFromPrevious >= 0 ? "+" : ""}${oi.changeFromPrevious} | Trend: ${oi.trend}`);
+      }
+    }
+  } else {
+    lines.push("Open Interest: Live Data Unavailable");
+  }
+
+  if (dataset.macro && dataset.macro.meta.status === "live") {
+    lines.push("Macro Indicators:");
+    for (const ind of dataset.macro.indicators) {
+      const dir = ind.change >= 0 ? "+" : "";
+      lines.push(`  ${ind.name}: ${ind.value} (${dir}${ind.change}) | Trend: ${ind.trend} | Impact: ${ind.impact}`);
+    }
+  } else {
+    lines.push("Macro Indicators: Live Data Unavailable");
+  }
+
+  if (dataset.breadth && dataset.breadth.length > 0) {
+    lines.push("Market Breadth:");
+    for (const b of dataset.breadth) {
+      if (b.meta.status === "live") {
+        lines.push(`  ${b.exchange} | Advances: ${b.advances} | Declines: ${b.declines} | A/D: ${b.aDRatio} | Score: ${b.breadthScore}`);
+      }
+    }
+  } else {
+    lines.push("Market Breadth: Live Data Unavailable");
   }
   lines.push("");
 
