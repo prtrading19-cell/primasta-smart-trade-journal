@@ -12,8 +12,8 @@ import { normalizeCOTRecord } from "./normalizer";
 import { validateCOTData } from "./validator";
 import { unzipBuffer } from "./zipUtil";
 
-const CFTC_BASE_URL = "https://www.cftc.gov/dea/newcot";
-const FETCH_TIMEOUT_MS = 10000;
+const CFTC_BASE_URL = "https://www.cftc.gov/files/dea/history";
+const FETCH_TIMEOUT_MS = 20000;
 const SOURCE = "CFTC";
 
 export interface COTMarketConfig {
@@ -57,14 +57,15 @@ export async function fetchCOTReport(
     const results: COTReportData[] = [];
 
     for (const market of targets) {
-      const matching = records.filter((r) => {
-        const name = r.marketName.toUpperCase();
-        const code = r.marketCode.toUpperCase();
-        return (
-          code === market.contractCode ||
-          name.includes(market.marketPattern.toUpperCase())
-        );
-      });
+      const codeMatches = records.filter((r) =>
+        r.marketCode.toUpperCase() === market.contractCode.toUpperCase()
+      );
+      const matching =
+        codeMatches.length > 0
+          ? codeMatches
+          : records.filter((r) =>
+              r.marketName.toUpperCase().includes(market.marketPattern.toUpperCase())
+            );
 
       if (matching.length === 0) {
         results.push(buildUnavailableRecord(market, "No matching record found"));
@@ -99,7 +100,7 @@ export async function fetchCOTReport(
 
 async function downloadCFTC(): Promise<string> {
   const year = new Date().getFullYear();
-  const url = `${CFTC_BASE_URL}/f_l_future_${year}.zip`;
+  const url = `${CFTC_BASE_URL}/deahistfo${year}.zip`;
 
   const response = await fetchWithTimeout(url, { timeout: FETCH_TIMEOUT_MS });
 

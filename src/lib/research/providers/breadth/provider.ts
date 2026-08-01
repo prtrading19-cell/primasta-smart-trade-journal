@@ -4,6 +4,7 @@ import {
   ProviderError,
   buildUnavailableResult,
   buildSuccessResult,
+  toUnavailableResult,
   type ProviderResult,
 } from "../shared";
 import { parseBreadthResponse } from "./parser";
@@ -52,7 +53,7 @@ export async function fetchMarketBreadth(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.log(`[Breadth Provider] ${SOURCE} failed: ${msg}`);
-    return buildUnavailableResult(SOURCE, `Breadth data unavailable: ${msg}`);
+    return toUnavailableResult(SOURCE, err, "Breadth data unavailable");
   }
 }
 

@@ -1,5 +1,6 @@
 import type { US100Earnings, US100DataMeta } from "@/types/us100";
 import { fmpFetch, nowISO, FMPError } from "./fmpClient";
+import { classifyProviderFailure, buildProviderLimitationError } from "../shared";
 
 interface FMPEarningsCalendar {
   symbol: string;
@@ -57,6 +58,10 @@ export async function fetchEarnings(symbols: readonly string[]): Promise<US100Ea
     if (message.includes("not configured")) statusLabel = "INVALID_KEY";
     else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
     console.log(`[FMP Earnings] Endpoint: /earnings-calendar | DateRange: ${from}..${to} | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
+    const classification = classifyProviderFailure("FMP", err);
+    const meta = classification.isLimitation
+      ? buildMeta("unavailable", "FMP", timestamp, buildProviderLimitationError("FMP", classification.reason ?? message))
+      : buildMeta("unavailable", "FMP", timestamp, message);
     return symbols.map((symbol) => ({
       symbol,
       company: symbol,
@@ -64,7 +69,7 @@ export async function fetchEarnings(symbols: readonly string[]): Promise<US100Ea
       estimateEPS: null,
       previousEPS: null,
       importance: "Medium" as const,
-      meta: buildMeta("unavailable", "FMP", timestamp, message),
+      meta,
     }));
   }
 }

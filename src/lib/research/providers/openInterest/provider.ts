@@ -4,6 +4,7 @@ import {
   ProviderError,
   buildUnavailableResult,
   buildSuccessResult,
+  toUnavailableResult,
   type ProviderResult,
 } from "../shared";
 import { parseOIResponse } from "./parser";
@@ -91,7 +92,7 @@ export async function fetchOpenInterest(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.log(`[OI Provider] ${SOURCE} failed: ${msg}`);
-    return buildUnavailableResult(SOURCE, `OI data unavailable: ${msg}`);
+    return toUnavailableResult(SOURCE, err, "OI data unavailable");
   }
 }
 

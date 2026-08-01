@@ -1,5 +1,6 @@
 import type { US100CompanyProfile, US100DataMeta } from "@/types/us100";
 import { fmpFetch, nowISO, FMPError } from "./fmpClient";
+import { classifyProviderFailure, buildProviderLimitationError } from "../shared";
 
 interface FMPProfile {
   symbol: string;
@@ -37,8 +38,22 @@ export async function fetchCompanyProfiles(symbols: readonly string[]): Promise<
               meta: buildMeta("live", "FMP", timestamp),
             } as US100CompanyProfile;
           }
-        } catch {
-          // per-symbol failure handled below
+        } catch (err) {
+          const classification = classifyProviderFailure("FMP", err);
+          if (classification.isLimitation) {
+            return {
+              symbol,
+              name: symbol,
+              marketCap: 0,
+              sector: "",
+              industry: "",
+              description: "",
+              website: "",
+              ceo: "",
+              employees: 0,
+              meta: buildMeta("unavailable", "FMP", timestamp, buildProviderLimitationError("FMP", classification.reason ?? "Profile fetch failed")),
+            } as US100CompanyProfile;
+          }
         }
         return {
           symbol,
@@ -66,6 +81,10 @@ export async function fetchCompanyProfiles(symbols: readonly string[]): Promise<
     if (message.includes("not configured")) statusLabel = "INVALID_KEY";
     else if (message.includes("Rate limited")) statusLabel = "RATE_LIMITED";
     console.log(`[FMP Profiles] Endpoint: /profile/* | Status: ${statusLabel} | Error: ${message} | Duration: ${durationMs}ms`);
+    const classification = classifyProviderFailure("FMP", err);
+    const meta = classification.isLimitation
+      ? buildMeta("unavailable", "FMP", timestamp, buildProviderLimitationError("FMP", classification.reason ?? message))
+      : buildMeta("unavailable", "FMP", timestamp, message);
     return symbols.map((symbol) => ({
       symbol,
       name: symbol,
@@ -76,7 +95,7 @@ export async function fetchCompanyProfiles(symbols: readonly string[]): Promise<
       website: "",
       ceo: "",
       employees: 0,
-      meta: buildMeta("unavailable", "FMP", timestamp, message),
+      meta,
     }));
   }
 }

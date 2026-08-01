@@ -1,5 +1,6 @@
 import type { ProviderResult } from "@/lib/research/providers/shared";
 import type { VolatilityData, BreadthData, SectorData, MacroData, ETFData, COTReportData, OpenInterestRecord } from "@/types/institutional";
+import { buildProviderMeta } from "@/types/institutional";
 import type { US100Index, US100MegaCapStock, US100Earnings, US100SectorPerformance, US100Movers, US100Volatility, US100CompanyProfile } from "@/types/us100";
 import { fetchCOTReport } from "../providers/cot/cftcProvider";
 import { fetchETFData } from "../providers/etf/provider";
@@ -185,12 +186,25 @@ const providerExecutors: Record<string, (params?: any) => Promise<any>> = {
       "gold-price-twelve",
       { timeoutMs: 8000 }
     );
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const isLimitation = response.status === 429 || response.status === 403;
+      if (isLimitation) {
+        return {
+          success: false,
+          data: null,
+          error: `Unavailable (Provider Limitation): Twelve Data rate limit (HTTP ${response.status})`,
+          meta: buildProviderMeta("Twelve Data", "unavailable", `Unavailable (Provider Limitation): Twelve Data rate limit (HTTP ${response.status})`),
+        };
+      }
+      return null;
+    }
     const raw = await response.json();
+    const price = parseFloat(raw.close ?? raw.price) || 0;
     return {
-      price: parseFloat(raw.close ?? raw.price) || 0,
+      price,
       change: parseFloat(raw.change) || 0,
       changePercent: parseFloat(raw.percent_change) || 0,
+      meta: buildProviderMeta("Twelve Data", "live"),
     };
   }, "gold"),
 };

@@ -4,6 +4,7 @@ import {
   ProviderError,
   buildUnavailableResult,
   buildSuccessResult,
+  toUnavailableResult,
   type ProviderResult,
 } from "../shared";
 import { parseVolResponse } from "./parser";
@@ -58,7 +59,7 @@ export async function fetchVolatilityData(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.log(`[Volatility Provider] ${SOURCE} failed: ${msg}`);
-    return buildUnavailableResult(SOURCE, `Volatility data unavailable: ${msg}`);
+    return toUnavailableResult(SOURCE, err, "Volatility data unavailable");
   }
 }
 

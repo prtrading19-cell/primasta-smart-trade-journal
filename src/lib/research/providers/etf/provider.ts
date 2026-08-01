@@ -4,6 +4,7 @@ import {
   ProviderError,
   buildUnavailableResult,
   buildSuccessResult,
+  toUnavailableResult,
   type ProviderResult,
 } from "../shared";
 import { parseETFResponse } from "./parser";
@@ -59,7 +60,7 @@ export async function fetchETFData(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.log(`[ETF Provider] ${SOURCE} failed: ${msg}`);
-    return buildUnavailableResult(SOURCE, `ETF flow data unavailable: ${msg}`);
+    return toUnavailableResult(SOURCE, err, "ETF flow data unavailable");
   }
 }
 

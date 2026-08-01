@@ -4,6 +4,7 @@ import {
   ProviderError,
   buildUnavailableResult,
   buildSuccessResult,
+  toUnavailableResult,
   type ProviderResult,
 } from "../shared";
 import { parseSectorQuotes } from "./parser";
@@ -61,7 +62,7 @@ export async function fetchSectorData(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.log(`[Sector Provider] ${SOURCE} failed: ${msg}`);
-    return buildUnavailableResult(SOURCE, `Sector data unavailable: ${msg}`);
+    return toUnavailableResult(SOURCE, err, "Sector data unavailable");
   }
 }
 
@@ -85,6 +86,13 @@ async function tryFetchAll(
 
     if (!response.ok) {
       console.log(`[Sector Provider] Twelve Data HTTP ${response.status} for batch ${i}`);
+      if (response.status === 429 || response.status === 403) {
+        throw new ProviderError(
+          `Twelve Data returned HTTP ${response.status}`,
+          SOURCE,
+          response.status
+        );
+      }
       continue;
     }
 

@@ -1,5 +1,6 @@
 import type { US100MegaCapStock, US100DataMeta } from "@/types/us100";
 import { RequestManager } from "@/lib/research/infrastructure/RequestManager";
+import { buildProviderLimitationError } from "../shared";
 
 const PER_REQUEST_TIMEOUT_MS = 10000;
 const TD_BASE = "https://api.twelvedata.com";
@@ -78,6 +79,9 @@ async function fetchSingleQuote(
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
       console.log(`[Twelve Data] ${symbol} HTTP ${response.status} | Duration: ${reqDuration}ms | ${errorText.slice(0, 100)}`);
+      if (response.status === 429 || response.status === 403) {
+        return buildSingleUnavailable(symbol, timestamp, `HTTP ${response.status}`, true);
+      }
       return buildSingleUnavailable(symbol, timestamp, `HTTP ${response.status}`);
     }
 
@@ -127,7 +131,7 @@ function buildUnavailableQuotes(symbols: readonly string[], timestamp: string, e
   return symbols.map((symbol) => buildSingleUnavailable(symbol, timestamp, error));
 }
 
-function buildSingleUnavailable(symbol: string, timestamp: string, error: string): US100MegaCapStock {
+function buildSingleUnavailable(symbol: string, timestamp: string, error: string, isLimitation = false): US100MegaCapStock {
   return {
     symbol,
     name: symbol,
@@ -142,10 +146,12 @@ function buildSingleUnavailable(symbol: string, timestamp: string, error: string
     low: 0,
     previousClose: 0,
     timestamp,
-    meta: { status: "unavailable", source: "Twelve Data", timestamp, lastUpdated: timestamp, error },
+    meta: isLimitation
+      ? buildMeta("unavailable", "Twelve Data", timestamp, buildProviderLimitationError("Twelve Data", error))
+      : buildMeta("unavailable", "Twelve Data", timestamp, error),
   };
 }
 
-function buildMeta(status: US100DataMeta["status"], source: string, timestamp: string): US100DataMeta {
-  return { status, source, timestamp, lastUpdated: timestamp };
+function buildMeta(status: US100DataMeta["status"], source: string, timestamp: string, error?: string): US100DataMeta {
+  return { status, source, timestamp, lastUpdated: timestamp, ...(error ? { error } : {}) };
 }
