@@ -49,7 +49,6 @@ export function calculateTechnicalBias(
   input: TechnicalInput,
   config?: TechnicalBiasConfig
 ): TechnicalBiasResult {
-  console.log("[RUNTIME-AUDIT:TechBias] calculateTechnicalBias called with input:", JSON.stringify(input, null, 2));
   const effectiveConfig = config ?? DEFAULT_CONFIG;
   const timestamp = input.timestamp ?? new Date().toISOString();
   const timeframe = input.timeframe ?? "D1";

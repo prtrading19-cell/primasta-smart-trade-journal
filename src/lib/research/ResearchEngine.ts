@@ -47,14 +47,6 @@ export function executeResearchEngine(
 
   const driverAnalyses = input.driverAnalyses ?? [];
 
-  console.log("[RUNTIME-AUDIT:Engine] executeResearchEngine called. asset:", input.asset);
-  console.log("[RUNTIME-AUDIT:Engine] technicalInput provided:", !!technicalInput, technicalInput ? Object.keys(technicalInput) : "null");
-  console.log("[RUNTIME-AUDIT:Engine] institutionalInput provided:", !!institutionalInput, institutionalInput ? Object.keys(institutionalInput) : "null");
-  console.log("[RUNTIME-AUDIT:Engine] driverAnalyses count:", driverAnalyses.length);
-  console.log("[RUNTIME-AUDIT:Engine] options.skipTechnicalBias:", options.skipTechnicalBias);
-  console.log("[RUNTIME-AUDIT:Engine] options.skipInstitutionalFlow:", options.skipInstitutionalFlow);
-  console.log("[RUNTIME-AUDIT:Engine] options.skipDecisionEngine:", options.skipDecisionEngine);
-
   let categoryScores = createEmptyCategoryScores(timestamp);
   let technicalBias = createEmptyTechnicalBias(timestamp);
   let institutionalFlow = createEmptyInstitutionalFlow(timestamp);
@@ -94,10 +86,6 @@ export function executeResearchEngine(
     ));
   }
 
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 1 - categoryScores.overallConfidence:", categoryScores.overallConfidence);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 1 - categoryScores.scores.length:", categoryScores.scores.length);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 1 - categoryScores:", JSON.stringify(categoryScores, null, 2));
-
   // Stage 2: Technical Bias
   if (!options.skipTechnicalBias && technicalInput) {
     const stopTiming = startStageTiming(diagnostics, "technical-bias");
@@ -126,14 +114,6 @@ export function executeResearchEngine(
       undefined, options.skipTechnicalBias ? ["Technical bias skipped by option."] : ["No technical input provided."]
     ));
   }
-
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.technicalBias:", technicalBias.technicalBias);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.confidence:", technicalBias.confidence);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.strength:", technicalBias.strength);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.technicalScore:", technicalBias.technicalScore);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.factors.length:", technicalBias.factors?.length);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias.supportingFactors:", technicalBias.supportingFactors);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 2 - technicalBias:", JSON.stringify(technicalBias, null, 2));
 
   // Stage 3: Institutional Flow
   if (!options.skipInstitutionalFlow && institutionalInput) {
@@ -164,13 +144,6 @@ export function executeResearchEngine(
       undefined, options.skipInstitutionalFlow ? ["Institutional flow skipped by option."] : ["No institutional input provided."]
     ));
   }
-
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow.institutionalBias:", institutionalFlow.institutionalBias);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow.confidence:", institutionalFlow.confidence);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow.strength:", institutionalFlow.strength);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow.institutionalScore:", institutionalFlow.institutionalScore);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow.factors.length:", institutionalFlow.factors?.length);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 3 - institutionalFlow:", JSON.stringify(institutionalFlow, null, 2));
 
   // Stage 4: Decision Engine
   let decision = createEmptyDecision(timestamp);
@@ -218,11 +191,6 @@ export function executeResearchEngine(
     ));
   }
 
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 4 - decision.decision:", decision.decision);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 4 - decision.overallGoldScore:", decision.overallGoldScore);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 4 - decision.overallConfidence:", decision.overallConfidence);
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 4 - decision:", JSON.stringify(decision, null, 2));
-
   // Stage 5: Institutional Decision (enhanced)
   let institutionalDecision: InstitutionalDecisionResult | undefined;
   if (!options.skipDecisionEngine && profile) {
@@ -255,8 +223,6 @@ export function executeResearchEngine(
       }
     }
   }
-
-  console.log("[RUNTIME-AUDIT:Engine] After Stage 5 - institutionalDecision:", institutionalDecision ? JSON.stringify(institutionalDecision, null, 2) : "undefined");
 
   // V2 Engines (optional — run when decisionContextRaw is provided)
   let decisionContext;
@@ -458,11 +424,6 @@ export function executeResearchEngine(
   const executionTimeMs = Math.round(performance.now() - pipelineStartTime);
   const hasFailure = diagnostics.engines.some(e => e.status === "failed");
   const pipelineStatus = hasFailure ? "partial" : "success";
-
-  console.log("[RUNTIME-AUDIT:Engine] FINAL RETURN - pipelineStatus:", pipelineStatus);
-  console.log("[RUNTIME-AUDIT:Engine] FINAL RETURN - technicalBias.confidence:", technicalBias.confidence, "strength:", technicalBias.strength);
-  console.log("[RUNTIME-AUDIT:Engine] FINAL RETURN - institutionalFlow.confidence:", institutionalFlow.confidence, "strength:", institutionalFlow.strength);
-  console.log("[RUNTIME-AUDIT:Engine] FINAL RETURN - decision.overallGoldScore:", decision.overallGoldScore);
 
   return {
     asset: input.asset,

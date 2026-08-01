@@ -1,6 +1,6 @@
 import type { DriverAnalysisObject, DriverBias, DriverStrength } from "@/types/goldResearchConfig";
 import type { US100FullDataset } from "./us100DataOrchestrator";
-import { getProfile } from "@/lib/research";
+import { getProfile } from "../ResearchRegistry";
 import type { SectorData, BreadthData, MacroData, ETFData, COTReportData, OpenInterestRecord, VolatilityData } from "@/types/institutional";
 
 const nowISO = () => new Date().toISOString();

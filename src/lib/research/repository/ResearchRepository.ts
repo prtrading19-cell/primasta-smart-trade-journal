@@ -1,16 +1,12 @@
 import type { ResearchSnapshot, SnapshotFilter, RepositoryStatistics, SnapshotOrigin } from "./types";
+import { getSharedSingleton } from "../infrastructure/singleton";
 
 export class ResearchRepository {
-  private static instance: ResearchRepository;
-
   private snapshots: ResearchSnapshot[] = [];
   private maxSnapshots = 10000;
 
   static getInstance(): ResearchRepository {
-    if (!ResearchRepository.instance) {
-      ResearchRepository.instance = new ResearchRepository();
-    }
-    return ResearchRepository.instance;
+    return getSharedSingleton("ResearchRepository", () => new ResearchRepository());
   }
 
   saveSnapshot(snapshot: ResearchSnapshot): void {

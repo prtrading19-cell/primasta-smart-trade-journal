@@ -1,4 +1,4 @@
-import { getProfile } from "../index";
+import { getProfile } from "../ResearchRegistry";
 import { initializeProviderRegistry } from "../infrastructure/registerProviders";
 import {
   executeUS100Index,

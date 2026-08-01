@@ -41,8 +41,8 @@ export function EarningsCard({ earnings }: EarningsCardProps) {
               <tr key={`${e.symbol}-${e.earningsDate}`} className="border-b border-border-subtle/50">
                 <td className="py-2 pr-3 font-semibold text-text-primary">{e.symbol}</td>
                 <td className="py-2 pr-3 text-text-secondary">{e.earningsDate}</td>
-                <td className="py-2 pr-3 text-right text-text-primary">{e.estimateEPS !== null ? `$${e.estimateEPS.toFixed(2)}` : "--"}</td>
-                <td className="py-2 pr-3 text-right text-text-secondary">{e.previousEPS !== null ? `$${e.previousEPS.toFixed(2)}` : "--"}</td>
+                <td className="py-2 pr-3 text-right text-text-primary">{typeof e.estimateEPS === "number" ? `$${e.estimateEPS.toFixed(2)}` : "--"}</td>
+                <td className="py-2 pr-3 text-right text-text-secondary">{typeof e.previousEPS === "number" ? `$${e.previousEPS.toFixed(2)}` : "--"}</td>
                 <td className="py-2">
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${getImportanceColor(e.importance)}`}>
                     {e.importance}

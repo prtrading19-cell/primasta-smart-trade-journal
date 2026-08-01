@@ -42,8 +42,8 @@ export async function fetchEarnings(symbols: readonly string[]): Promise<US100Ea
         symbol: e.symbol,
         company: e.symbol,
         earningsDate: e.date,
-        estimateEPS: e.epsEstimated,
-        previousEPS: e.eps,
+        estimateEPS: e.epsEstimated ?? null,
+        previousEPS: e.eps ?? null,
         importance: symbolSet.has(e.symbol) ? "High" as const : "Medium" as const,
         meta: buildMeta("live", "FMP", timestamp),
       }));

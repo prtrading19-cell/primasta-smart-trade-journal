@@ -9,10 +9,9 @@ import { SchedulerMetrics } from "./SchedulerMetrics";
 import { SchedulerEvents } from "./SchedulerEvents";
 import { CacheLifecycleLayer } from "./CacheLifecycleLayer";
 import { ResearchRepository } from "../repository/ResearchRepository";
+import { getSharedSingleton } from "./singleton";
 
 export class SchedulerEngine {
-  private static instance: SchedulerEngine;
-
   private status: SchedulerEngineStatus = "stopped";
   private mainInterval: ReturnType<typeof setInterval> | null = null;
   private readonly intervalMs = 10000;
@@ -26,10 +25,7 @@ export class SchedulerEngine {
   private providerRecords = new Map<string, AssetRefreshRecord>();
 
   static getInstance(): SchedulerEngine {
-    if (!SchedulerEngine.instance) {
-      SchedulerEngine.instance = new SchedulerEngine();
-    }
-    return SchedulerEngine.instance;
+    return getSharedSingleton("SchedulerEngine", () => new SchedulerEngine());
   }
 
   getStatus(): SchedulerEngineStatus {

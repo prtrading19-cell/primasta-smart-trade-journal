@@ -28,34 +28,43 @@ function readStoredAsset(): ResearchAsset {
   return DEFAULT_ASSET;
 }
 
-export function ResearchAssetProvider({ children }: { children: React.ReactNode }) {
-  const [selectedAsset, setSelectedAssetState] = useState<ResearchAsset>(DEFAULT_ASSET);
-  const [hydrated, setHydrated] = useState(false);
+interface ResearchAssetProviderProps {
+  children: React.ReactNode;
+  initialAsset?: ResearchAsset;
+}
+
+export function ResearchAssetProvider({ children, initialAsset }: ResearchAssetProviderProps) {
+  const [selectedAsset, setSelectedAssetState] = useState<ResearchAsset>(initialAsset ?? DEFAULT_ASSET);
+  const [hydrated, setHydrated] = useState(Boolean(initialAsset));
 
   useEffect(() => {
+    if (initialAsset) return;
     setSelectedAssetState(readStoredAsset());
     setHydrated(true);
-  }, []);
+  }, [initialAsset]);
 
-  const setSelectedAsset = useCallback((asset: ResearchAsset) => {
-    setSelectedAssetState(asset);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, asset);
-      } catch {
-        // localStorage unavailable
+  const setSelectedAsset = useCallback(
+    (asset: ResearchAsset) => {
+      setSelectedAssetState(asset);
+      if (!initialAsset && typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, asset);
+        } catch {
+          // localStorage unavailable
+        }
       }
-    }
-  }, []);
+    },
+    [initialAsset]
+  );
 
   const value = useMemo<ResearchAssetContextValue>(
     () => ({
-      selectedAsset: hydrated ? selectedAsset : DEFAULT_ASSET,
+      selectedAsset: hydrated ? selectedAsset : initialAsset ?? DEFAULT_ASSET,
       setSelectedAsset,
       availableAssets: ASSET_CONFIG,
       profileLoaded: hydrated,
     }),
-    [selectedAsset, setSelectedAsset, hydrated]
+    [selectedAsset, setSelectedAsset, hydrated, initialAsset]
   );
 
   return (

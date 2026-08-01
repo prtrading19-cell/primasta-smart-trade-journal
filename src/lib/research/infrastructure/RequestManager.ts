@@ -1,5 +1,6 @@
 import type { RequestPriority, RequestManagerStatus } from "./types";
 import { ProviderLogger } from "./ProviderLogger";
+import { getSharedSingleton } from "./singleton";
 
 interface PendingRequest {
   resolve: (value: Response) => void;
@@ -14,7 +15,6 @@ interface PendingRequest {
 }
 
 export class RequestManager {
-  private static instance: RequestManager;
   private queue: PendingRequest[] = [];
   private activeCount = 0;
   private maxConcurrency = 6;
@@ -22,10 +22,7 @@ export class RequestManager {
   private baseBackoffMs = 1000;
 
   static getInstance(): RequestManager {
-    if (!RequestManager.instance) {
-      RequestManager.instance = new RequestManager();
-    }
-    return RequestManager.instance;
+    return getSharedSingleton("RequestManager", () => new RequestManager());
   }
 
   setMaxConcurrency(max: number): void {

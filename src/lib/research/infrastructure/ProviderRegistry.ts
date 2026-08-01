@@ -1,14 +1,11 @@
 import type { ProviderRegistration, AssetClass } from "./types";
+import { getSharedSingleton } from "./singleton";
 
 export class ProviderRegistry {
-  private static instance: ProviderRegistry;
   private providers = new Map<string, ProviderRegistration>();
 
   static getInstance(): ProviderRegistry {
-    if (!ProviderRegistry.instance) {
-      ProviderRegistry.instance = new ProviderRegistry();
-    }
-    return ProviderRegistry.instance;
+    return getSharedSingleton("ProviderRegistry", () => new ProviderRegistry());
   }
 
   register(registration: ProviderRegistration): void {

@@ -1,15 +1,12 @@
 import type { CacheEntry } from "./types";
+import { getSharedSingleton } from "./singleton";
 
 export class ProviderCache {
-  private static instance: ProviderCache;
   private cache = new Map<string, CacheEntry>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   static getInstance(): ProviderCache {
-    if (!ProviderCache.instance) {
-      ProviderCache.instance = new ProviderCache();
-    }
-    return ProviderCache.instance;
+    return getSharedSingleton("ProviderCache", () => new ProviderCache());
   }
 
   startAutoCleanup(intervalMs = 60000): void {

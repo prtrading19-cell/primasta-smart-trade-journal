@@ -8,10 +8,11 @@ import { buildDecisionExplanation } from "./DecisionExplanationEngine";
 import { generateAiSummary } from "./AiSummaryEngine";
 import { ResearchTimeline } from "./ResearchTimeline";
 import { DecisionHistory } from "./DecisionHistory";
+import { getSharedSingleton } from "../infrastructure/singleton";
 import type { DecisionIntelligenceResult, DecisionHistoryEntry } from "./types";
 
-export const globalTimeline = new ResearchTimeline();
-export const globalDecisionHistory = new DecisionHistory();
+export const globalTimeline = getSharedSingleton("globalTimeline", () => new ResearchTimeline());
+export const globalDecisionHistory = getSharedSingleton("globalDecisionHistory", () => new DecisionHistory());
 
 export interface DecisionIntelligenceInput {
   asset: string;

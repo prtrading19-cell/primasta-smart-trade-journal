@@ -1,15 +1,12 @@
 import type { ProviderLogEntry } from "./types";
+import { getSharedSingleton } from "./singleton";
 
 export class ProviderLogger {
-  private static instance: ProviderLogger;
   private logs: ProviderLogEntry[] = [];
   private maxLogs = 10000;
 
   static getInstance(): ProviderLogger {
-    if (!ProviderLogger.instance) {
-      ProviderLogger.instance = new ProviderLogger();
-    }
-    return ProviderLogger.instance;
+    return getSharedSingleton("ProviderLogger", () => new ProviderLogger());
   }
 
   log(entry: ProviderLogEntry): void {

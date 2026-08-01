@@ -7,9 +7,7 @@ interface InstitutionalSummaryCardProps {
 }
 
 export function InstitutionalSummaryCard({ institutionalFlow }: InstitutionalSummaryCardProps) {
-  console.log("[RUNTIME-AUDIT:InstitutionalCard] received props:", JSON.stringify(institutionalFlow, null, 2));
   const hasData = institutionalFlow.confidence > 0 || institutionalFlow.strength !== "None";
-  console.log("[RUNTIME-AUDIT:InstitutionalCard] hasData:", hasData, "confidence:", institutionalFlow.confidence, "strength:", institutionalFlow.strength);
 
   if (!hasData) {
     return (

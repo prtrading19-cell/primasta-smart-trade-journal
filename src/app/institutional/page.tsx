@@ -27,14 +27,14 @@ export default function InstitutionalPage() {
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
-                href="/gold-research"
+                href="/research/gold"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-card px-4 py-2.5 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold"
               >
                 Gold Research
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/research"
+                href="/research/us100"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-card px-4 py-2.5 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold"
               >
                 US100 Research

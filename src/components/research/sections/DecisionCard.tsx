@@ -64,8 +64,6 @@ function CategoryBreakdownBar({ category }: { category: CategoryBreakdown }) {
 }
 
 export function DecisionCard({ decision, institutionalDecision }: DecisionCardProps) {
-  console.log("[RUNTIME-AUDIT:DecisionCard] received decision:", JSON.stringify(decision, null, 2));
-  console.log("[RUNTIME-AUDIT:DecisionCard] received institutionalDecision:", institutionalDecision ? JSON.stringify(institutionalDecision, null, 2) : "undefined");
   if (!institutionalDecision) {
     if (!decision || decision.overallGoldScore === 0) {
       return (

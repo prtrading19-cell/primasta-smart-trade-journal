@@ -15,12 +15,6 @@ import { getProfile, hasProfile } from "./ResearchRegistry";
 import { executeResearchEngine, buildAutoSummary } from "./ResearchEngine";
 
 export function analyzeResearchAsset(request: ResearchServiceRequest): ResearchServiceResponse {
-  console.log("[RUNTIME-AUDIT:Service] analyzeResearchAsset called. asset:", request.asset);
-  console.log("[RUNTIME-AUDIT:Service] request.technicalInput:", request.technicalInput ? JSON.stringify(request.technicalInput, null, 2) : "undefined/null");
-  console.log("[RUNTIME-AUDIT:Service] request.institutionalInput:", request.institutionalInput ? JSON.stringify(request.institutionalInput, null, 2) : "undefined/null");
-  console.log("[RUNTIME-AUDIT:Service] request.driverAnalyses.length:", request.driverAnalyses?.length);
-  console.log("[RUNTIME-AUDIT:Service] request.currentPrice:", request.currentPrice);
-
   if (!hasProfile(request.asset)) {
     return { success: false, error: `No profile registered for asset: ${request.asset}` };
   }

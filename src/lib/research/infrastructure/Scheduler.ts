@@ -3,18 +3,15 @@ import { ProviderRegistry } from "./ProviderRegistry";
 import { ProviderCache } from "./ProviderCache";
 import { ProviderHealthEngine } from "./ProviderHealthEngine";
 import { ProviderLogger } from "./ProviderLogger";
+import { getSharedSingleton } from "./singleton";
 
 export class Scheduler {
-  private static instance: Scheduler;
   private jobs = new Map<string, SchedulerJob>();
   private timers = new Map<string, ReturnType<typeof setInterval>>();
   private running = false;
 
   static getInstance(): Scheduler {
-    if (!Scheduler.instance) {
-      Scheduler.instance = new Scheduler();
-    }
-    return Scheduler.instance;
+    return getSharedSingleton("Scheduler", () => new Scheduler());
   }
 
   registerJob(

@@ -1,16 +1,13 @@
 import type { HealthRecord } from "./types";
 import { ProviderRegistry } from "./ProviderRegistry";
+import { getSharedSingleton } from "./singleton";
 
 export class ProviderHealthEngine {
-  private static instance: ProviderHealthEngine;
   private health = new Map<string, HealthRecord>();
   private latencyWindow: number[] = [];
 
   static getInstance(): ProviderHealthEngine {
-    if (!ProviderHealthEngine.instance) {
-      ProviderHealthEngine.instance = new ProviderHealthEngine();
-    }
-    return ProviderHealthEngine.instance;
+    return getSharedSingleton("ProviderHealthEngine", () => new ProviderHealthEngine());
   }
 
   recordSuccess(providerId: string, latency: number): void {

@@ -48,7 +48,6 @@ export function calculateInstitutionalFlow(
   input: InstitutionalFlowInput,
   config?: InstitutionalFlowConfig
 ): InstitutionalFlowResult {
-  console.log("[RUNTIME-AUDIT:InstFlow] calculateInstitutionalFlow called with input:", JSON.stringify(input, null, 2));
   const effectiveConfig = config ?? DEFAULT_CONFIG;
   const timestamp = input.timestamp ?? new Date().toISOString();
 
