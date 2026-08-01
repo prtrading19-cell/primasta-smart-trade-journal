@@ -8,6 +8,7 @@ import { DependencyGraph } from "./DependencyGraph";
 import { SchedulerMetrics } from "./SchedulerMetrics";
 import { SchedulerEvents } from "./SchedulerEvents";
 import { CacheLifecycleLayer } from "./CacheLifecycleLayer";
+import { classifyExecutionResult } from "./classifyExecutionResult";
 import { ResearchRepository } from "../repository/ResearchRepository";
 import { getSharedSingleton } from "./singleton";
 
@@ -151,7 +152,8 @@ export class SchedulerEngine {
       const record = this.getOrCreateProviderRecord(provider.id);
       if (record.status === "refreshing") continue;
 
-      const nextRefresh = (record.lastSuccess ?? 0) + provider.refreshIntervalMs;
+      const lastAttempt = record.lastRefresh ?? record.lastSuccess ?? 0;
+      const nextRefresh = lastAttempt + provider.refreshIntervalMs;
       if (now >= nextRefresh && !this.queue.hasPending(provider.id)) {
         this.queue.enqueue("provider", provider.id, this.mapPriority(provider.priority));
       }
@@ -205,6 +207,10 @@ export class SchedulerEngine {
 
     try {
       const { executeProvider } = await import("./ProviderExecution");
+      const { initializeResearchProfiles } = await import("../initialize");
+      const { getProfile } = await import("../ResearchRegistry");
+      initializeResearchProfiles();
+      const symbols = getProfile("us100")?.trackedSymbols ?? [];
       const executors: Record<string, () => Promise<unknown>> = {
         "volatility-institutional": () => executeProvider("volatility-institutional", {}),
         "macro-institutional": () => executeProvider("macro-institutional", {}),
@@ -215,23 +221,53 @@ export class SchedulerEngine {
         "sectors-institutional": () => executeProvider("sectors-institutional", {}),
         "gold-price-twelve": () => executeProvider("gold-price-twelve", {}),
         "market-index-fmp": () => executeProvider("market-index-fmp", {}),
-        "stock-quotes-twelve": () => executeProvider("stock-quotes-twelve", {}),
-        "earnings-fmp": () => executeProvider("earnings-fmp", {}),
+        "stock-quotes-twelve": () => executeProvider("stock-quotes-twelve", { symbols }),
+        "earnings-fmp": () => executeProvider("earnings-fmp", { symbols }),
         "sectors-fmp": () => executeProvider("sectors-fmp", {}),
         "movers-fmp": () => executeProvider("movers-fmp", {}),
         "volatility-fmp": () => executeProvider("volatility-fmp", {}),
-        "company-profiles-fmp": () => executeProvider("company-profiles-fmp", {}),
+        "company-profiles-fmp": () => executeProvider("company-profiles-fmp", { symbols }),
       };
 
       const executor = executors[providerId];
       if (executor) {
-        await executor();
+        const result = await executor();
+        const classification = classifyExecutionResult(result);
+
+        const latency = Date.now() - execStart;
+        const duration = Date.now() - start;
+
+        if (classification.isFailure) {
+          const error = classification.error ?? "Provider returned unavailable result";
+          this.cacheLifecycle.markComplete(providerId, false, error);
+          this.metrics.recordRefresh("provider", latency, duration, false, error);
+
+          record.status = "stale";
+          record.lastRefresh = start;
+          record.lastFailure = start;
+          record.lastError = error;
+          record.consecutiveFailures++;
+
+          logger.log({
+            providerId,
+            asset: Array.isArray(provider.assetClass) ? provider.assetClass.join(",") : provider.assetClass,
+            timestamp: start,
+            latency,
+            success: false,
+            failureReason: error,
+            responseSize: 0,
+            cacheHit: false,
+            cacheMiss: true,
+          });
+
+          this.events.emit({ type: "refreshFailure", timestamp: Date.now(), providerId, error });
+          return;
+        }
       }
 
       const latency = Date.now() - execStart;
       const duration = Date.now() - start;
 
-      health.recordSuccess(providerId, latency);
       this.cacheLifecycle.markComplete(providerId, true);
       this.metrics.recordRefresh("provider", latency, duration, true);
 
@@ -266,11 +302,11 @@ export class SchedulerEngine {
       const duration = Date.now() - start;
       const error = err instanceof Error ? err.message : String(err);
 
-      health.recordFailure(providerId, duration, error);
       this.cacheLifecycle.markComplete(providerId, false, error);
       this.metrics.recordRefresh("provider", duration, duration, false, error);
 
       record.status = "stale";
+      record.lastRefresh = start;
       record.lastFailure = start;
       record.lastError = error;
       record.consecutiveFailures++;

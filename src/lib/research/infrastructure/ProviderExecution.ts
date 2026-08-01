@@ -1,4 +1,5 @@
 import type { ProviderResult } from "@/lib/research/providers/shared";
+import { classifyExecutionResult } from "./classifyExecutionResult";
 import type { VolatilityData, BreadthData, SectorData, MacroData, ETFData, COTReportData, OpenInterestRecord } from "@/types/institutional";
 import { buildProviderMeta } from "@/types/institutional";
 import type { US100Index, US100MegaCapStock, US100Earnings, US100SectorPerformance, US100Movers, US100Volatility, US100CompanyProfile } from "@/types/us100";
@@ -64,6 +65,27 @@ async function executeWithInfrastructure<T>(
   try {
     const result = await fn();
     const latency = getElapsed(startTime);
+
+    const classification = classifyExecutionResult(result);
+
+    if (classification.isFailure) {
+      const errorMsg = classification.error ?? "Provider returned unavailable result";
+      health.recordFailure(providerId, latency, errorMsg);
+
+      logger.log({
+        providerId,
+        asset,
+        timestamp: startTime,
+        latency,
+        success: false,
+        failureReason: errorMsg,
+        responseSize: 0,
+        cacheHit: false,
+        cacheMiss: true,
+      });
+
+      return result;
+    }
 
     const success = true;
     health.recordSuccess(providerId, latency);
