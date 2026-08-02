@@ -10,6 +10,7 @@ import {
   executeVolatilityData,
   executeMacroData,
 } from "../infrastructure/ProviderExecution";
+import { applySnapshotFallback } from "../infrastructure/snapshotFallback";
 
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -49,13 +50,39 @@ export async function collectGoldFullDataset(): Promise<GoldFullDataset> {
   const errors: string[] = [];
   const sourceSummary: string[] = [];
 
-  const settleProvider = <T>(label: string, promise: Promise<T | null>): Promise<T | null> =>
+  const settleProvider = <T>(label: string, providerId: string, promise: Promise<T | null>, isLive: (data: T) => boolean): Promise<T | null> =>
     promise
       .then((result) => {
-        if (result !== null) {
+        if (result !== null && isLive(result)) {
           sourceSummary.push(label);
           return result;
         }
+        const fb = applySnapshotFallback<T>(providerId, result, isLive, `${label} provider limited`);
+        if (fb.fromSnapshot && fb.value) {
+          sourceSummary.push(`${label} (cached snapshot)`);
+          return fb.value;
+        }
+        errors.push(`${label}: unavailable`);
+        return null;
+      })
+      .catch((err) => {
+        errors.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      });
+
+  const settleInstitutional = <T>(label: string, providerId: string, promise: Promise<{ success: boolean; data: T | null; error?: string }>, isLive: (result: { success: boolean; data: T | null }) => boolean): Promise<T | null> =>
+    promise
+      .then((result) => {
+        const fb = applySnapshotFallback(providerId, result, isLive, `${label} provider limited`);
+        if (fb.fromSnapshot && fb.value) {
+          sourceSummary.push(`${label} (cached snapshot)`);
+          return fb.value as T;
+        }
+        if (result.success && result.data !== null) {
+          sourceSummary.push(label);
+          return result.data;
+        }
+        errors.push(`${label}: ${result.error || "unavailable"}`);
         return null;
       })
       .catch((err) => {
@@ -72,13 +99,13 @@ export async function collectGoldFullDataset(): Promise<GoldFullDataset> {
       errors.push("TwelveData Gold: unavailable");
       return null;
     }),
-    settleProvider("COT", executeCOTReport().then((r) => (r.success ? r.data : (errors.push(`COT: ${r.error || "unavailable"}`), null)))),
-    settleProvider("ETF", executeETFData().then((r) => (r.success ? r.data : (errors.push(`ETF: ${r.error || "unavailable"}`), null)))),
-    settleProvider("Open Interest", executeOpenInterest().then((r) => (r.success ? r.data : (errors.push(`Open Interest: ${r.error || "unavailable"}`), null)))),
-    settleProvider("Market Breadth", executeMarketBreadth().then((r) => (r.success ? r.data : (errors.push(`Market Breadth: ${r.error || "unavailable"}`), null)))),
-    settleProvider("Sector Rotation", executeSectorData().then((r) => (r.success ? r.data : (errors.push(`Sector Rotation: ${r.error || "unavailable"}`), null)))),
-    settleProvider("Volatility", executeVolatilityData().then((r) => (r.success ? r.data : (errors.push(`Volatility: ${r.error || "unavailable"}`), null)))),
-    settleProvider("Macro", executeMacroData().then((r) => (r.success ? r.data : (errors.push(`Macro: ${r.error || "unavailable"}`), null)))),
+    settleInstitutional("COT", "cot-institutional", executeCOTReport(), (r) => r.success && r.data !== null),
+    settleInstitutional("ETF", "etf-institutional", executeETFData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Open Interest", "open-interest-institutional", executeOpenInterest(), (r) => r.success && r.data !== null),
+    settleInstitutional("Market Breadth", "breadth-institutional", executeMarketBreadth(), (r) => r.success && r.data !== null),
+    settleInstitutional("Sector Rotation", "sectors-institutional", executeSectorData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Volatility", "volatility-institutional", executeVolatilityData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Macro", "macro-institutional", executeMacroData(), (r) => r.success && r.data !== null),
   ]);
 
   const goldLive = goldPriceResult !== null;

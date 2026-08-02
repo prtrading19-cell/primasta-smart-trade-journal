@@ -204,24 +204,30 @@ export function US100ResearchDesk() {
 
   const dataSources = useMemo(() => {
     if (!dataset) return [];
+    const sourceStatus = (meta?: { status?: string; stale?: boolean }): "live" | "delayed" | "unavailable" => {
+      if (!meta) return "unavailable";
+      if (meta.stale) return "delayed";
+      if (meta.status === "live") return "live";
+      if (meta.status === "delayed") return "delayed";
+      return "unavailable";
+    };
     const sources: { name: string; status: "live" | "delayed" | "unavailable" | "error"; timestamp?: string; error?: string }[] = [];
-    sources.push({ name: dataset.index.meta.source, status: dataset.index.meta.status, timestamp: dataset.index.meta.lastUpdated, error: dataset.index.meta.error });
-    sources.push({ name: "Twelve Data Stocks", status: dataset.stocks.some((s) => s.meta.status === "live") ? "live" : "unavailable", timestamp: dataset.collectedAt });
-    sources.push({ name: dataset.sectors.meta.source, status: dataset.sectors.meta.status, timestamp: dataset.sectors.meta.lastUpdated, error: dataset.sectors.meta.error });
-    const earningsLive = dataset.earnings.some((e) => e.meta.status === "live");
-    const earningsName = earningsLive ? (dataset.earnings[0]?.meta.source ?? "FMP Earnings") : "Corporate Earnings";
-    const earningsError = earningsLive ? undefined : "Corporate Earnings unavailable (FMP rate limit)";
-    sources.push({ name: earningsName, status: earningsLive ? "live" : "unavailable", timestamp: dataset.collectedAt, error: earningsError });
-    sources.push({ name: dataset.movers.meta.source, status: dataset.movers.meta.status, timestamp: dataset.movers.meta.lastUpdated, error: dataset.movers.meta.error });
-    sources.push({ name: dataset.volatility.meta.source, status: dataset.volatility.meta.status, timestamp: dataset.volatility.meta.lastUpdated, error: dataset.volatility.meta.error });
-    sources.push({ name: dataset.volatilityInstitutional?.meta.source ?? "Institutional Volatility", status: (dataset.volatilityInstitutional?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.volatilityInstitutional?.meta.timestamp, error: dataset.volatilityInstitutional?.meta.error });
-    sources.push({ name: dataset.etf?.meta.source ?? "ETF Flows", status: (dataset.etf?.meta.status === "live" ? "live" : "unavailable") as "live" | "unavailable", timestamp: dataset.etf?.meta.timestamp, error: dataset.etf?.meta.error });
-    const cotLive = dataset.cot?.some((c) => c.meta.status === "live");
-    sources.push({ name: "COT", status: cotLive ? "live" : "unavailable", timestamp: dataset.cot?.[0]?.meta.timestamp });
-    const oiLive = dataset.openInterest?.some((o) => o.meta.status === "live");
-    sources.push({ name: "Open Interest", status: oiLive ? "live" : "unavailable", timestamp: dataset.openInterest?.[0]?.meta.timestamp });
-    const macroLive = dataset.macro?.meta.status === "live";
-    sources.push({ name: dataset.macro?.meta.source ?? "Macro", status: macroLive ? "live" : "unavailable", timestamp: dataset.macro?.meta.timestamp, error: dataset.macro?.meta.error });
+    sources.push({ name: dataset.index.meta.source, status: sourceStatus(dataset.index.meta), timestamp: dataset.index.meta.lastUpdated, error: dataset.index.meta.error });
+    const stockMeta = dataset.stocks.find((s) => s.meta.status === "live")?.meta ?? dataset.stocks[0]?.meta;
+    sources.push({ name: "Twelve Data Stocks", status: sourceStatus(stockMeta), timestamp: stockMeta?.lastUpdated ?? dataset.collectedAt, error: stockMeta?.error });
+    sources.push({ name: dataset.sectors.meta.source, status: sourceStatus(dataset.sectors.meta), timestamp: dataset.sectors.meta.lastUpdated, error: dataset.sectors.meta.error });
+    const earningsMeta = dataset.earnings.find((e) => e.meta.status === "live")?.meta ?? dataset.earnings[0]?.meta;
+    const earningsName = earningsMeta ? (earningsMeta.source ?? "FMP Earnings") : "Corporate Earnings";
+    sources.push({ name: earningsName, status: sourceStatus(earningsMeta), timestamp: earningsMeta?.lastUpdated ?? dataset.collectedAt, error: earningsMeta?.error });
+    sources.push({ name: dataset.movers.meta.source, status: sourceStatus(dataset.movers.meta), timestamp: dataset.movers.meta.lastUpdated, error: dataset.movers.meta.error });
+    sources.push({ name: dataset.volatility.meta.source, status: sourceStatus(dataset.volatility.meta), timestamp: dataset.volatility.meta.lastUpdated, error: dataset.volatility.meta.error });
+    sources.push({ name: dataset.volatilityInstitutional?.meta.source ?? "Institutional Volatility", status: sourceStatus(dataset.volatilityInstitutional?.meta), timestamp: dataset.volatilityInstitutional?.meta.timestamp, error: dataset.volatilityInstitutional?.meta.error });
+    sources.push({ name: dataset.etf?.meta.source ?? "ETF Flows", status: sourceStatus(dataset.etf?.meta), timestamp: dataset.etf?.meta.timestamp, error: dataset.etf?.meta.error });
+    const cotMeta = dataset.cot?.find((c) => c.meta.status === "live")?.meta ?? dataset.cot?.[0]?.meta;
+    sources.push({ name: "COT", status: sourceStatus(cotMeta), timestamp: cotMeta?.timestamp, error: cotMeta?.error });
+    const oiMeta = dataset.openInterest?.find((o) => o.meta.status === "live")?.meta ?? dataset.openInterest?.[0]?.meta;
+    sources.push({ name: "Open Interest", status: sourceStatus(oiMeta), timestamp: oiMeta?.timestamp, error: oiMeta?.error });
+    sources.push({ name: dataset.macro?.meta.source ?? "Macro", status: sourceStatus(dataset.macro?.meta), timestamp: dataset.macro?.meta.timestamp, error: dataset.macro?.meta.error });
     return sources;
   }, [dataset]);
 

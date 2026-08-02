@@ -1,4 +1,5 @@
 import { getProfile } from "../ResearchRegistry";
+import { initializeResearchProfiles } from "../initialize";
 import { initializeProviderRegistry } from "../infrastructure/registerProviders";
 import {
   executeUS100Index,
@@ -18,6 +19,7 @@ import {
 } from "../infrastructure/ProviderExecution";
 import type { US100FullDataset } from "./us100DataOrchestrator";
 import type { US100Index, US100SectorPerformance, US100Movers, US100Volatility, US100MarketBreadth, US100MegaCapStock, US100MarketMover } from "@/types/us100";
+import { applySnapshotFallback } from "../infrastructure/snapshotFallback";
 
 export type EnrichedUS100Dataset = US100FullDataset & {
   index: US100Index;
@@ -30,6 +32,7 @@ export type EnrichedUS100Dataset = US100FullDataset & {
 
 export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
   initializeProviderRegistry();
+  initializeResearchProfiles();
   const collectedAt = new Date().toISOString();
   const errors: string[] = [];
   const sourceSummary: string[] = [];
@@ -37,21 +40,36 @@ export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
   const profile = getProfile("us100");
   const symbols = profile?.trackedSymbols ?? [];
 
-  const settleProvider = <T>(label: string, promise: Promise<T>): Promise<{ data: T | null; error: string | null }> =>
+  const settleProvider = <T>(label: string, providerId: string, promise: Promise<T>, isLive: (data: T) => boolean): Promise<{ data: T | null; error: string | null; stale: boolean }> =>
     promise
       .then((data) => {
+        const fb = applySnapshotFallback(providerId, data, isLive, `${label} provider limited`);
+        if (fb.fromSnapshot) {
+          sourceSummary.push(`${label} (cached snapshot)`);
+          return { data: fb.value, error: null, stale: true };
+        }
         sourceSummary.push(label);
-        return { data, error: null };
+        return { data: fb.value, error: null, stale: false };
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         errors.push(`${label}: ${msg}`);
-        return { data: null, error: msg };
+        const fb = applySnapshotFallback<T>(providerId, undefined, isLive, `${label} provider error`);
+        if (fb.fromSnapshot) {
+          sourceSummary.push(`${label} (cached snapshot)`);
+          return { data: fb.value, error: null, stale: true };
+        }
+        return { data: null, error: msg, stale: false };
       });
 
-  const settleInstitutional = <T>(label: string, promise: Promise<{ success: boolean; data: T | null; error?: string }>): Promise<T | null> =>
+  const settleInstitutional = <T>(label: string, providerId: string, promise: Promise<{ success: boolean; data: T | null; error?: string }>, isLive: (result: { success: boolean; data: T | null }) => boolean): Promise<T | null> =>
     promise
       .then((result) => {
+        const fb = applySnapshotFallback(providerId, result, isLive, `${label} provider limited`);
+        if (fb.fromSnapshot && fb.value) {
+          sourceSummary.push(`${label} (cached snapshot)`);
+          return fb.value as T;
+        }
         if (result.success && result.data !== null) {
           sourceSummary.push(label);
           return result.data;
@@ -80,20 +98,20 @@ export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
     volatilityInstResult,
     macroResult,
   ] = await Promise.all([
-    settleProvider("FMP Index", executeUS100Index()),
-    settleProvider("Twelve Data Stocks", executeStockQuotes(symbols)),
-    settleProvider("FMP Earnings", executeEarnings(symbols)),
-    settleProvider("FMP Sectors", executeUS100Sectors()),
-    settleProvider("FMP Movers", executeUS100Movers()),
-    settleProvider("FMP Volatility", executeUS100Volatility()),
-    settleProvider("FMP Profiles", executeCompanyProfiles(symbols)),
-    settleInstitutional("COT", executeCOTReport()),
-    settleInstitutional("ETF", executeETFData()),
-    settleInstitutional("Open Interest", executeOpenInterest()),
-    settleInstitutional("Market Breadth", executeMarketBreadth()),
-    settleInstitutional("Sector Rotation", executeSectorData()),
-    settleInstitutional("Volatility", executeVolatilityData()),
-    settleInstitutional("Macro", executeMacroData()),
+    settleProvider("FMP Index", "market-index-fmp", executeUS100Index(), (d) => d.meta.status === "live"),
+    settleProvider("Twelve Data Stocks", "stock-quotes-twelve", executeStockQuotes(symbols), (d) => d.some((s) => s.meta.status === "live")),
+    settleProvider("FMP Earnings", "earnings-fmp", executeEarnings(symbols), (d) => d.some((e) => e.meta.status === "live")),
+    settleProvider("FMP Sectors", "sectors-fmp", executeUS100Sectors(), (d) => d.meta.status === "live"),
+    settleProvider("FMP Movers", "movers-fmp", executeUS100Movers(), (d) => d.meta.status === "live"),
+    settleProvider("FMP Volatility", "volatility-fmp", executeUS100Volatility(), (d) => d.meta.status === "live"),
+    settleProvider("FMP Profiles", "company-profiles-fmp", executeCompanyProfiles(symbols), (d) => d.some((p) => p.meta.status === "live")),
+    settleInstitutional("COT", "cot-institutional", executeCOTReport(), (r) => r.success && r.data !== null),
+    settleInstitutional("ETF", "etf-institutional", executeETFData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Open Interest", "open-interest-institutional", executeOpenInterest(), (r) => r.success && r.data !== null),
+    settleInstitutional("Market Breadth", "breadth-institutional", executeMarketBreadth(), (r) => r.success && r.data !== null),
+    settleInstitutional("Sector Rotation", "sectors-institutional", executeSectorData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Volatility", "volatility-institutional", executeVolatilityData(), (r) => r.success && r.data !== null),
+    settleInstitutional("Macro", "macro-institutional", executeMacroData(), (r) => r.success && r.data !== null),
   ]);
 
   const dataset: US100FullDataset = {

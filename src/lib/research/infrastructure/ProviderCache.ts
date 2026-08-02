@@ -27,10 +27,17 @@ export class ProviderCache {
       return { hit: false, data: null };
     }
     if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
       return { hit: false, data: null };
     }
     return { hit: true, data: entry.data as T };
+  }
+
+  getLastKnownGood<T>(key: string): { hit: boolean; data: T | null; cachedAt: number | null } {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      return { hit: false, data: null, cachedAt: null };
+    }
+    return { hit: true, data: entry.data as T, cachedAt: entry.cachedAt };
   }
 
   set<T>(key: string, data: T, ttlMs: number, providerId: string): void {
@@ -95,10 +102,12 @@ export class ProviderCache {
     return entries;
   }
 
+  private static readonly SNAPSHOT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
   private evictExpired(): void {
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
+      if (now > entry.expiresAt + ProviderCache.SNAPSHOT_RETENTION_MS) {
         this.cache.delete(key);
       }
     }

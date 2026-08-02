@@ -7,6 +7,7 @@ export interface ProviderMeta {
   latency: number;
   error?: string;
   lastSuccessfulFetch?: string;
+  stale?: boolean;
 }
 
 export function buildProviderMeta(

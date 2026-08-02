@@ -6,6 +6,7 @@ export interface US100DataMeta {
   timestamp: string;
   lastUpdated: string;
   error?: string;
+  stale?: boolean;
 }
 
 export interface US100Index {
