@@ -90,16 +90,6 @@ export function mapMarketDataToResearch(data: MarketData): MappedSections {
   const fedTone = interpretFedTone(data.fedFundsRate, data.fedNews);
   const inflationDirection = interpretInflation(data.inflationNews);
 
-  console.info("[DEBUG:MAPPER] Interpreted values:", {
-    goldPrice,
-    dxyDirection,
-    us10Direction,
-    us2Direction,
-    realYieldDirection,
-    fedTone,
-    inflationDirection,
-  });
-
   const sections: MappedSection[] = [
     mapDXYSection(data, dxyDirection),
     mapYieldSection(data, us10Direction, us2Direction),
@@ -119,11 +109,6 @@ export function mapMarketDataToResearch(data: MarketData): MappedSections {
     mapSeasonalitySection(data),
     mapPositionRiskSection(data),
   ];
-
-  for (const s of sections) {
-    const emptyFields = Object.entries(s).filter(([k, v]) => k !== "driver" && k !== "goldImpact" && (v === "" || v === undefined || v === null)).map(([k]) => k);
-    console.info(`[DEBUG:MAPPER] Section "${s.driver}" impact=${s.goldImpact} empty_fields=${emptyFields.length > 0 ? emptyFields.join(",") : "none"}`);
-  }
 
   const summary = buildSummary(sections);
 

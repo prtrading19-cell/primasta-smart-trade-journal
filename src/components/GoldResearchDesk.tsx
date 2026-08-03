@@ -232,22 +232,6 @@ export function GoldResearchDesk() {
     setSetupInputs((current) => ({ ...current, setupDate: autoReport?.date || today(), currentGoldPrice: current.currentGoldPrice || marketData.currentPrice }));
   }, [marketData, autoReport]);
 
-  // DEBUG: Log sections state on every change
-  useEffect(() => {
-    console.info("[DEBUG:RENDER] sections changed. count:", sections.length);
-    for (const s of sections) {
-      const emptyFields = Object.entries(s).filter(([k, v]) => k !== "driver" && k !== "goldImpact" && (v === "" || v === undefined || v === null)).map(([k]) => k);
-      if (emptyFields.length > 0) {
-        console.info(`[DEBUG:RENDER] Section "${s.driver}" HAS EMPTY FIELDS:`, emptyFields);
-      }
-    }
-  }, [sections]);
-
-  // DEBUG: Log enhancedAnalysis state on every change
-  useEffect(() => {
-    console.info("[DEBUG:RENDER] enhancedAnalysis changed:", enhancedAnalysis ? "PRESENT" : "null");
-  }, [enhancedAnalysis]);
-
   async function autoFillGoldResearch() {
     setAutoLoading(true);
     setAutoMessage("Researching current Gold drivers...");
@@ -260,24 +244,9 @@ export function GoldResearchDesk() {
       });
       const result = await readJsonResponse(response);
 
-      console.info("[DEBUG:CLIENT] Raw API response keys:", Object.keys(result));
-      console.info("[DEBUG:CLIENT] goldCurrentPrice:", (result as Record<string, unknown>).goldCurrentPrice || "(empty)");
-      const rawSections = Array.isArray((result as Record<string, unknown>).sections) ? (result as Record<string, unknown>).sections as Array<Record<string, unknown>> : [];
-      console.info("[DEBUG:CLIENT] Raw sections count:", rawSections.length);
-      if (rawSections.length > 0) {
-        console.info("[DEBUG:CLIENT] First raw section driver:", rawSections[0]?.driver, "keys:", Object.keys(rawSections[0] || {}));
-      }
-      console.info("[DEBUG:CLIENT] engineAnalysis exists:", Boolean((result as Record<string, unknown>).engineAnalysis));
-
       if (!response.ok) throw new Error(getAutoFillErrorMessage(result));
 
       const normalized = normalizeAutoFillResponse(result);
-      console.info("[DEBUG:CLIENT] Normalized sections count:", normalized.sections.length);
-      console.info("[DEBUG:CLIENT] Normalized goldCurrentPrice:", normalized.goldCurrentPrice || "(empty)");
-      for (const ns of normalized.sections) {
-        const emptyFields = Object.entries(ns).filter(([k, v]) => k !== "driver" && k !== "goldImpact" && (v === "" || v === undefined || v === null)).map(([k]) => k);
-        console.info(`[DEBUG:CLIENT] Normalized section "${ns.driver}" impact=${ns.goldImpact} empty_fields=${emptyFields.length > 0 ? emptyFields.join(",") : "none"}`);
-      }
 
       setSections(normalized.sections);
       setReportDate(normalized.date);

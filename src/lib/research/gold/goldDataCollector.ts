@@ -11,6 +11,7 @@ import {
   executeMacroData,
 } from "../infrastructure/ProviderExecution";
 import { applySnapshotFallback } from "../infrastructure/snapshotFallback";
+import { ProviderCache } from "../infrastructure/ProviderCache";
 
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -95,6 +96,20 @@ export async function collectGoldFullDataset(): Promise<GoldFullDataset> {
       if (data) {
         sourceSummary.push("TwelveData Gold");
         return data;
+      }
+      const cached = ProviderCache.getInstance().getLastKnownGood<{ data: { price: number; change: number; changePercent: number } }>("exec:gold-price-twelve");
+      const snap = cached.hit ? cached.data?.data : undefined;
+      if (snap && snap.price > 0) {
+        sourceSummary.push("TwelveData Gold (cached snapshot)");
+        return {
+          price: snap.price,
+          change: snap.change ?? 0,
+          changePercent: snap.changePercent ?? 0,
+          high: snap.price,
+          low: snap.price,
+          open: snap.price,
+          previousClose: snap.price,
+        };
       }
       errors.push("TwelveData Gold: unavailable");
       return null;

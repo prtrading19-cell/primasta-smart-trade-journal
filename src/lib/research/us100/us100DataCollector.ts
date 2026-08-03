@@ -16,6 +16,7 @@ import {
   executeSectorData,
   executeVolatilityData,
   executeMacroData,
+  cacheKeyFor,
 } from "../infrastructure/ProviderExecution";
 import type { US100FullDataset } from "./us100DataOrchestrator";
 import type { US100Index, US100SectorPerformance, US100Movers, US100Volatility, US100MarketBreadth, US100MegaCapStock, US100MarketMover } from "@/types/us100";
@@ -40,10 +41,10 @@ export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
   const profile = getProfile("us100");
   const symbols = profile?.trackedSymbols ?? [];
 
-  const settleProvider = <T>(label: string, providerId: string, promise: Promise<T>, isLive: (data: T) => boolean): Promise<{ data: T | null; error: string | null; stale: boolean }> =>
+  const settleProvider = <T>(label: string, providerId: string, promise: Promise<T>, isLive: (data: T) => boolean, cacheKey?: string): Promise<{ data: T | null; error: string | null; stale: boolean }> =>
     promise
       .then((data) => {
-        const fb = applySnapshotFallback(providerId, data, isLive, `${label} provider limited`);
+        const fb = applySnapshotFallback(providerId, data, isLive, `${label} provider limited`, cacheKey);
         if (fb.fromSnapshot) {
           sourceSummary.push(`${label} (cached snapshot)`);
           return { data: fb.value, error: null, stale: true };
@@ -54,7 +55,7 @@ export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         errors.push(`${label}: ${msg}`);
-        const fb = applySnapshotFallback<T>(providerId, undefined, isLive, `${label} provider error`);
+        const fb = applySnapshotFallback<T>(providerId, undefined, isLive, `${label} provider error`, cacheKey);
         if (fb.fromSnapshot) {
           sourceSummary.push(`${label} (cached snapshot)`);
           return { data: fb.value, error: null, stale: true };
@@ -99,12 +100,12 @@ export async function collectUS100FullDataset(): Promise<EnrichedUS100Dataset> {
     macroResult,
   ] = await Promise.all([
     settleProvider("FMP Index", "market-index-fmp", executeUS100Index(), (d) => d.meta.status === "live"),
-    settleProvider("Twelve Data Stocks", "stock-quotes-twelve", executeStockQuotes(symbols), (d) => d.some((s) => s.meta.status === "live")),
-    settleProvider("FMP Earnings", "earnings-fmp", executeEarnings(symbols), (d) => d.some((e) => e.meta.status === "live")),
+    settleProvider("Twelve Data Stocks", "stock-quotes-twelve", executeStockQuotes(symbols), (d) => d.some((s) => s.meta.status === "live"), cacheKeyFor("stock-quotes-twelve", symbols)),
+    settleProvider("FMP Earnings", "earnings-fmp", executeEarnings(symbols), (d) => d.some((e) => e.meta.status === "live"), cacheKeyFor("earnings-fmp", symbols)),
     settleProvider("FMP Sectors", "sectors-fmp", executeUS100Sectors(), (d) => d.meta.status === "live"),
     settleProvider("FMP Movers", "movers-fmp", executeUS100Movers(), (d) => d.meta.status === "live"),
     settleProvider("FMP Volatility", "volatility-fmp", executeUS100Volatility(), (d) => d.meta.status === "live"),
-    settleProvider("FMP Profiles", "company-profiles-fmp", executeCompanyProfiles(symbols), (d) => d.some((p) => p.meta.status === "live")),
+    settleProvider("FMP Profiles", "company-profiles-fmp", executeCompanyProfiles(symbols), (d) => d.some((p) => p.meta.status === "live"), cacheKeyFor("company-profiles-fmp", symbols)),
     settleInstitutional("COT", "cot-institutional", executeCOTReport(), (r) => r.success && r.data !== null),
     settleInstitutional("ETF", "etf-institutional", executeETFData(), (r) => r.success && r.data !== null),
     settleInstitutional("Open Interest", "open-interest-institutional", executeOpenInterest(), (r) => r.success && r.data !== null),

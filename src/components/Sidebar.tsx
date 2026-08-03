@@ -7,6 +7,7 @@ import {
   BarChart3,
   BookOpen,
   BrainCircuit,
+  Briefcase,
   Calculator,
   Calendar,
   ChevronLeft,
@@ -15,8 +16,8 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Radar,
   Search,
-  Settings,
   TrendingUp,
   UserCircle,
   X,
@@ -39,12 +40,13 @@ export const sidebarNavItems: SidebarNavItem[] = [
   { href: "/gold-research", label: "Gold Research", icon: Search, section: "Research" },
   { href: "/economic-calendar", label: "Economic Calendar", icon: Calendar, section: "Research" },
   { href: "/institutional", label: "Institutional Intelligence", icon: BrainCircuit, section: "Research" },
+  { href: "/portfolio", label: "Portfolio Intelligence", icon: Briefcase, section: "Research" },
+  { href: "/trading", label: "Trade Execution", icon: Radar, section: "Research" },
   { href: "/calculator", label: "Calculator", icon: Calculator, section: "Tools" },
   { href: "/summary", label: "Analytics", icon: TrendingUp, section: "Performance" },
   { href: "/plan", label: "Trading Plan", icon: ListChecks, section: "Performance" },
   { href: "/export", label: "Export", icon: Download, section: "Tools" },
-  { href: "/account", label: "Account", icon: UserCircle, section: "Settings" },
-  { href: "#", label: "Settings", icon: Settings, section: "Settings" }
+  { href: "/account", label: "Account", icon: UserCircle, section: "Settings" }
 ];
 
 interface SidebarProps {

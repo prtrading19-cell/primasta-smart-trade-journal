@@ -32,10 +32,30 @@ function getElapsed(start: number): number {
   return Date.now() - start;
 }
 
+function hashParams(params: unknown): string {
+  if (params === undefined || params === null) return "";
+  try {
+    const serialized = JSON.stringify(params);
+    let hash = 0;
+    for (let i = 0; i < serialized.length; i++) {
+      hash = ((hash << 5) - hash + serialized.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash).toString(36);
+  } catch {
+    return "";
+  }
+}
+
+export function cacheKeyFor(providerId: string, params?: unknown): string {
+  const signature = hashParams(params);
+  return signature ? `exec:${providerId}:${signature}` : `exec:${providerId}`;
+}
+
 async function executeWithInfrastructure<T>(
   providerId: string,
   fn: () => Promise<T>,
-  asset: string
+  asset: string,
+  cacheKey = `exec:${providerId}`
 ): Promise<T> {
   const cache = ProviderCache.getInstance();
   const health = ProviderHealthEngine.getInstance();
@@ -43,7 +63,6 @@ async function executeWithInfrastructure<T>(
   const registry = ProviderRegistry.getInstance();
   const registration = registry.get(providerId);
   const startTime = getStartTime();
-  const cacheKey = `exec:${providerId}`;
 
   const cached = cache.get<{ data: T }>(cacheKey);
   if (cached.hit) {
@@ -129,31 +148,31 @@ async function executeWithInfrastructure<T>(
 }
 
 export async function executeCOTReport(markets?: Parameters<typeof fetchCOTReport>[0]): Promise<ProviderResult<COTReportData[]>> {
-  return executeWithInfrastructure("cot-institutional", () => fetchCOTReport(markets), "gold,us100");
+  return executeWithInfrastructure("cot-institutional", () => fetchCOTReport(markets), "gold,us100", cacheKeyFor("cot-institutional", markets));
 }
 
 export async function executeETFData(markets?: Parameters<typeof fetchETFData>[0]): Promise<ProviderResult<ETFData>> {
-  return executeWithInfrastructure("etf-institutional", () => fetchETFData(markets), "gold,us100");
+  return executeWithInfrastructure("etf-institutional", () => fetchETFData(markets), "gold,us100", cacheKeyFor("etf-institutional", markets));
 }
 
 export async function executeOpenInterest(markets?: Parameters<typeof fetchOpenInterest>[0]): Promise<ProviderResult<OpenInterestRecord[]>> {
-  return executeWithInfrastructure("open-interest-institutional", () => fetchOpenInterest(markets), "gold,us100");
+  return executeWithInfrastructure("open-interest-institutional", () => fetchOpenInterest(markets), "gold,us100", cacheKeyFor("open-interest-institutional", markets));
 }
 
 export async function executeMarketBreadth(markets?: Parameters<typeof fetchMarketBreadth>[0]): Promise<ProviderResult<BreadthData[]>> {
-  return executeWithInfrastructure("breadth-institutional", () => fetchMarketBreadth(markets), "gold,us100");
+  return executeWithInfrastructure("breadth-institutional", () => fetchMarketBreadth(markets), "gold,us100", cacheKeyFor("breadth-institutional", markets));
 }
 
 export async function executeSectorData(config?: Parameters<typeof fetchSectorData>[0]): Promise<ProviderResult<SectorData>> {
-  return executeWithInfrastructure("sectors-institutional", () => fetchSectorData(config), "gold,us100");
+  return executeWithInfrastructure("sectors-institutional", () => fetchSectorData(config), "gold,us100", cacheKeyFor("sectors-institutional", config));
 }
 
 export async function executeVolatilityData(config?: Parameters<typeof fetchVolatilityData>[0]): Promise<ProviderResult<VolatilityData>> {
-  return executeWithInfrastructure("volatility-institutional", () => fetchVolatilityData(config), "gold,us100");
+  return executeWithInfrastructure("volatility-institutional", () => fetchVolatilityData(config), "gold,us100", cacheKeyFor("volatility-institutional", config));
 }
 
 export async function executeMacroData(config?: Parameters<typeof fetchMacroData>[0]): Promise<ProviderResult<MacroData>> {
-  return executeWithInfrastructure("macro-institutional", () => fetchMacroData(config), "gold,us100");
+  return executeWithInfrastructure("macro-institutional", () => fetchMacroData(config), "gold,us100", cacheKeyFor("macro-institutional", config));
 }
 
 export async function executeUS100Index(): Promise<US100Index> {
@@ -161,11 +180,11 @@ export async function executeUS100Index(): Promise<US100Index> {
 }
 
 export async function executeStockQuotes(symbols: readonly string[]): Promise<US100MegaCapStock[]> {
-  return executeWithInfrastructure("stock-quotes-twelve", () => fetchStockQuotes(symbols), "us100");
+  return executeWithInfrastructure("stock-quotes-twelve", () => fetchStockQuotes(symbols), "us100", cacheKeyFor("stock-quotes-twelve", symbols));
 }
 
 export async function executeEarnings(symbols: readonly string[]): Promise<US100Earnings[]> {
-  return executeWithInfrastructure("earnings-fmp", () => fetchEarnings(symbols), "us100");
+  return executeWithInfrastructure("earnings-fmp", () => fetchEarnings(symbols), "us100", cacheKeyFor("earnings-fmp", symbols));
 }
 
 export async function executeUS100Sectors(): Promise<US100SectorPerformance> {
@@ -181,7 +200,7 @@ export async function executeUS100Volatility(): Promise<US100Volatility> {
 }
 
 export async function executeCompanyProfiles(symbols: readonly string[]): Promise<US100CompanyProfile[]> {
-  return executeWithInfrastructure("company-profiles-fmp", () => fetchCompanyProfiles(symbols), "us100");
+  return executeWithInfrastructure("company-profiles-fmp", () => fetchCompanyProfiles(symbols), "us100", cacheKeyFor("company-profiles-fmp", symbols));
 }
 
 const providerExecutors: Record<string, (params?: any) => Promise<any>> = {
@@ -221,7 +240,10 @@ const providerExecutors: Record<string, (params?: any) => Promise<any>> = {
       return null;
     }
     const raw = await response.json();
-    const price = parseFloat(raw.close ?? raw.price) || 0;
+    const price = parseFloat(raw.close ?? raw.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      return null;
+    }
     return {
       price,
       change: parseFloat(raw.change) || 0,

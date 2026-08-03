@@ -102,33 +102,6 @@ export function normalizeMarketData(params: {
     sentimentNews: allSentimentNews,
   });
 
-  console.info("[DEBUG:NORMALIZER] Merged news counts:", {
-    goldNews: allGoldNews.length,
-    fedNews: allFedNews.length,
-    inflationNews: allInflationNews.length,
-    geopoliticalNews: allGeopoliticalNews.length,
-    economicNews: allEconomicNews.length,
-    etfNews: allEtfNews.length,
-    centralBankNews: allCentralBankNews.length,
-    sentimentNews: allSentimentNews.length,
-    positioningNews: allPositioningNews.length,
-    liquidityNews: allLiquidityNews.length,
-  });
-  console.info("[DEBUG:NORMALIZER] Scalar values:", {
-    goldPrice: goldPrice || "(empty)",
-    dxy: alphaVantage?.dxy || "(empty)",
-    us10Yield: fred?.us10Yield || "(empty)",
-    us2Yield: fred?.us2Yield || "(empty)",
-    realYield: fred?.realYield || "(empty)",
-    fedFundsRate: fred?.fedFundsRate || "(empty)",
-    unemploymentRate: fred?.unemploymentRate || "(empty)",
-    gdpGrowth: fred?.gdpGrowth || "(empty)",
-    balanceSheetSize: fred?.balanceSheetSize || "(empty)",
-    vixLevel: extractVixLevel(allSentimentNews) || "(empty)",
-    marketSentiment,
-    sources,
-  });
-
   return {
     goldPrice,
     dxy: alphaVantage?.dxy || "",

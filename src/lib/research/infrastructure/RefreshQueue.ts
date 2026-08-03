@@ -48,10 +48,9 @@ export class RefreshQueue {
   }
 
   complete(id: string, error?: string): void {
-    const item = this.items.find((i) => i.id === id);
-    if (!item) return;
-    item.completedAt = Date.now();
-    item.error = error ?? null;
+    const idx = this.items.findIndex((i) => i.id === id);
+    if (idx < 0) return;
+    this.items.splice(idx, 1);
   }
 
   remove(id: string): void {

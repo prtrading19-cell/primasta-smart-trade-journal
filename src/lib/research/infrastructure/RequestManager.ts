@@ -117,66 +117,64 @@ export class RequestManager {
 
   private async executeRequest(entry: PendingRequest): Promise<void> {
     this.activeCount++;
-    const startTime = Date.now();
 
     try {
-      const response = await this.fetchWithTimeout(
-        entry.url,
-        entry.timeoutMs,
-        entry.providerId
-      );
+      for (let attempt = 0; ; attempt++) {
+        const startTime = Date.now();
+        try {
+          const response = await this.fetchWithTimeout(
+            entry.url,
+            entry.timeoutMs,
+            entry.providerId
+          );
 
-      const latency = Date.now() - startTime;
-      const logger = ProviderLogger.getInstance();
-      logger.log({
-        providerId: entry.providerId,
-        asset: "unknown",
-        timestamp: startTime,
-        latency,
-        success: response.ok,
-        failureReason: response.ok ? null : `HTTP ${response.status}`,
-        responseSize: 0,
-        cacheHit: false,
-        cacheMiss: true,
-      });
+          const latency = Date.now() - startTime;
+          const logger = ProviderLogger.getInstance();
+          logger.log({
+            providerId: entry.providerId,
+            asset: "unknown",
+            timestamp: startTime,
+            latency,
+            success: response.ok,
+            failureReason: response.ok ? null : `HTTP ${response.status}`,
+            responseSize: 0,
+            cacheHit: false,
+            cacheMiss: true,
+          });
 
-      if (this.isRateLimited(response)) {
-        if (entry.retryCount < entry.maxRetries) {
-          await this.backoff(entry.retryCount);
-          entry.retryCount++;
-          this.activeCount--;
-          this.enqueue(entry);
+          if (this.isRateLimited(response) && attempt < entry.maxRetries) {
+            await this.backoff(attempt);
+            continue;
+          }
+
+          entry.resolve(response);
+          return;
+        } catch (err) {
+          const isTimeout = err instanceof DOMException && err.name === "AbortError";
+          const errorMsg = err instanceof Error ? err.message : String(err);
+
+          const logger = ProviderLogger.getInstance();
+          logger.log({
+            providerId: entry.providerId,
+            asset: "unknown",
+            timestamp: startTime,
+            latency: Date.now() - startTime,
+            success: false,
+            failureReason: isTimeout ? `Timeout after ${entry.timeoutMs}ms` : errorMsg,
+            responseSize: 0,
+            cacheHit: false,
+            cacheMiss: true,
+          });
+
+          if (attempt < entry.maxRetries && (isTimeout || this.isRetryable(err))) {
+            await this.backoff(attempt);
+            continue;
+          }
+
+          entry.reject(err);
           return;
         }
       }
-
-      entry.resolve(response);
-    } catch (err) {
-      const isTimeout = err instanceof DOMException && err.name === "AbortError";
-      const errorMsg = err instanceof Error ? err.message : String(err);
-
-      const logger = ProviderLogger.getInstance();
-      logger.log({
-        providerId: entry.providerId,
-        asset: "unknown",
-        timestamp: startTime,
-        latency: Date.now() - startTime,
-        success: false,
-        failureReason: isTimeout ? `Timeout after ${entry.timeoutMs}ms` : errorMsg,
-        responseSize: 0,
-        cacheHit: false,
-        cacheMiss: true,
-      });
-
-      if (entry.retryCount < entry.maxRetries && (isTimeout || this.isRetryable(err))) {
-        await this.backoff(entry.retryCount);
-        entry.retryCount++;
-        this.activeCount--;
-        this.enqueue(entry);
-        return;
-      }
-
-      entry.reject(err);
     } finally {
       this.activeCount--;
       this.drainQueue();

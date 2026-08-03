@@ -34,9 +34,9 @@ export function markSnapshotStale<T>(value: T, staleError: string): T {
   return value;
 }
 
-function readSnapshotData<T>(providerId: string): T | null {
+function readSnapshotData<T>(providerId: string, cacheKey?: string): T | null {
   const cache = ProviderCache.getInstance();
-  const hit = cache.getLastKnownGood<{ data: T }>(`exec:${providerId}`);
+  const hit = cache.getLastKnownGood<{ data: T }>(cacheKey ?? `exec:${providerId}`);
   if (!hit.hit || !hit.data) return null;
   const data = hit.data.data;
   return data === null || data === undefined ? null : data;
@@ -51,13 +51,14 @@ export function applySnapshotFallback<T>(
   providerId: string,
   current: T | null | undefined,
   isLive: (value: T) => boolean,
-  staleError: string
+  staleError: string,
+  cacheKey?: string
 ): SnapshotFallbackResult<T> {
   if (current !== null && current !== undefined && isLive(current)) {
     return { value: current, fromSnapshot: false };
   }
 
-  const cached = readSnapshotData<unknown>(providerId);
+  const cached = readSnapshotData<unknown>(providerId, cacheKey);
   if (cached === null || cached === undefined) {
     return { value: current ?? null, fromSnapshot: false };
   }

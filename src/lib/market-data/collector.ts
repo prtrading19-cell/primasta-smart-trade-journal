@@ -26,51 +26,13 @@ export async function collectMarketData(goldPrice: string): Promise<MarketData> 
 
   const providerResults: MarketDataProviderResult[] = [];
 
-  console.info("[DEBUG:COLLECTOR] Starting provider fetches. Keys exist:", {
-    fred: Boolean(fredKey),
-    alpha: Boolean(alphaKey),
-    finnhub: Boolean(finnhubKey),
-    newsapi: Boolean(newsApiKey),
-    gnews: Boolean(gnewsKey),
-  });
-
   const fredResult = await runProvider<FREDData>("FRED", fredKey ? () => fetchFRED(fredKey) : null, providerResults);
-  console.info("[DEBUG:COLLECTOR] FRED result:", fredResult ? {
-    us10Yield: fredResult.us10Yield,
-    us2Yield: fredResult.us2Yield,
-    fedFundsRate: fredResult.fedFundsRate,
-    realYield: fredResult.realYield,
-    unemploymentRate: fredResult.unemploymentRate,
-    gdpGrowth: fredResult.gdpGrowth,
-    balanceSheetSize: fredResult.balanceSheetSize,
-  } : "NULL");
 
   const alphaResult = await runProvider<AlphaVantageData>("Alpha Vantage", alphaKey ? () => fetchAlphaVantage(alphaKey) : null, providerResults);
-  console.info("[DEBUG:COLLECTOR] AlphaVantage result:", alphaResult ? { dxy: alphaResult.dxy } : "NULL");
 
   const finnhubResult = await runProvider<FinnhubData>("Finnhub", finnhubKey ? () => fetchFinnhub(finnhubKey) : null, providerResults);
-  console.info("[DEBUG:COLLECTOR] Finnhub result:", finnhubResult ? {
-    marketNewsCount: finnhubResult.marketNews.length,
-    fedNewsCount: finnhubResult.fedNews.length,
-    etfNewsCount: finnhubResult.etfNews.length,
-    sentimentNewsCount: finnhubResult.sentimentNews.length,
-    positioningNewsCount: finnhubResult.positioningNews.length,
-  } : "NULL");
 
   const newsApiResult = await runProvider<NewsApiData>("NewsAPI", newsApiKey ? () => fetchNewsApi(newsApiKey) : null, providerResults);
-  console.info("[DEBUG:COLLECTOR] NewsAPI result:", newsApiResult ? {
-    goldNewsCount: newsApiResult.goldNews.length,
-    fedNewsCount: newsApiResult.fedNews.length,
-    inflationNewsCount: newsApiResult.inflationNews.length,
-    geopoliticalNewsCount: newsApiResult.geopoliticalNews.length,
-    economicNewsCount: newsApiResult.economicNews.length,
-    etfNewsCount: newsApiResult.etfNews.length,
-    centralBankNewsCount: newsApiResult.centralBankNews.length,
-    sentimentNewsCount: newsApiResult.sentimentNews.length,
-    positioningNewsCount: newsApiResult.positioningNews.length,
-    liquidityNewsCount: newsApiResult.liquidityNews.length,
-    seasonalityNewsCount: newsApiResult.seasonalityNews.length,
-  } : "NULL");
 
   let gnewsResult: GNewsData | null = null;
 
@@ -147,8 +109,6 @@ export async function collectMarketData(goldPrice: string): Promise<MarketData> 
     failures: providerResults.filter((r) => !r.success).length,
     sources: providerResults.filter((r) => r.success).map((r) => r.provider),
   });
-
-  console.info("[DEBUG:COLLECTOR] GNews backup decision:", { newsApiCount, willFetchGNews: gnewsKey && newsApiCount < 5 });
 
   return normalizeMarketData({
     goldPrice,

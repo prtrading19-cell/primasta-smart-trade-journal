@@ -14,6 +14,17 @@ import { globalTimeline, globalDecisionHistory } from "@/lib/research/decision";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  try {
+    return NextResponse.json(await buildDashboard());
+  } catch (err) {
+    return NextResponse.json(
+      { error: "institutional/dashboard failed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
+async function buildDashboard() {
   initializeProviderRegistry();
 
   const registry = ProviderRegistry.getInstance();
@@ -167,7 +178,7 @@ export async function GET() {
   /* Log stats */
   const logStats = logger.getStats();
 
-  return NextResponse.json({
+  return {
     fetchedAt: new Date().toISOString(),
     providers,
     scheduler,
@@ -177,5 +188,5 @@ export async function GET() {
     decisionHistory,
     analytics,
     logStats,
-  });
+  };
 }

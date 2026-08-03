@@ -37,7 +37,6 @@ const COLLECT_TIMEOUT_MS = 45000;
 
 export async function collectUS100Data(): Promise<US100FullDataset> {
   const startTime = Date.now();
-  console.log("[US100 Data] Fetching from /api/us100/data...");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), COLLECT_TIMEOUT_MS);

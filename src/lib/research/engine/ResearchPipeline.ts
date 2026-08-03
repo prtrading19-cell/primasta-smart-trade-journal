@@ -38,7 +38,6 @@ export async function run(
 ): Promise<PipelineResult> {
   const startTime = performance.now();
   const stages: string[] = [];
-  const profile = getProfileForAsset(dataset.asset);
 
   stages.push("driver");
   const drivers = executeDriverEngine(dataset);
@@ -65,7 +64,7 @@ export async function run(
   stages.push("summary");
   const summary = executeResearchSummaryEngine({
     asset: dataset.asset,
-    reportDate: dataset.collectedAt.split("T")[0],
+    reportDate: typeof dataset.collectedAt === "string" && dataset.collectedAt ? dataset.collectedAt.split("T")[0] : new Date().toISOString().slice(0, 10),
     drivers: drivers.map((d) => ({
       driverTitle: d.driverTitle,
       bias: d.bias,
@@ -109,10 +108,6 @@ export async function run(
     executionTimeMs,
     stages,
   };
-}
-
-function getProfileForAsset(asset: string): string {
-  return asset;
 }
 
 function buildInstitutionalInput(dataset: ResearchDataset): InstitutionalEngineInput {
