@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Radar } from "lucide-react";
 import { TradeExecutionDashboard } from "@/components/trading";
+import { Mt5BrokerDashboard } from "@/components/mt5";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,10 @@ export default function TradingPage() {
       </div>
 
       <TradeExecutionDashboard />
+
+      <div className="border-t border-border-subtle pt-6">
+        <Mt5BrokerDashboard />
+      </div>
     </div>
   );
 }
