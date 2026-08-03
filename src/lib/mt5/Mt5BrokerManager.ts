@@ -174,6 +174,17 @@ export class Mt5BrokerManager {
     this.status.recordHeartbeat(latency >= 0 ? latency : null, ok);
     if (ok) {
       this.status.setConnected({});
+    } else if (this.gateway.getTransportSummary().available && this.status.getState().connected) {
+      /* Configured transport is unreachable — surface the outage and keep
+       * the auto-reconnect loop active. Proposals/history are never lost. */
+      this.status.setDisconnected("Gateway offline");
+      this.health.recordDisconnection();
+      this.logger.log(
+        "reconnect",
+        "Gateway offline — auto-reconnect active",
+        "Heartbeat failed; reconnect is scheduled by the gateway transport",
+        { latencyMs: latency, ok }
+      );
     }
     this.logger.log("latency", "Heartbeat", ok ? `Latency ${latency}ms` : "No gateway response", { latencyMs: latency, ok });
     return this.health.getRecord();
@@ -435,6 +446,7 @@ export class Mt5BrokerManager {
           `${approvedProposal.request.type} ${approvedProposal.request.volume} ${approvedProposal.request.symbol} @ ${result.data?.price ?? "—"}`,
           { ticket: confirmation.ticket, status }
         );
+        await this.refresh();
       } else {
         this.health.recordBrokerError(result.error ?? "Order rejected by broker");
         this.logger.log("order", `Order rejected for ${proposalId}`, result.error ?? "Broker rejected order", { proposalId });

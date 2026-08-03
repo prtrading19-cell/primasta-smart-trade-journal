@@ -41,6 +41,7 @@ export { getMt5Config, hasMt5Credentials, maskLogin, redactMt5Config, MT5_BROKER
 export type { Mt5Config } from "./config";
 export { getMt5Logger, Mt5Logger } from "./Mt5Logger";
 export { Mt5Gateway, Mt5UnavailableTransport } from "./Mt5Gateway";
+export { Mt5PythonGatewayTransport } from "./PythonGatewayTransport";
 export type { Mt5GatewayTransport } from "./Mt5Gateway";
 export { Mt5Adapter } from "./Mt5Adapter";
 export type { Mt5Subscription, Mt5History } from "./Mt5Adapter";

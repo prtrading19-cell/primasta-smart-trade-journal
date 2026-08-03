@@ -59,17 +59,31 @@ export function Mt5StatusPanel({
           <div className="flex items-center gap-2">
             <TerminalSquare className="h-3.5 w-3.5 text-gold" />
             <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">MT5 Gateway</p>
-            <span className={cn("ml-auto flex items-center gap-1.5 text-[10px] font-bold", gatewayAvailable ? "text-profit" : "text-warning")}>
+            <span
+              className={cn(
+                "ml-auto flex items-center gap-1.5 text-[10px] font-bold",
+                !gatewayAvailable ? "text-warning" : status.connected ? "text-profit" : "text-loss"
+              )}
+            >
               <Activity className="h-3 w-3" />
-              {gatewayAvailable ? status.gateway.label : "No live gateway configured"}
+              {!gatewayAvailable
+                ? "No live gateway configured"
+                : status.connected
+                  ? status.gateway.label
+                  : "Gateway Offline"}
             </span>
           </div>
-          {!gatewayAvailable && (
+          {!gatewayAvailable ? (
             <p className="mt-2 text-[11px] leading-5 text-text-muted">
               Secure order transmission is disabled until a bridge / Python / Windows / Docker MT5 gateway service is
               configured and connected. Trade proposals are prepared and reviewed manually below.
             </p>
-          )}
+          ) : !status.connected ? (
+            <p className="mt-2 text-[11px] leading-5 text-text-muted">
+              The {status.gateway.label} is configured but offline. Automatic reconnect is active — the gateway will
+              retry on the next heartbeat. Proposals and history are never lost.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between gap-2">

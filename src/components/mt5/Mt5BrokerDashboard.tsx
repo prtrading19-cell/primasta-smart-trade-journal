@@ -133,6 +133,25 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
 
   if (!data) return null;
 
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayDeals = (data.positions.deals ?? []).filter((d) => {
+    const t = new Date(d.time).getTime();
+    return Number.isFinite(t) && t >= startOfToday.getTime();
+  });
+  const todayPnl = todayDeals.reduce(
+    (sum, d) => sum + (d.profit ?? 0) + (d.swap ?? 0) + (d.commission ?? 0),
+    0
+  );
+  const balance = data.account.latest?.balance ?? null;
+  const maxDailyLossPercent = data.config?.safety?.maxDailyLossPercent ?? null;
+  const maxDailyLoss =
+    balance != null && maxDailyLossPercent != null ? Math.abs((balance * maxDailyLossPercent) / 100) : null;
+  const dailyRiskPercent =
+    maxDailyLoss != null && maxDailyLoss > 0
+      ? Math.min(100, Math.max(0, (-Math.min(todayPnl, 0) / maxDailyLoss) * 100))
+      : null;
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -174,6 +193,9 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
         closedPnl={data.account.closedPnl}
         syncStatus={data.account.lastSyncStatus}
         lastSyncAt={data.account.lastSyncAt}
+        todayPnl={todayPnl}
+        todayTrades={data.dailyTrades}
+        dailyRiskPercent={dailyRiskPercent}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

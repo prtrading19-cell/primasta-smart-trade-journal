@@ -30,14 +30,29 @@ export function Mt5AccountPanel({
   closedPnl,
   syncStatus,
   lastSyncAt,
+  todayPnl = null,
+  todayTrades = null,
+  dailyRiskPercent = null,
 }: {
   account: Mt5AccountInfo | null;
   floatingPnl: number | null;
   closedPnl: number | null;
   syncStatus: string;
   lastSyncAt: string | null;
+  todayPnl?: number | null;
+  todayTrades?: number | null;
+  dailyRiskPercent?: number | null;
 }) {
   const currency = account?.currency ?? "USD";
+
+  const riskTone =
+    dailyRiskPercent == null
+      ? "text-text-primary"
+      : dailyRiskPercent >= 75
+        ? "text-loss"
+        : dailyRiskPercent >= 50
+          ? "text-warning"
+          : "text-profit";
 
   return (
     <PanelShell
@@ -79,6 +94,9 @@ export function Mt5AccountPanel({
             <Cell label="Leverage" value={account.leverage ? `1:${account.leverage}` : "—"} />
             <Cell label="Broker" value={account.brokerName || "—"} />
             <Cell label="Last Sync" value={formatDuration(Date.now() - new Date(account.updatedAt).getTime())} />
+            <Cell label="Today's P/L" value={money(todayPnl, currency)} tone={pnlTone(todayPnl)} />
+            <Cell label="Today's Trades" value={todayTrades != null ? String(todayTrades) : "—"} />
+            <Cell label="Daily Risk Used" value={dailyRiskPercent != null ? `${dailyRiskPercent.toFixed(0)}%` : "—"} tone={riskTone} />
           </div>
           <p className="text-[10px] text-text-muted">
             Account info is mirrored from the MT5 terminal over the configured gateway. Credentials are never exposed to the browser.

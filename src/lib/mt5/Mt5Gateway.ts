@@ -10,6 +10,7 @@ import type {
   Mt5RawResult,
 } from "./types";
 import { getMt5Config } from "./config";
+import { Mt5PythonGatewayTransport } from "./PythonGatewayTransport";
 import { getSharedSingleton } from "@/lib/research/infrastructure/singleton";
 
 /**
@@ -101,7 +102,6 @@ export class Mt5UnavailableTransport implements Mt5GatewayTransport {
 
 export class Mt5Gateway {
   private transport: Mt5GatewayTransport;
-  private connected = false;
 
   constructor(transport: Mt5GatewayTransport = new Mt5UnavailableTransport()) {
     this.transport = transport;
@@ -109,7 +109,6 @@ export class Mt5Gateway {
 
   registerTransport(transport: Mt5GatewayTransport): void {
     this.transport = transport;
-    this.connected = false;
   }
 
   getTransport(): Mt5GatewayTransport {
@@ -125,16 +124,12 @@ export class Mt5Gateway {
   }
 
   async connect(): Promise<boolean> {
-    if (this.transport.available) {
-      try {
-        this.connected = await this.transport.connect();
-      } catch {
-        this.connected = false;
-      }
-    } else {
-      this.connected = false;
+    if (!this.transport.available) return false;
+    try {
+      return await this.transport.connect();
+    } catch {
+      return false;
     }
-    return this.connected;
   }
 
   async disconnect(): Promise<boolean> {
@@ -143,12 +138,11 @@ export class Mt5Gateway {
     } catch {
       /* best effort */
     }
-    this.connected = false;
     return true;
   }
 
   isConnected(): boolean {
-    return this.connected && this.transport.isConnected();
+    return this.transport.isConnected();
   }
 
   private unavailable<T>(method: string): Mt5GatewayResponse<T> {
@@ -305,7 +299,6 @@ export class Mt5Gateway {
   }
 
   async ping(): Promise<number> {
-    if (!this.isConnected()) return -1;
     try {
       return await this.transport.ping();
     } catch {
@@ -318,10 +311,14 @@ export function getMt5Gateway(): Mt5Gateway {
   return getSharedSingleton("Mt5Gateway", () => {
     const gateway = new Mt5Gateway();
     const config = getMt5Config();
-    if (config.gatewayTransport !== "unavailable") {
-      // Future secure transports (bridge / python / windows / docker) are
-      // registered here. Until one is configured the unavailable transport
-      // remains active and every gateway call returns "Unavailable".
+    if (config.gatewayTransport === "python") {
+      // Secure Python MT5 gateway (FastAPI + MetaTrader5 package) running on
+      // the loopback interface. See mt5-gateway/ for the service source.
+      gateway.registerTransport(new Mt5PythonGatewayTransport(config));
+    } else if (config.gatewayTransport !== "unavailable") {
+      // Future secure transports (bridge / windows / docker) are registered
+      // here. Until one is configured the unavailable transport remains
+      // active and every gateway call returns "Unavailable".
       gateway.registerTransport(new Mt5UnavailableTransport());
     }
     return gateway;
