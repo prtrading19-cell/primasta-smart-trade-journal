@@ -8,6 +8,7 @@ import type {
   Mt5Position,
   Mt5RawResult,
 } from "./types";
+import type { Mt5ConnectOptions, Mt5ConnectOutcome } from "./accountTypes";
 import type { Mt5GatewayTransport } from "./Mt5Gateway";
 import type { Mt5Config } from "./config";
 
@@ -48,6 +49,7 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
   private lastError: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
+  private activeAccountId: string | null = null;
 
   constructor(config: Mt5Config) {
     this.config = config;
@@ -57,6 +59,49 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
 
   getLastError(): string | null {
     return this.lastError;
+  }
+
+  async connectWith(options: Mt5ConnectOptions): Promise<Mt5ConnectOutcome> {
+    if (!this.available) {
+      return { ok: false, message: "No live MT5 gateway configured", error: "No live MT5 gateway configured", data: null };
+    }
+    const res = await this.request(
+      "POST",
+      "/connect",
+      {
+        account_id: options.accountId ?? null,
+        login: options.login ?? null,
+        password: options.password ?? null,
+        investor_password: options.investorPassword ?? null,
+        server: options.server ?? null,
+        terminal_path: options.terminalPath ?? null,
+        remember: options.remember ?? null,
+        name: options.name ?? null,
+        read_only: options.readOnly ?? null,
+        auto_connect: options.autoConnect ?? null,
+        demo: options.demo ?? null,
+        trade_mode: options.tradeMode ?? null,
+        magic: options.magic ?? null,
+        deviation: options.deviation ?? null,
+      },
+      45000
+    );
+    const data = (res.data ?? {}) as { connected?: boolean; activeAccountId?: string | null; login?: number | null; server?: string | null };
+    const connected = res.ok && data.connected === true;
+    this.connected = connected;
+    if (connected) {
+      this.activeAccountId = data.activeAccountId ?? options.accountId ?? null;
+      this.lastError = null;
+      this.reconnectAttempts = 0;
+      this.clearReconnectTimer();
+    } else {
+      this.lastError = res.error ?? res.message ?? "MT5 connect failed";
+    }
+    return { ok: connected, message: res.message, error: res.error, data: res.data };
+  }
+
+  getActiveAccountId(): string | null {
+    return this.activeAccountId;
   }
 
   async connect(): Promise<boolean> {
@@ -78,6 +123,7 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
     const connected = res.ok && (res.data as { connected?: boolean } | null)?.connected === true;
     this.connected = connected;
     if (connected) {
+      this.activeAccountId = (res.data as { activeAccountId?: string | null } | null)?.activeAccountId ?? null;
       this.lastError = null;
       this.reconnectAttempts = 0;
       this.clearReconnectTimer();
@@ -89,6 +135,7 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
 
   async disconnect(): Promise<boolean> {
     this.connected = false;
+    this.activeAccountId = null;
     this.clearReconnectTimer();
     await this.request("POST", "/disconnect", {});
     return true;
@@ -183,8 +230,11 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
       this.scheduleReconnect();
       return -1;
     }
-    const heartbeat = (res.data ?? {}) as { connected?: boolean };
+    const heartbeat = (res.data ?? {}) as { connected?: boolean; activeAccountId?: string | null };
     this.connected = heartbeat.connected === true;
+    if (this.connected && typeof heartbeat.activeAccountId === "string") {
+      this.activeAccountId = heartbeat.activeAccountId;
+    }
     const latency = Date.now() - started;
     if (this.connected) {
       this.lastError = null;
@@ -263,7 +313,9 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
 
   private async autoReconnect(): Promise<void> {
     this.reconnectAttempts += 1;
-    const ok = await this.connect();
+    const ok = this.activeAccountId
+      ? await this.connectWith({ accountId: this.activeAccountId })
+      : await this.connect();
     if (!ok) this.scheduleReconnect();
   }
 

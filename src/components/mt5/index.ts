@@ -1,5 +1,7 @@
 export type { Mt5Overview, Mt5ActionResponse, Mt5ApprovalRequest } from "./types";
 export { Mt5BrokerDashboard } from "./Mt5BrokerDashboard";
+export { Mt5ConnectionManagerPanel } from "./Mt5ConnectionManagerPanel";
+export { Mt5AccountSettingsPanel } from "./Mt5AccountSettingsPanel";
 export { Mt5StatusPanel } from "./Mt5StatusPanel";
 export { Mt5AccountPanel } from "./Mt5AccountPanel";
 export { Mt5PositionsPanel } from "./Mt5PositionsPanel";

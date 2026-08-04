@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, RadioTower, RefreshCw } from "lucide-react";
 import type { Mt5Overview, Mt5ActionResponse } from "./types";
 import { Mt5StatusPanel } from "./Mt5StatusPanel";
+import { Mt5ConnectionManagerPanel } from "./Mt5ConnectionManagerPanel";
 import { Mt5AccountPanel } from "./Mt5AccountPanel";
 import { Mt5PositionsPanel } from "./Mt5PositionsPanel";
 import { Mt5HistoryPanel } from "./Mt5HistoryPanel";
@@ -177,6 +178,8 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
           <button onClick={() => setNotice(null)} className="text-[10px] text-text-muted">Dismiss</button>
         </div>
       )}
+
+      <Mt5ConnectionManagerPanel onChanged={() => void load()} />
 
       <Mt5StatusPanel
         status={data.status}

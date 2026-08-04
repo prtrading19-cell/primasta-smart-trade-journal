@@ -36,6 +36,18 @@ export type {
   Mt5SyncStatus,
   Mt5TradeProposal,
 } from "./types";
+export type {
+  Mt5AccountConnectionStatus,
+  Mt5AccountInput,
+  Mt5AccountManagerSession,
+  Mt5AutoConnectResult,
+  Mt5BrokerInfo,
+  Mt5ConnectOptions,
+  Mt5ConnectOutcome,
+  Mt5SavedAccount,
+  Mt5TerminalInfo,
+  Mt5TestConnectionResult,
+} from "./accountTypes";
 
 export { getMt5Config, hasMt5Credentials, maskLogin, redactMt5Config, MT5_BROKER_ID, MT5_BROKER_NAME } from "./config";
 export type { Mt5Config } from "./config";
@@ -54,6 +66,7 @@ export { SafetyEngine, getSafetyEngine } from "./SafetyEngine";
 export { ManualApprovalLayer, getManualApprovalLayer } from "./ManualApprovalLayer";
 export { Mt5BrokerManager, getMt5BrokerManager } from "./Mt5BrokerManager";
 export type { Mt5SubmitResult, Mt5ApproveResult, Mt5Overview } from "./Mt5BrokerManager";
+export { Mt5AccountManager, getMt5AccountManager } from "./Mt5AccountManager";
 
 import { getTradeExecutionService, globalBrokerRegistry } from "@/lib/trading";
 import { Mt5Adapter } from "./Mt5Adapter";

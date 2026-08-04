@@ -3,6 +3,7 @@
 import { LogOut, ShieldCheck } from "lucide-react";
 import { useAppData } from "@/context/AppDataContext";
 import { SCREENSHOT_BUCKET } from "@/lib/storage";
+import { Mt5AccountSettingsPanel } from "@/components/mt5";
 
 export default function AccountPage() {
   const { user, isCloudSync, signOut } = useAppData();
@@ -53,6 +54,10 @@ export default function AccountPage() {
           <p>2. Run `supabase/schema.sql` in the Supabase SQL editor.</p>
           <p>3. Sign in, then use the screenshot upload buttons on New Trade or Close Trade.</p>
         </div>
+      </section>
+
+      <section className="max-w-2xl">
+        <Mt5AccountSettingsPanel />
       </section>
     </div>
   );

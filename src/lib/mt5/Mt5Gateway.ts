@@ -9,6 +9,7 @@ import type {
   Mt5Position,
   Mt5RawResult,
 } from "./types";
+import type { Mt5ConnectOptions, Mt5ConnectOutcome } from "./accountTypes";
 import { getMt5Config } from "./config";
 import { Mt5PythonGatewayTransport } from "./PythonGatewayTransport";
 import { getSharedSingleton } from "@/lib/research/infrastructure/singleton";
@@ -40,6 +41,8 @@ export interface Mt5GatewayTransport {
   closePosition(request: Mt5CloseRequest): Promise<Mt5RawResult>;
   cancelOrder(ticket: number): Promise<Mt5RawResult>;
   ping(): Promise<number>;
+  connectWith?(options: Mt5ConnectOptions): Promise<Mt5ConnectOutcome>;
+  getActiveAccountId?(): string | null;
 }
 
 export class Mt5UnavailableTransport implements Mt5GatewayTransport {
@@ -97,6 +100,14 @@ export class Mt5UnavailableTransport implements Mt5GatewayTransport {
 
   async ping(): Promise<number> {
     return -1;
+  }
+
+  async connectWith(): Promise<Mt5ConnectOutcome> {
+    return { ok: false, message: "Unavailable", error: "MT5 gateway is not configured", data: null };
+  }
+
+  getActiveAccountId(): string | null {
+    return null;
   }
 }
 
@@ -304,6 +315,29 @@ export class Mt5Gateway {
     } catch {
       return -1;
     }
+  }
+
+  async connectWith(options: Mt5ConnectOptions): Promise<Mt5ConnectOutcome> {
+    if (!this.transport.available) {
+      return { ok: false, message: "No live MT5 gateway configured", error: "No live MT5 gateway configured", data: null };
+    }
+    if (!this.transport.connectWith) {
+      return { ok: false, message: "Transport does not support account-based connect", error: "Unsupported transport", data: null };
+    }
+    try {
+      return await this.transport.connectWith(options);
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : "Connect failed",
+        error: err instanceof Error ? err.message : "Connect failed",
+        data: null,
+      };
+    }
+  }
+
+  getActiveAccountId(): string | null {
+    return this.transport.getActiveAccountId ? this.transport.getActiveAccountId() : null;
   }
 }
 

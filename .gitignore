@@ -19,3 +19,4 @@ __pycache__/
 .venv/
 venv/
 mt5-gateway/.env
+mt5-gateway/data/

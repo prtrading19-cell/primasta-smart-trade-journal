@@ -6,12 +6,15 @@ from pydantic import BaseModel, Field
 
 
 class ConnectRequest(BaseModel):
-    """Credentials are supplied server-side by the Next.js transport.
+    """Connect using saved-account credentials (account_id) or direct
+    credentials supplied server-side by the Next.js transport.
 
-    They never appear in any response payload and are held in memory only
-    for the lifetime of the MT5 session.
+    Credentials never appear in any response payload and are held in memory
+    only for the lifetime of the MT5 session. When `remember` is true the
+    account is persisted with its password encrypted at rest.
     """
 
+    account_id: Optional[str] = None
     login: Optional[int] = None
     password: Optional[str] = None
     investor_password: Optional[str] = None
@@ -19,6 +22,68 @@ class ConnectRequest(BaseModel):
     terminal_path: Optional[str] = None
     magic: Optional[int] = None
     deviation: Optional[int] = None
+    remember: Optional[bool] = None
+    name: Optional[str] = None
+    read_only: Optional[bool] = None
+    auto_connect: Optional[bool] = None
+    demo: Optional[bool] = None
+    trade_mode: Optional[str] = None
+
+
+class TestConnectionRequest(BaseModel):
+    """Probe credentials against the broker without synchronizing anything."""
+
+    login: Optional[int] = None
+    password: Optional[str] = None
+    investor_password: Optional[str] = None
+    server: Optional[str] = None
+    terminal_path: Optional[str] = None
+
+
+class SwitchAccountRequest(BaseModel):
+    account_id: str
+
+
+class AutoConnectRequest(BaseModel):
+    """Optional: only attempt accounts whose autoConnect flag is set."""
+
+    auto_only: Optional[bool] = False
+
+
+class SaveAccountRequest(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    broker: Optional[str] = None
+    login: Optional[int] = None
+    password: Optional[str] = None
+    investor_password: Optional[str] = None
+    server: Optional[str] = None
+    terminal_path: Optional[str] = None
+    remember: Optional[bool] = None
+    auto_connect: Optional[bool] = None
+    read_only: Optional[bool] = None
+    demo: Optional[bool] = None
+    trade_mode: Optional[str] = None
+    magic: Optional[int] = None
+    deviation: Optional[int] = None
+    favorite: Optional[bool] = None
+    is_default: Optional[bool] = None
+
+
+class AccountPatchRequest(BaseModel):
+    name: Optional[str] = None
+    broker: Optional[str] = None
+    server: Optional[str] = None
+    terminal_path: Optional[str] = None
+    password: Optional[str] = None
+    investor_password: Optional[str] = None
+    remember: Optional[bool] = None
+    auto_connect: Optional[bool] = None
+    read_only: Optional[bool] = None
+    demo: Optional[bool] = None
+    trade_mode: Optional[str] = None
+    favorite: Optional[bool] = None
+    is_default: Optional[bool] = None
 
 
 class PlaceOrderRequest(BaseModel):

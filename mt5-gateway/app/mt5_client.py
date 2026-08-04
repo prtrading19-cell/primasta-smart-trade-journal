@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import queue as _queue
+import threading as _threading
 import time as _time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -38,6 +40,17 @@ ORDER_STATE_FILLED = 3
 ORDER_STATE_CANCELED = 4
 ORDER_STATE_EXPIRED = 5
 ORDER_STATE_REJECTED = 6
+
+# Account trade mode (from account_info().trade_mode)
+ACCOUNT_TRADE_MODE_DEMO = 0
+ACCOUNT_TRADE_MODE_CONTEST = 1
+ACCOUNT_TRADE_MODE_REAL = 2
+
+TRADE_MODE_NAMES = {
+    ACCOUNT_TRADE_MODE_DEMO: "demo",
+    ACCOUNT_TRADE_MODE_CONTEST: "contest",
+    ACCOUNT_TRADE_MODE_REAL: "live",
+}
 
 POSITION_TYPE_BUY = 0
 POSITION_TYPE_SELL = 1
@@ -110,6 +123,8 @@ class Mt5Client:
         self._deviation: int = 20
         self._version: Optional[str] = None
         self._build: Optional[int] = None
+        self._stuck = False
+        self._mt5_lock = _threading.RLock()
 
     @property
     def package_available(self) -> bool:
@@ -191,7 +206,7 @@ class Mt5Client:
             kwargs["server"] = effective_server
 
         try:
-            ok = mt5.initialize(**kwargs)
+            ok = self._initialize_bounded(kwargs)
         except Exception as exc:  # pragma: no cover - defensive
             self._connected = False
             self._last_error = f"initialize failed: {exc}"
@@ -212,6 +227,51 @@ class Mt5Client:
         self._capture_terminal_version()
         return True, None
 
+    def _initialize_bounded(self, kwargs: Dict[str, Any]) -> bool:
+        """Run `mt5.initialize()` under the bounded runner so an unreachable
+        broker cannot hang the gateway. Returns False with a recorded error on
+        timeout; the stuck worker is left to die as a daemon and the client is
+        marked unresponsive so later calls short-circuit cleanly."""
+        target = kwargs.get("timeout", 30000)
+        value = self._bounded(lambda: bool(mt5.initialize(**kwargs)), timeout_ms=target + 5000)
+        if value is None:
+            return False
+        return bool(value)
+
+    def _bounded(self, fn: Any, timeout_ms: int = 10000) -> Any:
+        """Run a MetaTrader5 call on a watchdog thread.
+
+        Returns the call's return value, or None if the call raised or did not
+        finish within `timeout_ms`. On timeout the client is marked stuck:
+        the wedged worker keeps holding the MT5 lock forever, so every later
+        call short-circuits to a clean error instead of hanging the gateway.
+        """
+        if self._stuck:
+            self._last_error = "Terminal is unresponsive. Restart the gateway to recover."
+            return None
+
+        result: _queue.Queue = _queue.Queue(maxsize=1)
+
+        def runner() -> None:
+            with self._mt5_lock:
+                try:
+                    result.put(("ok", fn()))
+                except Exception as exc:  # pragma: no cover - defensive
+                    result.put(("error", str(exc)))
+
+        worker = _threading.Thread(target=runner, daemon=True, name="mt5-call")
+        worker.start()
+        worker.join(timeout=timeout_ms / 1000.0)
+        if worker.is_alive():
+            self._stuck = True
+            self._last_error = "Terminal is unresponsive. Restart the gateway to recover."
+            return None
+        state, value = result.get_nowait()
+        if state == "error":
+            self._last_error = f"Terminal call failed: {value}"
+            return None
+        return value
+
     def disconnect(self) -> bool:
         if self.package_available:
             self._shutdown_quietly()
@@ -219,21 +279,17 @@ class Mt5Client:
         return True
 
     def _shutdown_quietly(self) -> None:
-        try:
-            mt5.shutdown()
-        except Exception:
-            pass
+        self._bounded(mt5.shutdown, timeout_ms=5000)
 
     def _capture_terminal_version(self) -> None:
-        try:
-            info = mt5.terminal_info()
-            if info is not None:
-                self._version = getattr(info, "version", None)
-                self._build = getattr(info, "build", None)
-        except Exception:
-            pass
+        info = self._bounded(mt5.terminal_info, timeout_ms=5000)
+        if info is not None:
+            self._version = getattr(info, "version", None)
+            self._build = getattr(info, "build", None)
 
     def _last_mt5_error(self) -> Tuple[Optional[int], Optional[str]]:
+        if self._stuck:
+            return None, "Terminal is unresponsive. Restart the gateway to recover."
         try:
             return mt5.last_error()
         except Exception:
@@ -260,11 +316,15 @@ class Mt5Client:
                 "terminalConnected": False,
             }
         try:
-            info = mt5.terminal_info()
+            info = self._bounded(mt5.terminal_info, timeout_ms=5000)
         except Exception as exc:
             return {"connected": False, "terminalConnected": False, "error": str(exc)}
         if info is None:
-            return {"connected": False, "terminalConnected": False}
+            return {
+                "connected": False,
+                "terminalConnected": False,
+                "error": self._last_error or "Terminal not reachable",
+            }
         terminal_connected = bool(getattr(info, "connected", False))
         self._connected = terminal_connected and self.package_available
         return {
@@ -294,17 +354,105 @@ class Mt5Client:
             "timestamp": _now_iso(),
         }
 
+    def connection_status(self) -> Dict[str, Any]:
+        """Rich connection snapshot used by the account manager."""
+        heartbeat = self.heartbeat()
+        terminal = self.terminal()
+        acc = self.account()
+        return {
+            **heartbeat,
+            "login": heartbeat.get("login") or (acc.get("login") if acc else None),
+            "server": heartbeat.get("server") or (acc.get("server") if acc else None),
+            "brokerName": acc.get("brokerName") if acc else terminal.get("company"),
+            "company": terminal.get("company"),
+            "terminalVersion": terminal.get("version"),
+            "terminalBuild": terminal.get("build"),
+            "accountType": acc.get("accountType") if acc else None,
+            "demo": (acc.get("accountType") == "demo") if acc else None,
+            "accountName": acc.get("name") if acc else None,
+            "currency": acc.get("currency") if acc else None,
+            "leverage": acc.get("leverage") if acc else None,
+            "balance": acc.get("balance") if acc else None,
+            "equity": acc.get("equity") if acc else None,
+            "tradeAllowed": terminal.get("tradeAllowed"),
+            "tradeDisabled": terminal.get("tradeDisabled"),
+            "tradeApiDisabled": terminal.get("tradeApiDisabled"),
+            "autoTrading": terminal.get("autoTrading"),
+        }
+
+    def broker_info(self) -> Dict[str, Any]:
+        """Broker + terminal metadata (display only)."""
+        terminal = self.terminal()
+        acc = self.account()
+        return {
+            "brokerName": acc.get("brokerName") if acc else terminal.get("company"),
+            "company": terminal.get("company"),
+            "server": acc.get("server") if acc else self._server,
+            "accountType": acc.get("accountType") if acc else None,
+            "demo": (acc.get("accountType") == "demo") if acc else None,
+            "terminalVersion": terminal.get("version"),
+            "terminalBuild": terminal.get("build"),
+            "tradeAllowed": terminal.get("tradeAllowed"),
+            "tradeDisabled": terminal.get("tradeDisabled"),
+            "autoTrading": terminal.get("autoTrading"),
+            "login": acc.get("login") if acc else self._login,
+            "accountName": acc.get("name") if acc else None,
+            "currency": acc.get("currency") if acc else None,
+            "leverage": acc.get("leverage") if acc else None,
+        }
+
+    def probe_login(
+        self,
+        login: Optional[int] = None,
+        password: Optional[str] = None,
+        investor_password: Optional[str] = None,
+        server: Optional[str] = None,
+        terminal_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Connect + measure latency + report broker metadata, then disconnect.
+
+        Used by /test-connection. Never synchronizes account state.
+        """
+        started = _time.perf_counter()
+        ok, error = self.connect(
+            login=login,
+            password=password,
+            investor_password=investor_password,
+            server=server,
+            terminal_path=terminal_path,
+        )
+        latency_ms = int((_time.perf_counter() - started) * 1000)
+        info: Dict[str, Any] = {
+            "connected": ok,
+            "latencyMs": latency_ms,
+            "error": error,
+        }
+        if ok:
+            acc = self.account()
+            terminal = self.terminal()
+            info.update(
+                {
+                    "broker": (acc.get("brokerName") if acc else None) or terminal.get("company"),
+                    "server": (acc.get("server") if acc else None) or server,
+                    "build": self._build,
+                    "company": terminal.get("company"),
+                    "terminalVersion": self._version,
+                    "accountType": acc.get("accountType") if acc else None,
+                    "demo": (acc.get("accountType") == "demo") if acc else None,
+                    "login": acc.get("login") if acc else login,
+                }
+            )
+        return info
+
     def account(self) -> Optional[Dict[str, Any]]:
-        if not self.is_connected:
+        if not self.is_connected or self._stuck:
             return None
-        try:
-            acc = mt5.account_info()
-        except Exception as exc:
-            self._last_error = str(exc)
-            return None
+        acc = self._bounded(mt5.account_info, timeout_ms=5000)
         if acc is None:
             return None
         terminal = self.terminal()
+        trade_mode_raw = getattr(acc, "trade_mode", None)
+        account_type = TRADE_MODE_NAMES.get(int(trade_mode_raw) if trade_mode_raw is not None else -1)
         return {
             "login": getattr(acc, "login", None),
             "name": getattr(acc, "name", ""),
@@ -319,6 +467,11 @@ class Mt5Client:
             "profit": getattr(acc, "profit", 0.0),
             "credit": getattr(acc, "credit", 0.0),
             "brokerName": getattr(acc, "company", "") or "",
+            "accountType": account_type,
+            "tradeModeRaw": int(trade_mode_raw) if trade_mode_raw is not None else None,
+            "tradeAllowed": bool(getattr(acc, "trade_allowed", False)),
+            "tradeExpert": bool(getattr(acc, "trade_expert", False)),
+            "tradeApiDisabled": bool(getattr(acc, "trade_api_disabled", False)),
             "terminalVersion": terminal.get("version"),
             "terminalBuild": terminal.get("build"),
             "terminalPath": terminal.get("path"),
@@ -328,12 +481,9 @@ class Mt5Client:
     # ── Read models ──
 
     def positions(self) -> List[Dict[str, Any]]:
-        if not self.is_connected:
+        if not self.is_connected or self._stuck:
             return []
-        try:
-            raw = mt5.positions_get()
-        except Exception:
-            return []
+        raw = self._bounded(mt5.positions_get, timeout_ms=5000)
         if raw is None:
             return []
         result = []
@@ -363,12 +513,9 @@ class Mt5Client:
         return result
 
     def orders(self) -> List[Dict[str, Any]]:
-        if not self.is_connected:
+        if not self.is_connected or self._stuck:
             return []
-        try:
-            raw = mt5.orders_get()
-        except Exception:
-            return []
+        raw = self._bounded(mt5.orders_get, timeout_ms=5000)
         if raw is None:
             return []
         result = []
@@ -384,22 +531,16 @@ class Mt5Client:
         start = now - int(days * 86400)
         orders: List[Dict[str, Any]] = []
         deals: List[Dict[str, Any]] = []
-        if not self.is_connected:
+        if not self.is_connected or self._stuck:
             return {"orders": orders, "deals": deals}
-        try:
-            raw_orders = mt5.history_orders_get(start, now)
-        except Exception:
-            raw_orders = None
+        raw_orders = self._bounded(lambda: mt5.history_orders_get(start, now), timeout_ms=10000)
         if raw_orders:
             for o in raw_orders:
                 try:
                     orders.append(self._order_to_dict(o))
                 except Exception:
                     continue
-        try:
-            raw_deals = mt5.history_deals_get(start, now)
-        except Exception:
-            raw_deals = None
+        raw_deals = self._bounded(lambda: mt5.history_deals_get(start, now), timeout_ms=10000)
         if raw_deals:
             for d in raw_deals:
                 try:
@@ -464,10 +605,9 @@ class Mt5Client:
     # ── Write models ──
 
     def _market_price(self, symbol: str, direction: str) -> Optional[float]:
-        try:
-            tick = mt5.symbol_info_tick(symbol)
-        except Exception:
+        if self._stuck:
             return None
+        tick = self._bounded(lambda: mt5.symbol_info_tick(symbol), timeout_ms=5000)
         if tick is None:
             return None
         if direction == "buy":
@@ -480,6 +620,8 @@ class Mt5Client:
     ) -> Dict[str, Any]:
         if not self.is_connected:
             return {"ticket": None, "price": None, "message": "Not connected", "error": "MT5 terminal is not connected"}
+        if self._stuck:
+            return {"ticket": None, "price": None, "message": "Terminal is unresponsive", "error": "Terminal is unresponsive. Restart the gateway to recover."}
         symbol = request.get("symbol", "")
         order_type = request.get("type", "buy")
         volume = float(request.get("volume", 0.0))
@@ -553,10 +695,9 @@ class Mt5Client:
 
     def _resolve_ticket(self, ticket: int) -> str:
         """Return 'position' if the ticket is an open position else 'order'."""
-        try:
-            pos = mt5.positions_get(ticket=ticket)
-        except Exception:
-            pos = None
+        if self._stuck:
+            return "order"
+        pos = self._bounded(lambda: mt5.positions_get(ticket=ticket), timeout_ms=5000)
         if pos:
             return "position"
         return "order"
@@ -564,6 +705,8 @@ class Mt5Client:
     def modify_order(self, request: Dict[str, Any]) -> Dict[str, Any]:
         if not self.is_connected:
             return {"ticket": None, "price": None, "message": "Not connected", "error": "MT5 terminal is not connected"}
+        if self._stuck:
+            return {"ticket": None, "price": None, "message": "Terminal is unresponsive", "error": "Terminal is unresponsive. Restart the gateway to recover."}
         ticket = int(request.get("ticket", 0))
         sl = request.get("sl")
         tp = request.get("tp")
@@ -573,9 +716,11 @@ class Mt5Client:
         kind = self._resolve_ticket(ticket)
         try:
             if kind == "position":
+                pos = self._bounded(lambda: mt5.positions_get(ticket=ticket), timeout_ms=5000)
+                symbol = getattr(pos[0], "symbol", "") if pos else ""
                 payload = {
                     "action": TRADE_ACTION_SLTP,
-                    "symbol": getattr(mt5.positions_get(ticket=ticket)[0], "symbol", ""),
+                    "symbol": symbol,
                     "position": ticket,
                     "sl": float(sl) if sl else 0.0,
                     "tp": float(tp) if tp else 0.0,
@@ -605,13 +750,12 @@ class Mt5Client:
     def close_position(self, request: Dict[str, Any]) -> Dict[str, Any]:
         if not self.is_connected:
             return {"ticket": None, "price": None, "message": "Not connected", "error": "MT5 terminal is not connected"}
+        if self._stuck:
+            return {"ticket": None, "price": None, "message": "Terminal is unresponsive", "error": "Terminal is unresponsive. Restart the gateway to recover."}
         ticket = int(request.get("ticket", 0))
         volume = request.get("volume")
 
-        try:
-            positions = mt5.positions_get(ticket=ticket)
-        except Exception:
-            positions = None
+        positions = self._bounded(lambda: mt5.positions_get(ticket=ticket), timeout_ms=5000)
         if not positions:
             return {"ticket": None, "price": None, "message": "Position not found", "error": f"Position {ticket} not found"}
         pos = positions[0]
@@ -660,6 +804,8 @@ class Mt5Client:
     def cancel_order(self, ticket: int) -> Dict[str, Any]:
         if not self.is_connected:
             return {"ticket": None, "price": None, "message": "Not connected", "error": "MT5 terminal is not connected"}
+        if self._stuck:
+            return {"ticket": None, "price": None, "message": "Terminal is unresponsive", "error": "Terminal is unresponsive. Restart the gateway to recover."}
         payload = {"action": TRADE_ACTION_REMOVE, "order": int(ticket)}
         try:
             result = mt5.order_send(payload)

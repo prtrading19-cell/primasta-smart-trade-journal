@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureMt5Broker, getMt5BrokerManager } from "@/lib/mt5";
+import { ensureMt5Broker, getMt5AccountManager, getMt5BrokerManager } from "@/lib/mt5";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,9 @@ export async function GET() {
   const manager = getMt5BrokerManager();
   try {
     await manager.heartbeat();
-    return NextResponse.json(manager.getStatus(), {
+    const status = manager.getStatus();
+    const connection = await getMt5AccountManager().connectionStatus();
+    return NextResponse.json({ ...status, connection }, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (e) {
