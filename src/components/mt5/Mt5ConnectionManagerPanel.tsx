@@ -77,8 +77,14 @@ export function Mt5ConnectionManagerPanel({
   const [editing, setEditing] = useState<Mt5SavedAccount | null>(null);
   const [editName, setEditName] = useState("");
 
-  const loadAll = async () => {
-    const [accRes, stRes] = await Promise.all([fetch("/api/mt5/accounts"), fetch("/api/mt5/connection-status")]);
+  const loadedOnce = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadAll = async (attempt = 0) => {
+    const [accRes, stRes] = await Promise.all([
+      fetch("/api/mt5/accounts", { cache: "no-store" }),
+      fetch("/api/mt5/connection-status", { cache: "no-store" }),
+    ]);
     let fetchedAccounts: Mt5SavedAccount[] = [];
     let fetchedStatus: Mt5AccountConnectionStatus | null = null;
     if (accRes.ok) {
@@ -91,7 +97,11 @@ export function Mt5ConnectionManagerPanel({
       fetchedStatus = json.status;
       setStatus(json.status);
     }
+    if (accRes.ok && stRes.ok) loadedOnce.current = true;
     setLoading(false);
+    if (!loadedOnce.current && attempt < 3) {
+      retryTimer.current = setTimeout(() => void loadAll(attempt + 1), 750 * Math.pow(2, attempt));
+    }
     return { fetchedAccounts, fetchedStatus };
   };
 
@@ -109,6 +119,7 @@ export function Mt5ConnectionManagerPanel({
     timer.current = setInterval(() => void loadAll(), 15000);
     return () => {
       if (timer.current) clearInterval(timer.current);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -121,6 +132,7 @@ export function Mt5ConnectionManagerPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
+        cache: "no-store",
       });
       const json = (await res.json().catch(() => ({ ok: false, error: "Invalid response" }))) as ConnResponse;
       if (res.ok && json.ok) {
@@ -178,6 +190,7 @@ export function Mt5ConnectionManagerPanel({
           server,
           terminalPath,
         }),
+        cache: "no-store",
       });
       const json = (await res.json().catch(() => ({ ok: false, result: null }))) as ConnResponse;
       const result = json.result ?? {};
@@ -243,7 +256,7 @@ export function Mt5ConnectionManagerPanel({
       setBusy("Deleting");
       setNotice(null);
       try {
-        const res = await fetch(`/api/mt5/accounts/${account.id}`, { method: "DELETE" });
+        const res = await fetch(`/api/mt5/accounts/${account.id}`, { method: "DELETE", cache: "no-store" });
         const json = (await res.json().catch(() => ({ ok: false, error: "Delete failed" }))) as { ok: boolean; error?: string };
         setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? `Deleted ${account.name}` : (json.error ?? "Delete failed") });
         await loadAll();
@@ -465,6 +478,7 @@ export function Mt5ConnectionManagerPanel({
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ name: editName }),
+                        cache: "no-store",
                       });
                       const json = (await res.json().catch(() => ({ ok: false, error: "Update failed" }))) as { ok: boolean; error?: string };
                       setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? "Account renamed" : (json.error ?? "Update failed") });

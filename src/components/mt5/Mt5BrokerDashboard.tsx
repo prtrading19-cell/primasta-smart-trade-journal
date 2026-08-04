@@ -20,27 +20,35 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasData = useRef(false);
 
-  const load = async () => {
+  const load = async (attempt = 0) => {
     try {
-      const res = await fetch("/api/mt5/overview");
+      const res = await fetch("/api/mt5/overview", { cache: "no-store" });
       if (!res.ok) throw new Error(`API responded ${res.status}`);
       const json = (await res.json()) as Mt5Overview;
+      hasData.current = true;
       setData(json);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load MT5 broker data.");
+      if (!hasData.current && attempt < 3) {
+        retryTimer.current = setTimeout(() => void load(attempt + 1), 750 * Math.pow(2, attempt));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
-    timer.current = setInterval(load, pollIntervalMs);
+    void load();
+    timer.current = setInterval(() => void load(), pollIntervalMs);
     return () => {
       if (timer.current) clearInterval(timer.current);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollIntervalMs]);
 
   const act = async (path: string, label: string) => {
@@ -125,7 +133,7 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
           <p className="text-sm font-bold text-text-primary">MT5 Broker unavailable</p>
           <p className="text-xs text-text-muted">{error}</p>
         </div>
-        <button onClick={load} className="ml-auto flex items-center gap-1.5 rounded-lg bg-surface-panel px-3 py-1.5 text-xs font-bold text-text-primary hover:bg-surface-panel/70">
+        <button onClick={() => void load()} className="ml-auto flex items-center gap-1.5 rounded-lg bg-surface-panel px-3 py-1.5 text-xs font-bold text-text-primary hover:bg-surface-panel/70">
           <RefreshCw className="h-3.5 w-3.5" /> Retry
         </button>
       </div>
@@ -166,7 +174,7 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
         </div>
         <div className="flex items-center gap-2">
           {busy && <span className="text-[10px] text-text-muted">{busy}…</span>}
-          <button onClick={load} className="flex items-center gap-1.5 rounded-lg bg-surface-panel px-2.5 py-1 text-[10px] font-bold text-text-muted transition-colors hover:text-text-primary">
+          <button onClick={() => void load()} className="flex items-center gap-1.5 rounded-lg bg-surface-panel px-2.5 py-1 text-[10px] font-bold text-text-muted transition-colors hover:text-text-primary">
             <RefreshCw className="h-3 w-3" /> Refresh
           </button>
         </div>

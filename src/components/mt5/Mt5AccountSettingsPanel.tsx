@@ -51,7 +51,7 @@ export function Mt5AccountSettingsPanel() {
 
   const load = async () => {
     try {
-      const res = await fetch("/api/mt5/accounts");
+      const res = await fetch("/api/mt5/accounts", { cache: "no-store" });
       const json = (await res.json()) as AccountsResponse;
       setAccounts(json.accounts);
     } finally {
@@ -71,6 +71,7 @@ export function Mt5AccountSettingsPanel() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        cache: "no-store",
       });
       const json = (await res.json().catch(() => ({ ok: false, error: "Update failed" }))) as { ok: boolean; error?: string };
       setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? "Account updated" : (json.error ?? "Update failed") });
@@ -84,7 +85,7 @@ export function Mt5AccountSettingsPanel() {
     setBusy("Deleting");
     setNotice(null);
     try {
-      const res = await fetch(`/api/mt5/accounts/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/mt5/accounts/${id}`, { method: "DELETE", cache: "no-store" });
       const json = (await res.json().catch(() => ({ ok: false, error: "Delete failed" }))) as { ok: boolean; error?: string };
       setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? `Deleted ${name}` : (json.error ?? "Delete failed") });
       await load();
@@ -118,6 +119,7 @@ export function Mt5AccountSettingsPanel() {
           autoConnect,
           readOnly,
         }),
+        cache: "no-store",
       });
       const json = (await res.json().catch(() => ({ ok: false, error: "Save failed" }))) as { ok: boolean; error?: string };
       setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? "Account saved" : (json.error ?? "Save failed") });
@@ -142,7 +144,7 @@ export function Mt5AccountSettingsPanel() {
     setBusy("Exporting");
     setNotice(null);
     try {
-      const res = await fetch("/api/mt5/account-export");
+      const res = await fetch("/api/mt5/account-export", { cache: "no-store" });
       const json = (await res.json().catch(() => ({ ok: false, error: "Export failed" }))) as { ok: boolean; payload?: Record<string, unknown>; error?: string };
       if (!json.ok || !json.payload) {
         setNotice({ tone: "err", text: (json.error ?? "Export failed") });
@@ -171,6 +173,7 @@ export function Mt5AccountSettingsPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        cache: "no-store",
       });
       const json = (await res.json().catch(() => ({ ok: false, error: "Import failed" }))) as { ok: boolean; imported?: number; error?: string };
       setNotice({ tone: json.ok ? "ok" : "err", text: json.ok ? `Imported ${json.imported ?? 0} account(s)` : (json.error ?? "Import failed") });
