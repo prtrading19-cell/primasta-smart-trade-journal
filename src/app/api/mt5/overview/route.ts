@@ -7,6 +7,10 @@ export async function GET() {
   ensureMt5Broker();
   const manager = getMt5BrokerManager();
   try {
+    await manager.heartbeat();
+    if (manager.isConnected()) {
+      await manager.refresh();
+    }
     return NextResponse.json(manager.getOverview(), {
       headers: { "Cache-Control": "no-store" },
     });
