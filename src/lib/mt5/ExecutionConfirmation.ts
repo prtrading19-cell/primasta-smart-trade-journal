@@ -25,6 +25,8 @@ export class ExecutionConfirmationEngine {
     sl: number | null;
     tp: number | null;
     rejectionReason?: string | null;
+    spread?: number | null;
+    latencyMs?: number | null;
   }): Mt5ExecutionConfirmation {
     confirmationCounter += 1;
     const confirmation: Mt5ExecutionConfirmation = {
@@ -47,6 +49,8 @@ export class ExecutionConfirmationEngine {
       requestedPrice: input.requestedPrice,
       sl: input.sl,
       tp: input.tp,
+      spread: input.spread ?? null,
+      latencyMs: input.latencyMs ?? null,
     };
     this.confirmations.push(confirmation);
     if (this.confirmations.length > this.maxHistory) {

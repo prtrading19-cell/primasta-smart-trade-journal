@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, RadioTower, RefreshCw } from "lucide-react";
 import type { Mt5Overview, Mt5ActionResponse } from "./types";
+import type { Mt5ExecutionEvent } from "@/lib/mt5/types";
 import { Mt5StatusPanel } from "./Mt5StatusPanel";
 import { Mt5ConnectionManagerPanel } from "./Mt5ConnectionManagerPanel";
 import { Mt5AccountPanel } from "./Mt5AccountPanel";
@@ -11,10 +12,21 @@ import { Mt5HistoryPanel } from "./Mt5HistoryPanel";
 import { Mt5HealthPanel } from "./Mt5HealthPanel";
 import { Mt5ApprovalPanel } from "./Mt5ApprovalPanel";
 import { Mt5LogPanel } from "./Mt5LogPanel";
+import { Mt5TradeExecutionPanel } from "./Mt5TradeExecutionPanel";
+import { Mt5OrderPreviewPanel } from "./Mt5OrderPreviewPanel";
+import { Mt5ExecutionTimeline } from "./Mt5ExecutionTimeline";
+import { Mt5RiskEnginePanel } from "./Mt5RiskEnginePanel";
+import { Mt5PositionActionsPanel } from "./Mt5PositionActionsPanel";
+import { Mt5HistoryExport } from "./Mt5HistoryExport";
+import { Mt5AdvancedOrdersPanel } from "./Mt5AdvancedOrdersPanel";
+import { Mt5ExecutionAnalyticsPanel } from "./Mt5ExecutionAnalyticsPanel";
+import { Mt5TradeReplayPanel } from "./Mt5TradeReplayPanel";
+import { Mt5InfrastructurePanel } from "./Mt5InfrastructurePanel";
 import { formatTime } from "@/components/institutional/primitives";
 
 export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?: number }) {
   const [data, setData] = useState<Mt5Overview | null>(null);
+  const [events, setEvents] = useState<Mt5ExecutionEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -25,11 +37,20 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
 
   const load = async (attempt = 0) => {
     try {
-      const res = await fetch("/api/mt5/overview", { cache: "no-store" });
-      if (!res.ok) throw new Error(`API responded ${res.status}`);
-      const json = (await res.json()) as Mt5Overview;
+      const [overviewRes, eventsRes] = await Promise.all([
+        fetch("/api/mt5/overview", { cache: "no-store" }),
+        fetch("/api/mt5/execution-events", { cache: "no-store" }),
+      ]);
+      if (!overviewRes.ok) throw new Error(`API responded ${overviewRes.status}`);
+      const json = (await overviewRes.json()) as Mt5Overview;
       hasData.current = true;
       setData(json);
+      try {
+        const eventsJson = (await eventsRes.json()) as { events?: Mt5ExecutionEvent[] };
+        setEvents(eventsJson.events ?? []);
+      } catch {
+        /* best effort */
+      }
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load MT5 broker data.");
@@ -189,6 +210,10 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
 
       <Mt5ConnectionManagerPanel onChanged={() => void load()} />
 
+      <Mt5TradeExecutionPanel connected={data.status.connected} onExecuted={() => void load()} />
+
+      <Mt5AdvancedOrdersPanel onChanged={() => void load()} />
+
       <Mt5StatusPanel
         status={data.status}
         onConnect={() => act("/api/mt5/connect", "Connecting")}
@@ -219,6 +244,37 @@ export function Mt5BrokerDashboard({ pollIntervalMs = 15000 }: { pollIntervalMs?
         />
         <Mt5HistoryPanel deals={data.positions.deals} closedOrders={data.positions.closedOrders.length} />
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Mt5PositionActionsPanel
+          positions={data.positions.positions}
+          pendingOrders={data.positions.pendingOrders}
+          onChanged={() => void load()}
+        />
+        <Mt5HistoryExport
+          deals={data.positions.deals}
+          positions={data.positions.positions}
+          closedOrders={data.positions.closedOrders}
+          proposals={data.proposals}
+          events={events}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Mt5RiskEnginePanel
+          config={data.config}
+          positions={data.positions.positions}
+          dailyTrades={data.dailyTrades}
+        />
+        <Mt5ExecutionTimeline events={events} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Mt5ExecutionAnalyticsPanel />
+        <Mt5TradeReplayPanel />
+      </div>
+
+      <Mt5InfrastructurePanel />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Mt5HealthPanel health={data.health} />

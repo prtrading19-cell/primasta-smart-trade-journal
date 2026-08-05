@@ -15,7 +15,13 @@ export type Mt5OrderType =
   | "buy-limit"
   | "sell-limit"
   | "buy-stop"
-  | "sell-stop";
+  | "sell-stop"
+  | "buy-stop-limit"
+  | "sell-stop-limit";
+
+export type Mt5FillPolicy = "fok" | "ioc" | "return";
+
+export type Mt5TimePolicy = "gtc" | "day" | "specified" | "specified-day";
 
 export type Mt5OrderState = "pending" | "filled" | "cancelled" | "expired" | "unknown";
 
@@ -205,12 +211,17 @@ export interface Mt5PlaceRequest {
   comment: string;
   riskPercent: number | null;
   source: Mt5ProposalSource;
+  stopLimit?: number | null;
+  fillPolicy?: Mt5FillPolicy;
+  timePolicy?: Mt5TimePolicy;
+  expiration?: string | null;
 }
 
 export interface Mt5ModifyRequest {
   ticket: number;
   sl: number | null;
   tp: number | null;
+  price?: number | null;
   comment?: string;
 }
 
@@ -245,6 +256,10 @@ export interface Mt5SafetyConfig {
   tradingOpenHour: number;
   tradingCloseHour: number;
   emergencyKillSwitch: boolean;
+  maxOpenTrades?: number;
+  maxExposureLots?: number;
+  maxSpreadPoints?: number;
+  correlationLimits?: Record<string, number>;
 }
 
 export interface Mt5SafetyCheck {
@@ -280,6 +295,8 @@ export interface Mt5ExecutionConfirmation {
   requestedPrice: number | null;
   sl: number | null;
   tp: number | null;
+  spread?: number | null;
+  latencyMs?: number | null;
 }
 
 export interface Mt5TradeProposal {
@@ -352,6 +369,7 @@ export type Mt5LogCategory =
   | "health"
   | "approval"
   | "safety"
+  | "execution"
   | "gateway";
 
 export interface Mt5LogEntry {
@@ -361,4 +379,449 @@ export interface Mt5LogEntry {
   message: string;
   detail: string | null;
   meta: Record<string, unknown> | null;
+}
+
+export interface Mt5Symbol {
+  symbol: string;
+  digits: number;
+  point: number;
+  spreadPoints: number;
+  spread: number;
+  contractSize: number;
+  tickSize: number;
+  tickValue: number;
+  volumeMin: number;
+  volumeMax: number;
+  volumeStep: number;
+  tradeMode: number;
+  tradeAllowed: boolean;
+}
+
+export interface Mt5SymbolSpec extends Mt5Symbol {
+  available: boolean;
+  tickValueProfit: number;
+  tickValueLoss: number;
+  stopsLevelPoints: number;
+  freezeLevelPoints: number;
+  stopsLevel: number;
+  freezeLevel: number;
+  swapLong: number;
+  swapShort: number;
+  tradeCalcMode: number;
+  tradeModeFlags: number;
+  marginInitial: number;
+  marginMaintenance: number;
+  marginHedged: number;
+  marginLong: number;
+  marginShort: number;
+  currencyBase: string;
+  currencyProfit: string;
+  currencyMargin: string;
+  description: string;
+  path: string;
+  session: {
+    tradeMode: number;
+    enabled: boolean;
+    longAllowed: boolean;
+    shortAllowed: boolean;
+  };
+  updatedAt: string;
+}
+
+export interface Mt5Tick {
+  symbol: string;
+  available: boolean;
+  bid: number;
+  ask: number;
+  last: number;
+  spread: number;
+  volume: number;
+  time: string;
+  timeMs: number;
+  ageSeconds: number;
+  marketLive: boolean;
+  updatedAt: string;
+}
+
+export interface Mt5ValidationCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  severity: "blocking" | "warning";
+  message: string;
+}
+
+export interface Mt5ValidationResult {
+  passed: boolean;
+  checks: Mt5ValidationCheck[];
+  blockedReasons: string[];
+  warnings: string[];
+  evaluatedAt: string;
+}
+
+export interface Mt5OrderPreview {
+  symbol: string;
+  orderType: Mt5OrderType;
+  volume: number;
+  entryPrice: number | null;
+  sl: number | null;
+  tp: number | null;
+  bid: number;
+  ask: number;
+  spread: number;
+  spreadCost: number;
+  pipValue: number;
+  positionValue: number;
+  requiredMargin: number;
+  commission: number | null;
+  swap: number;
+  dollarRisk: number;
+  riskPercent: number;
+  reward: number;
+  rewardPercent: number;
+  rrRatio: number;
+  estimatedProfit: number;
+  estimatedLoss: number;
+  balance: number;
+  equity: number;
+  freeMargin: number;
+  marginLevel: number | null;
+  balanceAfterLoss: number;
+  freeMarginAfterEntry: number;
+  marginLevelAfterEntry: number | null;
+  evaluatedAt: string;
+}
+
+export interface Mt5ExecutionEvent {
+  id: string;
+  at: string;
+  stage:
+    | "proposal-created"
+    | "validated"
+    | "approved"
+    | "rejected"
+    | "sent"
+    | "accepted"
+    | "executed"
+    | "failed"
+    | "cancelled"
+    | "closed"
+    | "modified";
+  proposalId: string | null;
+  ticket: number | null;
+  dealId: number | null;
+  user: string;
+  account: string;
+  symbol: string;
+  orderType: string;
+  volume: number;
+  price: number | null;
+  sl: number | null;
+  tp: number | null;
+  result: string;
+  error: string | null;
+  latencyMs: number | null;
+}
+
+export interface Mt5PositionActionResult {
+  ticket: number | null;
+  price: number | null;
+  message: string;
+  error: string | null;
+  dealId?: number | null;
+}
+
+export interface Mt5BulkCloseResult {
+  requested: number;
+  closed: number;
+  failed: number;
+  results: Mt5PositionActionResult[];
+  error: string | null;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Institutional execution groups (OCO / bracket / scale-in / scale-out /
+ * basket). Linked orders are orchestrated by InstitutionalOrderEngine and
+ * tracked here so a single approval decision governs the whole group.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export type Mt5ExecutionGroupMode = "bracket" | "oco" | "scale-in" | "scale-out" | "basket";
+
+export type Mt5ExecutionGroupStatus =
+  | "pending"
+  | "approved"
+  | "active"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export type Mt5ExecutionGroupLegStatus =
+  | "pending"
+  | "approved"
+  | "transmitted"
+  | "filled"
+  | "cancelled"
+  | "rejected";
+
+export interface Mt5ExecutionGroupLeg {
+  proposalId: string | null;
+  ticket: number | null;
+  symbol: string;
+  type: Mt5OrderType;
+  volume: number;
+  price: number | null;
+  sl: number | null;
+  tp: number | null;
+  stopLimit: number | null;
+  status: Mt5ExecutionGroupLegStatus;
+  error: string | null;
+}
+
+export interface Mt5ExecutionGroup {
+  id: string;
+  mode: Mt5ExecutionGroupMode;
+  status: Mt5ExecutionGroupStatus;
+  symbol: string;
+  legs: Mt5ExecutionGroupLeg[];
+  proposalIds: string[];
+  note: string | null;
+  scaleOutLevels: number[];
+  scaleOutOriginalVolume: number | null;
+  scaleOutClosedVolume: number;
+  scaleOutTicket: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Mt5BracketLeg {
+  type: Mt5OrderType;
+  volume: number;
+  price: number | null;
+  sl: number | null;
+  tp: number | null;
+}
+
+export interface Mt5BracketRequest {
+  symbol: string;
+  legs: Mt5BracketLeg[];
+  magic?: number;
+  deviation?: number;
+  comment?: string;
+}
+
+export interface Mt5OcoRequest {
+  symbol: string;
+  first: Mt5BracketLeg;
+  second: Mt5BracketLeg;
+  magic?: number;
+  deviation?: number;
+  comment?: string;
+}
+
+export interface Mt5ScaleInTranche {
+  volume: number;
+  price: number | null;
+  sl?: number | null;
+  tp?: number | null;
+}
+
+export interface Mt5ScaleInRequest {
+  symbol: string;
+  direction: Mt5PositionType;
+  tranches: Mt5ScaleInTranche[];
+  magic?: number;
+  deviation?: number;
+  comment?: string;
+}
+
+export interface Mt5ScaleOutRequest {
+  ticket: number;
+  levels: number[];
+  note?: string | null;
+}
+
+export interface Mt5BasketLeg {
+  symbol: string;
+  type: Mt5OrderType;
+  volume: number;
+  price?: number | null;
+  sl?: number | null;
+  tp?: number | null;
+}
+
+export interface Mt5BasketRequest {
+  legs: Mt5BasketLeg[];
+  magic?: number;
+  deviation?: number;
+  comment?: string;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Execution analytics (G) + trade replay (H)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export interface Mt5ExecutionStatEntry {
+  id: string;
+  proposalId: string | null;
+  ticket: number | null;
+  symbol: string;
+  orderType: Mt5OrderType;
+  volume: number;
+  submittedAt: string;
+  fillAt: string | null;
+  latencyMs: number | null;
+  requestedPrice: number | null;
+  fillPrice: number | null;
+  slippage: number | null;
+  spread: number | null;
+  sl: number | null;
+  tp: number | null;
+  profit: number | null;
+  swap: number | null;
+  commission: number | null;
+  holdingTimeMs: number | null;
+  rrRatio: number | null;
+  outcome: "win" | "loss" | "breakeven" | "open" | "rejected";
+}
+
+export interface Mt5ExecutionSymbolStat {
+  symbol: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
+  netPnl: number;
+}
+
+export interface Mt5ExecutionAnalytics {
+  totalTrades: number;
+  closedTrades: number;
+  openTrades: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
+  averageRR: number | null;
+  expectancy: number | null;
+  averageHoldingTimeMs: number | null;
+  averageProfit: number | null;
+  averageLoss: number | null;
+  totalProfit: number;
+  totalLoss: number;
+  netPnl: number;
+  totalCommission: number;
+  totalSwap: number;
+  averageLatencyMs: number | null;
+  averageSlippage: number | null;
+  averageSpread: number | null;
+  profitFactor: number | null;
+  stats: Mt5ExecutionSymbolStat[];
+  computedAt: string;
+}
+
+export interface Mt5ReplayStep {
+  index: number;
+  stage: Mt5ExecutionEvent["stage"];
+  at: string;
+  result: string;
+  error: string | null;
+  latencyMs: number | null;
+  price: number | null;
+  ticket: number | null;
+  deltaMs: number | null;
+}
+
+export interface Mt5ReplaySession {
+  id: string;
+  proposalId: string | null;
+  symbol: string;
+  orderType: string;
+  volume: number;
+  steps: Mt5ReplayStep[];
+  startedAt: string | null;
+  endedAt: string | null;
+  totalDurationMs: number | null;
+  result: string;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * FIX-ready execution venues (J) + multi-account routing (F)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export type Mt5VenueId =
+  | "mt5-python"
+  | "lmax"
+  | "primexm"
+  | "onezero"
+  | "interactive-brokers"
+  | "dxtrade";
+
+export type Mt5VenueStatus = "active" | "configured" | "available" | "unavailable";
+
+export interface Mt5VenueDescriptor {
+  id: Mt5VenueId;
+  name: string;
+  protocol: "MT5" | "FIX" | "REST" | "native";
+  status: Mt5VenueStatus;
+  description: string;
+}
+
+export interface Mt5VenueRoutingResult {
+  venueId: Mt5VenueId;
+  accepted: boolean;
+  orderId: string | null;
+  message: string;
+  error: string | null;
+}
+
+export interface Mt5AccountDescriptor {
+  accountId: string;
+  label: string;
+  venueId: Mt5VenueId;
+  isActive: boolean;
+  login: number | null;
+  server: string | null;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Order book preparation (I) — placeholder interfaces only. No fake data is
+ * ever produced; a NoopOrderBookFeed returns the "not connected" state.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export interface Mt5DepthEntry {
+  price: number;
+  volume: number;
+  side: "bid" | "ask";
+}
+
+export interface Mt5DepthOfMarket {
+  symbol: string;
+  available: boolean;
+  connected: boolean;
+  bids: Mt5DepthEntry[];
+  asks: Mt5DepthEntry[];
+  updatedAt: string | null;
+}
+
+export interface Mt5Level2Entry {
+  price: number;
+  volume: number;
+  side: "bid" | "ask";
+  level: number;
+}
+
+export interface Mt5LiquidityHeatmapCell {
+  symbol: string;
+  depthPoints: number;
+  bidLiquidity: number;
+  askLiquidity: number;
+}
+
+export interface Mt5OrderBookSnapshot {
+  symbol: string;
+  connected: boolean;
+  depth: Mt5DepthOfMarket | null;
+  level2: Mt5Level2Entry[];
+  heatmap: Mt5LiquidityHeatmapCell[];
+  error: string | null;
+  updatedAt: string;
 }

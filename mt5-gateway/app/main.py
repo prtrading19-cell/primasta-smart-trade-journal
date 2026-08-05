@@ -52,6 +52,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models import (
     AccountPatchRequest,
     AutoConnectRequest,
+    CalcMarginRequest,
+    CalcProfitRequest,
     CancelOrderRequest,
     CloseOrderRequest,
     ConnectRequest,
@@ -503,6 +505,56 @@ def send_order(body: PlaceOrderRequest) -> GatewayResponse:
     if result.get("error"):
         return _error(result["error"])
     return _ok(result, result.get("message"))
+
+
+# ── Symbols / market data / calculators (Phase 26, additive) ──
+
+
+@app.get("/symbols", response_model=GatewayResponse)
+def symbols() -> GatewayResponse:
+    if not _client.is_connected:
+        return _error("MT5 terminal is not connected")
+    return _ok({"symbols": _client.symbols(tradeable_only=True)})
+
+
+@app.get("/symbol/{symbol}", response_model=GatewayResponse)
+def symbol_spec(symbol: str) -> GatewayResponse:
+    if not _client.is_connected:
+        return _error("MT5 terminal is not connected")
+    spec = _client.symbol_spec(symbol)
+    if not spec.get("available"):
+        return _error(spec.get("error") or f"Symbol {symbol} not available")
+    return _ok(spec)
+
+
+@app.get("/symbol/{symbol}/tick", response_model=GatewayResponse)
+def symbol_tick(symbol: str) -> GatewayResponse:
+    if not _client.is_connected:
+        return _error("MT5 terminal is not connected")
+    tick = _client.symbol_tick(symbol)
+    if not tick.get("available"):
+        return _error(tick.get("error") or f"No tick available for {symbol}")
+    return _ok(tick)
+
+
+@app.post("/calc-margin", response_model=GatewayResponse)
+def calc_margin(body: CalcMarginRequest) -> GatewayResponse:
+    if not _client.is_connected:
+        return _error("MT5 terminal is not connected")
+    result = _client.calc_margin(body.symbol, body.volume, body.type or "buy", body.price)
+    if not result.get("ok"):
+        return _error(result.get("error") or "Margin calculation failed")
+    return _ok(result)
+
+
+@app.post("/calc-profit", response_model=GatewayResponse)
+def calc_profit(body: CalcProfitRequest) -> GatewayResponse:
+    if not _client.is_connected:
+        return _error("MT5 terminal is not connected")
+    result = _client.calc_profit(body.symbol, body.volume, body.type or "buy", body.open_price, body.close_price)
+    if not result.get("ok"):
+        return _error(result.get("error") or "Profit calculation failed")
+    return _ok(result)
 
 
 @app.post("/modify-order", response_model=GatewayResponse)

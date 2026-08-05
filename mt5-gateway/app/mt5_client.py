@@ -32,6 +32,8 @@ ORDER_TYPE_BUY_LIMIT = 2
 ORDER_TYPE_SELL_LIMIT = 3
 ORDER_TYPE_BUY_STOP = 4
 ORDER_TYPE_SELL_STOP = 5
+ORDER_TYPE_BUY_STOP_LIMIT = 6
+ORDER_TYPE_SELL_STOP_LIMIT = 7
 
 ORDER_STATE_STARTED = 0
 ORDER_STATE_PLACED = 1
@@ -80,6 +82,32 @@ ORDER_TYPE_NAMES = {
     "sell-limit": ORDER_TYPE_SELL_LIMIT,
     "buy-stop": ORDER_TYPE_BUY_STOP,
     "sell-stop": ORDER_TYPE_SELL_STOP,
+    "buy-stop-limit": ORDER_TYPE_BUY_STOP_LIMIT,
+    "sell-stop-limit": ORDER_TYPE_SELL_STOP_LIMIT,
+}
+
+# Filling policies (request.type_filling)
+ORDER_FILLING_FOK = 0
+ORDER_FILLING_IOC = 1
+ORDER_FILLING_RETURN = 2
+
+FILL_POLICY_NAMES = {
+    "fok": ORDER_FILLING_FOK,
+    "ioc": ORDER_FILLING_IOC,
+    "return": ORDER_FILLING_RETURN,
+}
+
+# Order time in force policies (request.type_time)
+ORDER_TIME_GTC = 0
+ORDER_TIME_DAY = 1
+ORDER_TIME_SPECIFIED = 2
+ORDER_TIME_SPECIFIED_DAY = 3
+
+TIME_POLICY_NAMES = {
+    "gtc": ORDER_TIME_GTC,
+    "day": ORDER_TIME_DAY,
+    "specified": ORDER_TIME_SPECIFIED,
+    "specified-day": ORDER_TIME_SPECIFIED_DAY,
 }
 
 ORDER_STATE_NAMES = {
@@ -108,6 +136,29 @@ def _iso(ts: Optional[float]) -> str:
 
 def _now_iso() -> str:
     return _dt.datetime.now(tz=_dt.timezone.utc).isoformat()
+
+
+def _parse_expiration(value: Any) -> Optional[int]:
+    """Parse an ISO-8601 string or unix epoch (s or ms) into unix seconds."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value < 10_000_000_000 else int(value / 1000)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.isdigit():
+            number = int(text)
+            return number if number < 10_000_000_000 else int(number / 1000)
+        try:
+            parsed = _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+        return int(parsed.timestamp())
+    return None
 
 
 class Mt5Client:
@@ -444,6 +495,179 @@ class Mt5Client:
             )
         return info
 
+    # ── Symbols & market data ──
+
+    @staticmethod
+    def _symbol_point(info: Any) -> float:
+        digits = int(getattr(info, "digits", 0) or 0)
+        return 10.0 ** (-digits)
+
+    @staticmethod
+    def _session_state(info: Any) -> Dict[str, Any]:
+        mode = int(getattr(info, "trade_mode", 0) or 0)
+        return {
+            "tradeMode": mode,
+            "enabled": mode != 0,
+            "longAllowed": mode == 3 or mode == 1,
+            "shortAllowed": mode == 3 or mode == 2,
+        }
+
+    def symbol_spec(self, symbol: str) -> Dict[str, Any]:
+        """Live contract specification for a symbol (digits, sizes, levels,
+        margins, swap, session). All values come from MT5 `symbol_info`."""
+        if not self.is_connected or self._stuck:
+            return {"symbol": symbol, "available": False, "error": self._last_error or "Not connected"}
+        info = self._bounded(lambda: mt5.symbol_info(symbol), timeout_ms=5000)
+        if info is None:
+            return {"symbol": symbol, "available": False, "error": "Symbol not found"}
+        point = self._symbol_point(info)
+        return {
+            "symbol": symbol,
+            "available": True,
+            "digits": int(getattr(info, "digits", 0) or 0),
+            "point": point,
+            "contractSize": float(getattr(info, "trade_contract_size", 0.0) or 0.0),
+            "tickSize": float(getattr(info, "trade_tick_size", 0.0) or 0.0),
+            "tickValue": float(getattr(info, "trade_tick_value", 0.0) or 0.0),
+            "tickValueProfit": float(getattr(info, "trade_tick_value_profit", 0.0) or 0.0),
+            "tickValueLoss": float(getattr(info, "trade_tick_value_loss", 0.0) or 0.0),
+            "volumeMin": float(getattr(info, "volume_min", 0.0) or 0.0),
+            "volumeMax": float(getattr(info, "volume_max", 0.0) or 0.0),
+            "volumeStep": float(getattr(info, "volume_step", 0.0) or 0.0),
+            "stopsLevelPoints": int(getattr(info, "stops_level", 0) or 0),
+            "freezeLevelPoints": int(getattr(info, "freeze_level", 0) or 0),
+            "stopsLevel": float((getattr(info, "stops_level", 0) or 0) * point),
+            "freezeLevel": float((getattr(info, "freeze_level", 0) or 0) * point),
+            "spreadPoints": float(getattr(info, "spread", 0) or 0),
+            "spread": float((getattr(info, "spread", 0) or 0) * point),
+            "swapLong": float(getattr(info, "swap_long", 0.0) or 0.0),
+            "swapShort": float(getattr(info, "swap_short", 0.0) or 0.0),
+            "tradeCalcMode": int(getattr(info, "trade_calc_mode", 0) or 0),
+            "tradeMode": int(getattr(info, "trade_mode", 0) or 0),
+            "tradeModeFlags": int(getattr(info, "trade_mode_flags", 0) or 0),
+            "marginInitial": float(getattr(info, "margin_initial", 0.0) or 0.0),
+            "marginMaintenance": float(getattr(info, "margin_maintenance", 0.0) or 0.0),
+            "marginHedged": float(getattr(info, "margin_hedged", 0.0) or 0.0),
+            "marginLong": float(getattr(info, "margin_long", 0.0) or 0.0),
+            "marginShort": float(getattr(info, "margin_short", 0.0) or 0.0),
+            "currencyBase": getattr(info, "currency_base", "") or "",
+            "currencyProfit": getattr(info, "currency_profit", "") or "",
+            "currencyMargin": getattr(info, "currency_margin", "") or "",
+            "description": getattr(info, "description", "") or "",
+            "path": getattr(info, "path", "") or "",
+            "session": self._session_state(info),
+            "updatedAt": _now_iso(),
+        }
+
+    def symbol_tick(self, symbol: str) -> Dict[str, Any]:
+        """Live bid/ask/spread and tick freshness for a symbol."""
+        if not self.is_connected or self._stuck:
+            return {"symbol": symbol, "available": False, "error": self._last_error or "Not connected"}
+        tick = self._bounded(lambda: mt5.symbol_info_tick(symbol), timeout_ms=5000)
+        if tick is None:
+            return {"symbol": symbol, "available": False, "error": "No tick available"}
+        tick_time = getattr(tick, "time", 0) or 0
+        now = _time.time()
+        bid = float(getattr(tick, "bid", 0.0) or 0.0)
+        ask = float(getattr(tick, "ask", 0.0) or 0.0)
+        return {
+            "symbol": symbol,
+            "available": True,
+            "bid": bid,
+            "ask": ask,
+            "last": float(getattr(tick, "last", 0.0) or 0.0),
+            "spread": round(ask - bid, 10),
+            "volume": float(getattr(tick, "volume", 0.0) or 0.0),
+            "time": _iso(tick_time),
+            "timeMs": int(getattr(tick, "time_msc", 0) or 0),
+            "ageSeconds": max(0, int(now - tick_time)),
+            "marketLive": bool(tick_time and (now - tick_time) < 600),
+            "updatedAt": _now_iso(),
+        }
+
+    def symbols(self, tradeable_only: bool = True) -> List[Dict[str, Any]]:
+        """Tradeable symbols straight from `symbols_get`. Metadata is live;
+        the active symbol's bid/ask is fetched on demand via symbol_tick."""
+        if not self.is_connected or self._stuck:
+            return []
+        raw = self._bounded(mt5.symbols_get, timeout_ms=15000)
+        if raw is None:
+            return []
+        result: List[Dict[str, Any]] = []
+        for s in raw:
+            try:
+                symbol = getattr(s, "name", "") or ""
+                if not symbol:
+                    continue
+                mode = int(getattr(s, "trade_mode", 0) or 0)
+                if tradeable_only and mode == 0:
+                    continue
+                point = 10.0 ** (-int(getattr(s, "digits", 0) or 0))
+                result.append(
+                    {
+                        "symbol": symbol,
+                        "digits": int(getattr(s, "digits", 0) or 0),
+                        "point": point,
+                        "spreadPoints": float(getattr(s, "spread", 0) or 0),
+                        "spread": float((getattr(s, "spread", 0) or 0) * point),
+                        "contractSize": float(getattr(s, "trade_contract_size", 0.0) or 0.0),
+                        "tickSize": float(getattr(s, "trade_tick_size", 0.0) or 0.0),
+                        "tickValue": float(getattr(s, "trade_tick_value", 0.0) or 0.0),
+                        "volumeMin": float(getattr(s, "volume_min", 0.0) or 0.0),
+                        "volumeMax": float(getattr(s, "volume_max", 0.0) or 0.0),
+                        "volumeStep": float(getattr(s, "volume_step", 0.0) or 0.0),
+                        "tradeMode": mode,
+                        "tradeAllowed": mode != 0,
+                    }
+                )
+            except Exception:
+                continue
+        result.sort(key=lambda x: x["symbol"])
+        return result
+
+    # ── Trade calculators (official MT5 math, live data only) ──
+
+    def calc_margin(self, symbol: str, volume: float, order_type: str = "buy", price: Optional[float] = None) -> Dict[str, Any]:
+        if not self.is_connected or self._stuck:
+            return {"ok": False, "error": self._last_error or "Not connected"}
+        is_buy = order_type in ("buy", "buy-limit", "buy-stop", "buy-stop-limit")
+        mt5_type = ORDER_TYPE_BUY if is_buy else ORDER_TYPE_SELL
+        if price is None:
+            tick = self.symbol_tick(symbol)
+            if not tick.get("available"):
+                return {"ok": False, "error": "No market price available for margin calculation"}
+            price = tick.get("ask" if is_buy else "bid")
+        try:
+            result = self._bounded(lambda: mt5.order_calc_margin(mt5_type, symbol, float(volume), float(price)), timeout_ms=5000)
+        except Exception as exc:
+            return {"ok": False, "error": f"calc_margin raised: {exc}"}
+        if result is None:
+            code, message = self._last_mt5_error()
+            return {"ok": False, "retcode": code, "error": message or "Margin calculation returned no result"}
+        retcode = int(result[0])
+        value = float(result[1]) if len(result) > 1 and result[1] is not None else None
+        if retcode != TRADE_RETCODE_DONE:
+            return {"ok": False, "retcode": retcode, "error": f"Margin calculation rejected (retcode {retcode})"}
+        return {"ok": True, "margin": value, "symbol": symbol, "volume": float(volume), "orderType": order_type, "price": float(price), "retcode": retcode}
+
+    def calc_profit(self, symbol: str, volume: float, order_type: str, open_price: float, close_price: float) -> Dict[str, Any]:
+        if not self.is_connected or self._stuck:
+            return {"ok": False, "error": self._last_error or "Not connected"}
+        is_buy = order_type in ("buy", "buy-limit", "buy-stop", "buy-stop-limit")
+        mt5_type = ORDER_TYPE_BUY if is_buy else ORDER_TYPE_SELL
+        try:
+            result = self._bounded(lambda: mt5.order_calc_profit(mt5_type, symbol, float(volume), float(open_price), float(close_price)), timeout_ms=5000)
+        except Exception as exc:
+            return {"ok": False, "error": f"calc_profit raised: {exc}"}
+        if result is None:
+            code, message = self._last_mt5_error()
+            return {"ok": False, "retcode": code, "error": message or "Profit calculation returned no result"}
+        retcode = int(result[0])
+        value = float(result[1]) if len(result) > 1 and result[1] is not None else None
+        if retcode != TRADE_RETCODE_DONE:
+            return {"ok": False, "retcode": retcode, "error": f"Profit calculation rejected (retcode {retcode})"}
+        return {"ok": True, "profit": value, "symbol": symbol, "volume": float(volume), "orderType": order_type, "openPrice": float(open_price), "closePrice": float(close_price), "retcode": retcode}
+
     def account(self) -> Optional[Dict[str, Any]]:
         if not self.is_connected or self._stuck:
             return None
@@ -631,23 +855,59 @@ class Mt5Client:
         magic = request.get("magic", self._magic or 0)
         deviation = request.get("deviation", self._deviation)
         comment = request.get("comment", "PRIMASTA") or "PRIMASTA"
+        stop_limit = request.get("stop_limit")
+        fill_policy = request.get("fill_policy")
+        time_policy = request.get("time_policy")
+        expiration = request.get("expiration")
 
         if order_type not in ORDER_TYPE_NAMES:
             return {"ticket": None, "price": None, "message": "Unsupported order type", "error": f"Unsupported order type: {order_type}"}
 
-        is_pending = order_type in ("buy-limit", "sell-limit", "buy-stop", "sell-stop")
+        is_pending = order_type in (
+            "buy-limit",
+            "sell-limit",
+            "buy-stop",
+            "sell-stop",
+            "buy-stop-limit",
+            "sell-stop-limit",
+        )
+        is_stop_limit = order_type in ("buy-stop-limit", "sell-stop-limit")
         action = TRADE_ACTION_PENDING if is_pending else TRADE_ACTION_DEAL
         mt5_type = ORDER_TYPE_NAMES[order_type]
 
         if is_pending:
             if not price:
                 return {"ticket": None, "price": None, "message": "Price required for pending order", "error": "Pending orders require an explicit price"}
+            if is_stop_limit and not stop_limit:
+                return {"ticket": None, "price": None, "message": "Stop Limit trigger price required", "error": "Stop Limit orders require a stop limit (activation) price"}
         else:
             if not price:
                 price = self._market_price(symbol, "buy" if mt5_type == ORDER_TYPE_BUY else "sell")
 
         if not price:
             return {"ticket": None, "price": None, "message": "No market price available", "error": "No market price available"}
+
+        type_time = ORDER_TIME_GTC
+        if time_policy:
+            policy = str(time_policy).lower()
+            if policy in ("specified", "specified-day"):
+                if not expiration:
+                    return {"ticket": None, "price": None, "message": "Expiration required", "error": "Orders with time policy 'specified' require an expiration timestamp"}
+                parsed = self._parse_expiration(expiration)
+                if parsed is None:
+                    return {"ticket": None, "price": None, "message": "Invalid expiration", "error": "Expiration must be an ISO-8601 or unix timestamp"}
+                type_time = TIME_POLICY_NAMES.get(policy, ORDER_TIME_SPECIFIED)
+                if is_pending:
+                    request_payload_extras = {"type_time": type_time, "expiration": int(parsed)}
+                else:
+                    request_payload_extras = {"type_time": type_time}
+            elif policy in TIME_POLICY_NAMES:
+                type_time = TIME_POLICY_NAMES[policy]
+                request_payload_extras = {"type_time": type_time}
+            else:
+                request_payload_extras = {}
+        else:
+            request_payload_extras = {}
 
         request_payload = {
             "action": action,
@@ -660,11 +920,18 @@ class Mt5Client:
             "deviation": int(deviation or 20),
             "magic": int(magic or 0),
             "comment": comment,
-            "type_time": ORDER_TIME_GTC,
+            "type_time": type_time,
             "type_filling": ORDER_FILLING_RETURN,
         }
+        if is_stop_limit:
+            request_payload["stoplimit"] = float(stop_limit)
         if is_pending:
             request_payload["type_filling"] = ORDER_FILLING_RETURN
+        request_payload.update(request_payload_extras)
+        if fill_policy:
+            policy = str(fill_policy).lower()
+            if policy in FILL_POLICY_NAMES:
+                request_payload["type_filling"] = FILL_POLICY_NAMES[policy]
 
         try:
             result = mt5.order_send(request_payload)

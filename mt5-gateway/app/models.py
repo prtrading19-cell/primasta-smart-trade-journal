@@ -89,7 +89,7 @@ class AccountPatchRequest(BaseModel):
 class PlaceOrderRequest(BaseModel):
     request_id: str = Field(default_factory=lambda: "")
     symbol: str
-    type: str  # buy | sell | buy-limit | sell-limit | buy-stop | sell-stop
+    type: str  # buy | sell | buy-limit | sell-limit | buy-stop | sell-stop | buy-stop-limit | sell-stop-limit
     volume: float
     price: Optional[float] = None
     sl: Optional[float] = None
@@ -97,6 +97,25 @@ class PlaceOrderRequest(BaseModel):
     magic: Optional[int] = None
     deviation: Optional[int] = None
     comment: Optional[str] = "PRIMASTA"
+    stop_limit: Optional[float] = None  # activation (trigger) price for stop-limit orders
+    fill_policy: Optional[str] = None  # fok | ioc | return
+    time_policy: Optional[str] = None  # gtc | day | specified | specified-day
+    expiration: Optional[str] = None   # ISO-8601 or unix timestamp
+
+
+class CalcMarginRequest(BaseModel):
+    symbol: str
+    volume: float
+    type: Optional[str] = "buy"  # buy | sell (direction)
+    price: Optional[float] = None
+
+
+class CalcProfitRequest(BaseModel):
+    symbol: str
+    volume: float
+    type: Optional[str] = "buy"  # buy | sell (direction)
+    open_price: float
+    close_price: float
 
 
 class ModifyOrderRequest(BaseModel):

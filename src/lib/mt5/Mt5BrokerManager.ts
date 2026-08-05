@@ -3,13 +3,21 @@ import type {
   Mt5BrokerStatus,
   Mt5ConnectionState,
   Mt5ExecutionConfirmation,
+  Mt5ExecutionEvent,
   Mt5HealthRecord,
   Mt5LogEntry,
+  Mt5OrderPreview,
   Mt5PlaceRequest,
+  Mt5PositionActionResult,
   Mt5PositionSynchronizerState,
   Mt5ProposalSource,
   Mt5RedactedConfig,
+  Mt5Symbol,
+  Mt5SymbolSpec,
+  Mt5Tick,
   Mt5TradeProposal,
+  Mt5SafetyResult,
+  Mt5ValidationResult,
 } from "./types";
 import { getMt5Config, redactMt5Config, MT5_BROKER_ID, MT5_BROKER_NAME, type Mt5Config } from "./config";
 import { getMt5Gateway } from "./Mt5Gateway";
@@ -21,7 +29,46 @@ import { getExecutionConfirmationEngine } from "./ExecutionConfirmation";
 import { getSafetyEngine, SafetyEngine } from "./SafetyEngine";
 import { getManualApprovalLayer } from "./ManualApprovalLayer";
 import { getMt5Logger } from "./Mt5Logger";
+import { getExecutionEngine, ExecutionEngine, type Mt5PreviewOutcome } from "./ExecutionEngine";
+import { getExecutionEventStore } from "./Mt5ExecutionEventStore";
+import {
+  getPositionManager,
+  PositionManager,
+  type Mt5CloseAllFilter,
+  type Mt5PartialCloseFraction,
+} from "./PositionManager";
 import { getSharedSingleton } from "@/lib/research/infrastructure/singleton";
+import {
+  getInstitutionalOrderEngine,
+  InstitutionalOrderEngine,
+  type Mt5GroupActionResult,
+  type Mt5GroupApproveResult,
+  type Mt5ScaleOutTriggerResult,
+  type Mt5ReconcileResult,
+} from "./InstitutionalOrderEngine";
+import {
+  getExecutionAnalyticsStore,
+  ExecutionAnalyticsStore,
+  computeExecutionAnalytics,
+  type Mt5AnalyticsInput,
+} from "./ExecutionAnalytics";
+import { getTradeReplay, TradeReplay } from "./TradeReplay";
+import { getMt5VenueRegistry, Mt5VenueRegistry } from "./ExecutionVenues";
+import { getOrderBookFeed, Mt5OrderBookFeed } from "./OrderBookFeed";
+import { getMt5AccountRouter, Mt5AccountRouter } from "./AccountRouter";
+import type {
+  Mt5AccountDescriptor,
+  Mt5BasketRequest,
+  Mt5BracketRequest,
+  Mt5ExecutionAnalytics,
+  Mt5ExecutionGroup,
+  Mt5OcoRequest,
+  Mt5OrderBookSnapshot,
+  Mt5ReplaySession,
+  Mt5ScaleInRequest,
+  Mt5ScaleOutRequest,
+  Mt5VenueDescriptor,
+} from "./types";
 
 export interface Mt5SubmitResult {
   created: boolean;
@@ -61,10 +108,25 @@ export class Mt5BrokerManager {
   private safety: SafetyEngine;
   private approvals = getManualApprovalLayer();
   private logger = getMt5Logger();
+  private execution: ExecutionEngine;
+  private events = getExecutionEventStore();
+  private positionsManager: PositionManager;
+  private strategyEngine: InstitutionalOrderEngine;
+  private analytics: ExecutionAnalyticsStore;
+  private replay: TradeReplay;
+  private venues: Mt5VenueRegistry;
+  private accountRouter: Mt5AccountRouter;
 
   constructor(config?: Mt5Config) {
     this.config = config ?? getMt5Config();
     this.safety = getSafetyEngine(this.config.safety);
+    this.execution = getExecutionEngine();
+    this.positionsManager = getPositionManager();
+    this.strategyEngine = getInstitutionalOrderEngine();
+    this.analytics = getExecutionAnalyticsStore();
+    this.replay = getTradeReplay();
+    this.venues = getMt5VenueRegistry();
+    this.accountRouter = getMt5AccountRouter();
   }
 
   reloadConfig(): void {
@@ -264,6 +326,10 @@ export class Mt5BrokerManager {
       this.logger.log("error", "Position sync failed", posRes.error);
     }
 
+    /* Reconcile linked execution groups (OCO sibling cancellation, etc.) on
+     * each synchronization cycle — no per-second polling is used. */
+    await this.strategyEngine.reconcileGroups();
+
     return { account: this.accountSync.getState(), positions: this.positionSync.getState(), connected: true };
   }
 
@@ -299,9 +365,8 @@ export class Mt5BrokerManager {
     }
 
     const account = this.accountSync.getState();
-    const existingPositionsVolume = this.positionSync
-      .getState()
-      .positions.reduce((sum, p) => sum + p.volume, 0);
+    const positionState = this.positionSync.getState();
+    const existingPositionsVolume = positionState.positions.reduce((sum, p) => sum + p.volume, 0);
     const pendingVolume = this.approvals
       .pending()
       .filter((p) => p.request.symbol === request.symbol)
@@ -313,11 +378,38 @@ export class Mt5BrokerManager {
       pendingProposalVolume: pendingVolume,
     });
 
+    /* Live 12-gate validation against gateway-verified data. */
+    const liveValidation = await this.execution.validate(request, {
+      account,
+      positions: positionState,
+    });
+
+    const mergedSafety: Mt5SafetyResult = {
+      passed: safetyResult.passed && liveValidation.passed,
+      checks: [...safetyResult.checks, ...liveValidation.checks],
+      blockedReasons: [...safetyResult.blockedReasons, ...liveValidation.blockedReasons],
+      warnings: [...safetyResult.warnings, ...liveValidation.warnings],
+      evaluatedAt: new Date().toISOString(),
+    };
+
     const proposal = this.approvals.create({
       request,
       signalId: input.signalId ?? null,
       source: input.source ?? "research",
-      safety: safetyResult,
+      safety: mergedSafety,
+    });
+
+    this.events.record({
+      stage: "proposal-created",
+      proposalId: proposal.id,
+      symbol: request.symbol,
+      orderType: request.type,
+      volume: request.volume,
+      price: request.price,
+      sl: request.sl,
+      tp: request.tp,
+      result: mergedSafety.passed ? "pending_approval" : "blocked",
+      error: mergedSafety.passed ? null : mergedSafety.blockedReasons.join("; ") || null,
     });
 
     this.logger.log(
@@ -329,8 +421,8 @@ export class Mt5BrokerManager {
     this.logger.log(
       "safety",
       "Safety validation",
-      safetyResult.passed ? "Passed" : `Blocked: ${safetyResult.blockedReasons.join("; ")}`,
-      { proposalId: proposal.id, passed: safetyResult.passed, blockedReasons: safetyResult.blockedReasons }
+      mergedSafety.passed ? "Passed" : `Blocked: ${mergedSafety.blockedReasons.join("; ")}`,
+      { proposalId: proposal.id, passed: mergedSafety.passed, blockedReasons: mergedSafety.blockedReasons }
     );
 
     return { created: true, proposal, error: null };
@@ -363,18 +455,34 @@ export class Mt5BrokerManager {
       note ?? "Manual approval granted",
       { proposalId }
     );
+    this.events.record({
+      stage: "approved",
+      proposalId,
+      symbol: approvedProposal.request.symbol,
+      orderType: approvedProposal.request.type,
+      volume: approvedProposal.request.volume,
+      price: approvedProposal.request.price,
+      sl: approvedProposal.request.sl,
+      tp: approvedProposal.request.tp,
+      result: "approved",
+      error: null,
+    });
 
-    /* Fail-safe: re-run safety before any transmission */
+    /* Fail-safe: re-run the full live validation before any transmission.
+     * Market conditions may have changed since the proposal was created. */
     const account = this.accountSync.getState();
-    const safetyResult = this.safety.validate(approvedProposal.request, { account });
+    const finalValidation = await this.execution.validate(approvedProposal.request, {
+      account,
+      positions: this.positionSync.getState(),
+    });
 
-    if (!safetyResult.passed) {
+    if (!finalValidation.passed) {
       const confirmation = this.confirmations.record({
         requestId: approvedProposal.request.requestId,
         proposalId,
         ticket: null,
         fillPrice: null,
-        brokerMessage: `Safety blocked transmission: ${safetyResult.blockedReasons.join("; ")}`,
+        brokerMessage: `Final validation blocked transmission: ${finalValidation.blockedReasons.join("; ")}`,
         status: "rejected",
         requestedPrice: approvedProposal.request.price,
         symbol: approvedProposal.request.symbol,
@@ -382,10 +490,22 @@ export class Mt5BrokerManager {
         orderType: approvedProposal.request.type,
         sl: approvedProposal.request.sl,
         tp: approvedProposal.request.tp,
-        rejectionReason: safetyResult.blockedReasons.join("; "),
+        rejectionReason: finalValidation.blockedReasons.join("; "),
       });
       this.approvals.addConfirmation(proposalId, confirmation);
-      this.logger.log("safety", `Transmission blocked for ${proposalId}`, safetyResult.blockedReasons.join("; "), { proposalId });
+      this.events.record({
+        stage: "failed",
+        proposalId,
+        symbol: approvedProposal.request.symbol,
+        orderType: approvedProposal.request.type,
+        volume: approvedProposal.request.volume,
+        price: approvedProposal.request.price,
+        sl: approvedProposal.request.sl,
+        tp: approvedProposal.request.tp,
+        result: "blocked",
+        error: finalValidation.blockedReasons.join("; ") || null,
+      });
+      this.logger.log("safety", `Transmission blocked for ${proposalId}`, finalValidation.blockedReasons.join("; "), { proposalId });
       return { ok: true, proposal: this.approvals.get(proposalId), confirmation, error: null };
     }
 
@@ -411,8 +531,21 @@ export class Mt5BrokerManager {
     }
 
     /* Live gateway available → transmit */
+    const request = approvedProposal.request;
     try {
-      const result = await this.gateway.placeOrder(approvedProposal.request);
+      this.events.record({
+        stage: "sent",
+        proposalId,
+        symbol: request.symbol,
+        orderType: request.type,
+        volume: request.volume,
+        price: request.price,
+        sl: request.sl,
+        tp: request.tp,
+        result: "sent",
+        error: null,
+      });
+      const result = await this.gateway.placeOrder(request);
       const transmitted = result.data?.ticket != null;
       const status = transmitted
         ? result.data?.error == null
@@ -421,21 +554,36 @@ export class Mt5BrokerManager {
         : "rejected";
 
       const confirmation = this.confirmations.record({
-        requestId: approvedProposal.request.requestId,
+        requestId: request.requestId,
         proposalId,
         ticket: result.data?.ticket ?? null,
         fillPrice: result.data?.price ?? null,
         brokerMessage: result.data?.message ?? result.error ?? "Order transmitted",
         status,
-        requestedPrice: approvedProposal.request.price,
-        symbol: approvedProposal.request.symbol,
-        volume: approvedProposal.request.volume,
-        orderType: approvedProposal.request.type,
-        sl: approvedProposal.request.sl,
-        tp: approvedProposal.request.tp,
+        requestedPrice: request.price,
+        symbol: request.symbol,
+        volume: request.volume,
+        orderType: request.type,
+        sl: request.sl,
+        tp: request.tp,
         rejectionReason: result.error,
       });
       this.approvals.addConfirmation(proposalId, confirmation);
+
+      this.events.record({
+        stage: transmitted && result.data?.error == null ? "accepted" : "failed",
+        proposalId,
+        ticket: result.data?.ticket ?? null,
+        dealId: null,
+        symbol: request.symbol,
+        orderType: request.type,
+        volume: request.volume,
+        price: result.data?.price ?? request.price,
+        sl: request.sl,
+        tp: request.tp,
+        result: transmitted && result.data?.error == null ? "accepted" : "rejected",
+        error: result.data?.error ?? result.error,
+      });
 
       if (transmitted) {
         this.safety.recordExecutedTrade(null);
@@ -443,7 +591,7 @@ export class Mt5BrokerManager {
         this.logger.log(
           "fill",
           `Order ${confirmation.ticket} ${confirmation.status}`,
-          `${approvedProposal.request.type} ${approvedProposal.request.volume} ${approvedProposal.request.symbol} @ ${result.data?.price ?? "—"}`,
+          `${request.type} ${request.volume} ${request.symbol} @ ${result.data?.price ?? "—"}`,
           { ticket: confirmation.ticket, status }
         );
         await this.refresh();
@@ -481,6 +629,18 @@ export class Mt5BrokerManager {
     if (!proposal) return { ok: false, proposal: null, confirmation: null, error: "Proposal not found" };
     const decided = this.approvals.decide(proposalId, "reject", note);
     this.logger.log("approval", `Proposal ${proposalId} rejected`, note ?? "Manual rejection", { proposalId });
+    this.events.record({
+      stage: "rejected",
+      proposalId,
+      symbol: proposal.request.symbol,
+      orderType: proposal.request.type,
+      volume: proposal.request.volume,
+      price: proposal.request.price,
+      sl: proposal.request.sl,
+      tp: proposal.request.tp,
+      result: "rejected",
+      error: note ?? null,
+    });
     return { ok: true, proposal: this.approvals.get(proposalId), confirmation: null, error: null };
   }
 
@@ -543,6 +703,155 @@ export class Mt5BrokerManager {
       logs: this.logger.getRecent(40),
       dailyTrades: this.safety.getDailyTrades(),
     };
+  }
+
+  /* ── Execution layer delegates (Phase 26) ── */
+
+  getExecutionEngine(): ExecutionEngine {
+    return this.execution;
+  }
+
+  getPositionManager(): PositionManager {
+    return this.positionsManager;
+  }
+
+  async previewOrder(request: Mt5PlaceRequest): Promise<Mt5PreviewOutcome> {
+    return this.execution.preview(request);
+  }
+
+  async getSymbols(): Promise<Mt5Symbol[]> {
+    const res = await this.gateway.getSymbols();
+    return res.ok ? (res.data ?? []) : [];
+  }
+
+  async getSymbolSpec(symbol: string): Promise<Mt5SymbolSpec | null> {
+    const res = await this.gateway.getSymbolSpec(symbol);
+    return res.ok ? res.data : null;
+  }
+
+  async getTick(symbol: string): Promise<Mt5Tick | null> {
+    const res = await this.gateway.getTick(symbol);
+    return res.ok ? res.data : null;
+  }
+
+  getExecutionEvents(count = 200): Mt5ExecutionEvent[] {
+    return this.events.list(count);
+  }
+
+  async closePosition(ticket: number, volume?: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.close(ticket, volume);
+  }
+
+  async partialClosePosition(ticket: number, fraction: Mt5PartialCloseFraction): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.partialClose(ticket, fraction);
+  }
+
+  async modifyPosition(ticket: number, sl: number | null, tp: number | null): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.modifyPosition(ticket, sl, tp);
+  }
+
+  async breakEvenPosition(ticket: number, bufferPoints = 0): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.breakEven(ticket, bufferPoints);
+  }
+
+  async trailPosition(ticket: number, distancePoints: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.trail(ticket, distancePoints);
+  }
+
+  async reversePosition(ticket: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.reverse(ticket);
+  }
+
+  async duplicatePosition(ticket: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.duplicate(ticket);
+  }
+
+  async closeAllPositions(filter: Mt5CloseAllFilter = "all"): Promise<{ requested: number; closed: number; failed: number; results: Mt5PositionActionResult[]; error: string | null }> {
+    return this.positionsManager.closeAll(filter);
+  }
+
+  async modifyPendingOrder(ticket: number, price: number | null, sl: number | null, tp: number | null): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.modifyPending(ticket, price, sl, tp);
+  }
+
+  async deletePendingOrder(ticket: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.deletePending(ticket);
+  }
+
+  async activatePendingOrder(ticket: number): Promise<Mt5PositionActionResult> {
+    return this.positionsManager.activatePending(ticket);
+  }
+
+  /* ── Institutional strategies (OCO / bracket / scale / basket) ── */
+
+  async submitBracketOrder(req: Mt5BracketRequest): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.submitBracket(req);
+  }
+
+  async submitOcoOrder(req: Mt5OcoRequest): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.submitOco(req);
+  }
+
+  async submitScaleInOrder(req: Mt5ScaleInRequest): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.submitScaleIn(req);
+  }
+
+  async submitScaleOutOrder(req: Mt5ScaleOutRequest): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.registerScaleOut(req);
+  }
+
+  async submitBasketOrder(req: Mt5BasketRequest): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.submitBasket(req);
+  }
+
+  async approveExecutionGroup(groupId: string, note?: string | null): Promise<Mt5GroupApproveResult> {
+    return this.strategyEngine.approveGroup(groupId, note);
+  }
+
+  async cancelExecutionGroup(groupId: string, note?: string | null): Promise<Mt5GroupActionResult> {
+    return this.strategyEngine.cancelGroup(groupId, note);
+  }
+
+  async triggerScaleOut(groupId: string, fraction: number): Promise<Mt5ScaleOutTriggerResult> {
+    return this.strategyEngine.triggerScaleOut(groupId, fraction);
+  }
+
+  async reconcileExecutionGroups(): Promise<Mt5ReconcileResult> {
+    return this.strategyEngine.reconcileGroups();
+  }
+
+  getExecutionGroups(): Mt5ExecutionGroup[] {
+    return this.strategyEngine.getGroups();
+  }
+
+  getExecutionGroup(id: string): Mt5ExecutionGroup | null {
+    return this.strategyEngine.getGroup(id);
+  }
+
+  /* ── Analytics, replay, venues, order book, routing ── */
+
+  getExecutionAnalytics(input?: Mt5AnalyticsInput): Mt5ExecutionAnalytics | null {
+    return input ? computeExecutionAnalytics(input) : this.analytics.recompute();
+  }
+
+  getReplaySessions(count = 100): Mt5ReplaySession[] {
+    return this.replay.listSessions(count);
+  }
+
+  getReplayByProposal(proposalId: string): Mt5ReplaySession | null {
+    return this.replay.buildByProposal(proposalId);
+  }
+
+  getVenueDescriptors(): Mt5VenueDescriptor[] {
+    return this.venues.list();
+  }
+
+  async getOrderBookSnapshot(symbols: string[]): Promise<Mt5OrderBookSnapshot> {
+    return getOrderBookFeed().snapshot(symbols);
+  }
+
+  getAccounts(): Mt5AccountDescriptor[] {
+    return this.accountRouter.listAccounts();
   }
 }
 

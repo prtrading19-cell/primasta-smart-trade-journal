@@ -7,9 +7,12 @@ import type {
   Mt5PlaceRequest,
   Mt5Position,
   Mt5RawResult,
+  Mt5Symbol,
+  Mt5SymbolSpec,
+  Mt5Tick,
 } from "./types";
 import type { Mt5ConnectOptions, Mt5ConnectOutcome } from "./accountTypes";
-import type { Mt5GatewayTransport } from "./Mt5Gateway";
+import type { Mt5CalcMarginInput, Mt5CalcProfitInput, Mt5CalcResult, Mt5GatewayTransport } from "./Mt5Gateway";
 import type { Mt5Config } from "./config";
 
 /**
@@ -187,6 +190,10 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
         price: request.price,
         sl: request.sl,
         tp: request.tp,
+        stop_limit: request.stopLimit ?? null,
+        fill_policy: request.fillPolicy ?? null,
+        time_policy: request.timePolicy ?? null,
+        expiration: request.expiration ?? null,
         magic: request.magic,
         deviation: request.deviation,
         comment: request.comment,
@@ -200,7 +207,7 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
     const res = await this.request(
       "POST",
       "/modify-order",
-      { ticket: request.ticket, sl: request.sl, tp: request.tp },
+      { ticket: request.ticket, sl: request.sl, tp: request.tp, price: request.price ?? null },
       20000
     );
     return this.rawResult(res, "Order modified");
@@ -219,6 +226,46 @@ export class Mt5PythonGatewayTransport implements Mt5GatewayTransport {
   async cancelOrder(ticket: number): Promise<Mt5RawResult> {
     const res = await this.request("POST", "/cancel-order", { ticket }, 20000);
     return this.rawResult(res, "Order cancelled");
+  }
+
+  async getSymbols(): Promise<Mt5Symbol[]> {
+    const res = await this.request("GET", "/symbols");
+    if (!res.ok || !res.data) return [];
+    return (res.data as { symbols?: Mt5Symbol[] }).symbols ?? [];
+  }
+
+  async getSymbolSpec(symbol: string): Promise<Mt5SymbolSpec | null> {
+    const res = await this.request("GET", `/symbol/${encodeURIComponent(symbol)}`);
+    if (!res.ok || !res.data) return null;
+    return res.data as unknown as Mt5SymbolSpec;
+  }
+
+  async getTick(symbol: string): Promise<Mt5Tick | null> {
+    const res = await this.request("GET", `/symbol/${encodeURIComponent(symbol)}/tick`);
+    if (!res.ok || !res.data) return null;
+    return res.data as unknown as Mt5Tick;
+  }
+
+  async calcMargin(input: Mt5CalcMarginInput): Promise<Mt5CalcResult> {
+    const res = await this.request(
+      "POST",
+      "/calc-margin",
+      { symbol: input.symbol, volume: input.volume, type: input.orderType, price: input.price ?? null },
+      10000
+    );
+    const data = (res.data ?? {}) as { ok?: boolean; margin?: number; error?: string | null };
+    return { ok: res.ok && data.ok !== false, value: data.margin ?? null, error: data.error ?? res.error };
+  }
+
+  async calcProfit(input: Mt5CalcProfitInput): Promise<Mt5CalcResult> {
+    const res = await this.request(
+      "POST",
+      "/calc-profit",
+      { symbol: input.symbol, volume: input.volume, type: input.orderType, open_price: input.openPrice, close_price: input.closePrice },
+      10000
+    );
+    const data = (res.data ?? {}) as { ok?: boolean; profit?: number; error?: string | null };
+    return { ok: res.ok && data.ok !== false, value: data.profit ?? null, error: data.error ?? res.error };
   }
 
   async ping(): Promise<number> {
