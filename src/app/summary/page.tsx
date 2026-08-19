@@ -10,11 +10,16 @@ export default function SummaryPage() {
   const summary = buildSummary(trades);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Closed-trade insights</p>
-        <h1 className="text-2xl font-bold tracking-tight">Summary</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">All summaries below use closed trades only.</p>
+    <div className="space-y-6 animate-fade-in">
+      <header className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-card">
+        <div className="relative">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+          <div className="p-6 sm:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">TradeOS Analytics</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-text-primary sm:text-4xl">Summary</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">All summaries below use closed trades only.</p>
+          </div>
+        </div>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -35,43 +40,43 @@ export default function SummaryPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-lg font-semibold">Automatic insights</h2>
+        <div className="rounded-xl border border-border-subtle bg-surface-card p-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">Automatic Insights</p>
           <div className="mt-4 space-y-3">
             {summary.insights.map((insight) => (
-              <p key={insight} className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+              <p key={insight} className="rounded-lg border border-border-subtle bg-surface-panel/40 px-4 py-3 text-sm text-text-secondary">
                 {insight}
               </p>
             ))}
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="border-b border-slate-200 p-5 dark:border-slate-800">
-            <h2 className="text-lg font-semibold">Monthly performance</h2>
+        <div className="rounded-xl border border-border-subtle bg-surface-card">
+          <div className="border-b border-border-subtle p-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">Monthly Performance</p>
           </div>
           <div className="table-scroll">
             <table className="min-w-[620px] w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-                <tr>
-                  <th className="px-4 py-3">Month</th>
-                  <th className="px-4 py-3">Profit/Loss</th>
-                  <th className="px-4 py-3">Total R</th>
-                  <th className="px-4 py-3">Closed trades</th>
+              <thead>
+                <tr className="border-b border-border-subtle">
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Month</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Profit/Loss</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Total R</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Closed trades</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              <tbody className="divide-y divide-border-subtle">
                 {summary.monthly.map((row) => (
-                  <tr key={row.month}>
-                    <td className="px-4 py-3 font-medium">{row.month}</td>
-                    <td className="px-4 py-3">{money(row.profitLoss)}</td>
-                    <td className="px-4 py-3">{row.totalR.toFixed(2)}</td>
-                    <td className="px-4 py-3">{row.trades}</td>
+                  <tr key={row.month} className="hover:bg-surface-hover/60">
+                    <td className="px-4 py-3 font-medium text-text-primary">{row.month}</td>
+                    <td className="px-4 py-3 text-text-secondary">{money(row.profitLoss)}</td>
+                    <td className="px-4 py-3 text-text-secondary">{row.totalR.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-text-secondary">{row.trades}</td>
                   </tr>
                 ))}
                 {!summary.monthly.length ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={4} className="px-4 py-10 text-center text-text-muted">
                       Close trades to generate monthly summaries.
                     </td>
                   </tr>
@@ -108,38 +113,38 @@ function StatsTable({
   showAverageRiskReward?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="border-b border-slate-200 p-5 dark:border-slate-800">
-        <h2 className="text-lg font-semibold">{title}</h2>
+    <div className="rounded-xl border border-border-subtle bg-surface-card">
+      <div className="border-b border-border-subtle p-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">{title}</p>
       </div>
       <div className="table-scroll">
         <table className="min-w-[680px] w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Trades</th>
-              <th className="px-4 py-3">Wins</th>
-              <th className="px-4 py-3">Win rate</th>
-              {showAverageRiskReward ? <th className="px-4 py-3">Avg R:R</th> : null}
-              <th className="px-4 py-3">Avg R</th>
-              <th className="px-4 py-3">P/L</th>
+          <thead>
+            <tr className="border-b border-border-subtle">
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Name</th>
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Trades</th>
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Wins</th>
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Win rate</th>
+              {showAverageRiskReward ? <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Avg R:R</th> : null}
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Avg R</th>
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">P/L</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+          <tbody className="divide-y divide-border-subtle">
             {rows.map((row) => (
-              <tr key={row.name}>
-                <td className="max-w-[260px] px-4 py-3 font-medium">{row.name}</td>
-                <td className="px-4 py-3">{row.trades}</td>
-                <td className="px-4 py-3">{row.wins}</td>
-                <td className="px-4 py-3">{percent(row.winRate)}</td>
-                {showAverageRiskReward ? <td className="px-4 py-3">{row.averagePlannedRiskReward ? `1:${number(row.averagePlannedRiskReward)}` : "-"}</td> : null}
-                <td className="px-4 py-3">{number(row.averageRMultiple)}</td>
-                <td className="px-4 py-3">{money(row.profitLoss)}</td>
+              <tr key={row.name} className="hover:bg-surface-hover/60">
+                <td className="max-w-[260px] px-4 py-3 font-medium text-text-primary">{row.name}</td>
+                <td className="px-4 py-3 text-text-secondary">{row.trades}</td>
+                <td className="px-4 py-3 text-text-secondary">{row.wins}</td>
+                <td className="px-4 py-3 text-text-secondary">{percent(row.winRate)}</td>
+                {showAverageRiskReward ? <td className="px-4 py-3 text-text-secondary">{row.averagePlannedRiskReward ? `1:${number(row.averagePlannedRiskReward)}` : "-"}</td> : null}
+                <td className="px-4 py-3 text-text-secondary">{number(row.averageRMultiple)}</td>
+                <td className="px-4 py-3 text-text-secondary">{money(row.profitLoss)}</td>
               </tr>
             ))}
             {!rows.length ? (
               <tr>
-                <td colSpan={showAverageRiskReward ? 7 : 6} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                <td colSpan={showAverageRiskReward ? 7 : 6} className="px-4 py-10 text-center text-text-muted">
                   Close trades to generate this breakdown.
                 </td>
               </tr>

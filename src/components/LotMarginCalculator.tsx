@@ -10,7 +10,7 @@ import type { AccountCurrency, CalculatorRiskType, CalculatorSymbol, LotMarginIn
 import type { TradeType } from "@/types/trade";
 
 const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:focus:border-slate-200";
+  "w-full rounded-lg border border-border-subtle bg-surface-panel px-3 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:ring-2 focus:ring-gold/10";
 
 export function LotMarginCalculator() {
   const { addLotMarginCalculation } = useAppData();
@@ -105,14 +105,19 @@ export function LotMarginCalculator() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Trading calculator</p>
-          <h1 className="text-2xl font-bold tracking-tight">TradeOS Lot Size & Margin Calculator</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Calculate safest lot size, risk amount, risk-to-reward, and estimated margin before placing a trade.</p>
+        <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-card flex-1">
+          <div className="relative">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+            <div className="p-6 sm:p-8">
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">TradeOS Calculator</p>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-text-primary sm:text-4xl">Lot Size & Margin Calculator</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">Calculate safest lot size, risk amount, risk-to-reward, and estimated margin before placing a trade.</p>
+            </div>
+          </div>
         </div>
-        <Link href="/calculator/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">
+        <Link href="/calculator/history" className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-card px-4 py-3 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold">
           <History className="h-4 w-4" />
           History
         </Link>
@@ -226,11 +231,11 @@ export function LotMarginCalculator() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="font-semibold">My risk rule:</p>
-          <p className="mt-2 text-slate-600 dark:text-slate-300">I risk only 0.25% to 0.5% per trade until I have proven consistency. I do not increase lot size to recover losses. I only trade when setup, risk, and psychology agree.</p>
+        <div className="rounded-xl border border-border-subtle bg-surface-card p-5 text-sm">
+          <p className="font-bold text-text-primary">My risk rule:</p>
+          <p className="mt-2 text-text-secondary">I risk only 0.25% to 0.5% per trade until I have proven consistency. I do not increase lot size to recover losses. I only trade when setup, risk, and psychology agree.</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="rounded-xl border border-warning/20 bg-warning/5 p-5 text-sm text-warning">
           This calculator is an estimate. Always confirm contract size, margin rules, pip value, and lot step with your broker before placing a live trade.
         </div>
       </section>
@@ -240,13 +245,13 @@ export function LotMarginCalculator() {
 
 function ResultPanel({ input, result, onCopy, onSave, newTradeHref, message }: { input: LotMarginInput; result: ReturnType<typeof calculateLotMargin>; onCopy: () => void; onSave: () => void; newTradeHref: string; message: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:sticky xl:top-6 xl:self-start">
+    <div className="rounded-xl border border-border-subtle bg-surface-card p-5 xl:sticky xl:top-6 xl:self-start">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Recommended Lot Size</p>
-          <p className="mt-1 text-4xl font-bold tracking-tight">{number(result.calculatedLotSize, 2)}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">Recommended Lot Size</p>
+          <p className="mt-1 text-4xl font-black tracking-tight text-text-primary">{number(result.calculatedLotSize, 2)}</p>
         </div>
-        <span className={cn("rounded-md px-3 py-1 text-xs font-bold", statusClass(result.finalRiskStatus))}>{result.finalRiskStatus}</span>
+        <span className={cn("rounded-full px-3 py-1 text-xs font-bold", statusClass(result.finalRiskStatus))}>{result.finalRiskStatus}</span>
       </div>
 
       <div className="mt-5 grid gap-3 text-sm">
@@ -265,36 +270,36 @@ function ResultPanel({ input, result, onCopy, onSave, newTradeHref, message }: {
       {result.warnings.length ? (
         <div className="mt-4 space-y-2">
           {result.warnings.map((warning) => (
-            <p key={warning} className={cn("rounded-md px-3 py-2 text-sm", warningClass(warning))}>{warning}</p>
+            <p key={warning} className={cn("rounded-lg border px-3 py-2 text-sm", warningClass(warning))}>{warning}</p>
           ))}
         </div>
       ) : null}
 
       <div className="mt-5 grid gap-2">
-        <button type="button" onClick={onCopy} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">
+        <button type="button" onClick={onCopy} className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-card px-4 py-3 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold">
           <Clipboard className="h-4 w-4" />
           Copy Lot Size
         </button>
-        <Link href={newTradeHref} className={cn("focus-ring inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold", result.isValid ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "pointer-events-none bg-slate-200 text-slate-500 dark:bg-slate-800")}>
+        <Link href={newTradeHref} className={cn("focus-ring inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all", result.isValid ? "bg-gold text-surface-base hover:bg-gold-dim" : "pointer-events-none border border-border-subtle bg-surface-panel text-text-muted")}>
           <Send className="h-4 w-4" />
           Use This Calculation in New Trade
         </Link>
-        <button type="button" onClick={onSave} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">
+        <button type="button" onClick={onSave} className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-card px-4 py-3 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold">
           <Save className="h-4 w-4" />
           Save Calculation
         </button>
       </div>
-      {message ? <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">{message}</p> : null}
+      {message ? <p className="mt-3 rounded-lg border border-border-subtle bg-surface-panel/40 px-3 py-2 text-sm text-text-secondary">{message}</p> : null}
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-xl border border-border-subtle bg-surface-card p-5">
       <div className="mb-4 flex items-center gap-2">
-        <Calculator className="h-4 w-4 text-slate-500" />
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <Calculator className="h-4 w-4 text-gold" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">{title}</p>
       </div>
       {children}
     </section>
@@ -303,7 +308,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+    <label className="block text-sm font-medium text-text-secondary">
       {label}
       <div className="mt-1">{children}</div>
     </label>
@@ -312,22 +317,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ResultRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-50 px-4 py-3 dark:bg-slate-950">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 font-semibold text-slate-800 dark:text-slate-100">{value}</p>
+    <div className="rounded-lg border border-border-subtle bg-surface-panel/40 px-4 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted">{label}</p>
+      <p className="mt-1 font-bold text-text-primary">{value}</p>
     </div>
   );
 }
 
 function statusClass(value: string) {
-  if (value === "Safe") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
-  if (value === "Caution") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
+  if (value === "Safe") return "bg-profit/15 text-profit";
+  if (value === "Caution") return "bg-warning/15 text-warning";
+  return "bg-loss/15 text-loss";
 }
 
 function warningClass(value: string) {
-  if (value.includes("below your trading plan") || value.includes("above 20%")) return "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200";
-  return "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200";
+  if (value.includes("below your trading plan") || value.includes("above 20%")) return "border-warning/20 bg-warning/5 text-warning";
+  return "border-loss/20 bg-loss/5 text-loss";
 }
 
 function formatMoney(value: number, currency: AccountCurrency) {

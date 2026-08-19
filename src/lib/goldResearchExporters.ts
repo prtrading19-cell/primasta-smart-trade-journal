@@ -1,5 +1,6 @@
 import { buildGoldBiasSummary } from "@/lib/goldResearch";
 import { GOLD_PERSONAL_RULE, type GoldChecklistResult, type GoldResearchReport } from "@/types/goldResearch";
+import type { ResearchEngineResult } from "@/lib/research/ResearchTypes";
 
 const APP_NAME = "TradeOS";
 
@@ -121,6 +122,109 @@ export async function exportGoldResearchPackPdf(
 
 export async function exportGoldBiasSummaryPdf(reports: GoldResearchReport[], checklistResult: GoldChecklistResult) {
   await exportGoldResearchPackPdf(reports, checklistResult, `primasta-gold-bias-summary-${new Date().toISOString().slice(0, 10)}.pdf`, "Gold Bias Summary");
+}
+
+export async function exportGoldV2ResearchPdf(
+  engineResult: ResearchEngineResult,
+  filename = `primasta-gold-v2-research-${new Date().toISOString().slice(0, 10)}.pdf`
+) {
+  const { default: jsPDF } = await import("jspdf");
+  await import("jspdf-autotable");
+  const doc = new jsPDF({ orientation: "landscape" });
+  const decision = engineResult.decision;
+  const categoryScores = engineResult.categoryScores;
+  const technicalBias = engineResult.technicalBias;
+  const institutionalFlow = engineResult.institutionalFlow;
+
+  doc.setFontSize(18);
+  doc.text(APP_NAME, 14, 18);
+  doc.setFontSize(11);
+  doc.text("Gold V2 Institutional Research Report", 14, 27);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+
+  const decisionRows = [
+    ["Decision", decision.decision],
+    ["Composite Score", `${decision.overallGoldScore.toFixed(1)}/100`],
+    ["Overall Bias", decision.overallBias],
+    ["Confidence", `${decision.overallConfidence.toFixed(1)}%`],
+    ["Risk Rating", decision.riskRating],
+    ["Decision Quality", decision.decisionQuality],
+    ["Alignment Score", `${decision.alignmentScore.toFixed(1)}%`],
+    ["Conflict Score", `${decision.conflictScore.toFixed(1)}%`],
+  ];
+
+  (doc as any).autoTable({
+    startY: 42,
+    head: [["Decision Metric", "Value"]],
+    body: decisionRows,
+    theme: "striped",
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [15, 23, 42] }
+  });
+
+  if (categoryScores && categoryScores.scores.length > 0) {
+    (doc as any).autoTable({
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Category", "Score", "Bias", "Weight", "Alignment", "Conflict"]],
+      body: categoryScores.scores.map((cat) => [
+        cat.categoryTitle,
+        `${cat.weightedScore.toFixed(1)}`,
+        cat.bias,
+        `${(cat.weight * 100).toFixed(0)}%`,
+        cat.alignmentScore > 65 ? "Aligned" : "Mixed",
+        cat.hasConflict ? "Yes" : "No",
+      ]),
+      theme: "grid",
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [15, 23, 42] }
+    });
+  }
+
+  if (technicalBias) {
+    (doc as any).autoTable({
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Technical Metric", "Value"]],
+      body: [
+        ["Technical Score", `${technicalBias.technicalScore.toFixed(1)}/100`],
+        ["Technical Bias", technicalBias.technicalBias],
+        ["Strength", technicalBias.strength],
+        ["Confidence", `${technicalBias.confidence.toFixed(1)}%`],
+        ["Market Structure", technicalBias.marketStructure],
+        ["Setup Present", technicalBias.setupPresent ? "Yes" : "No"],
+      ],
+      theme: "striped",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [15, 23, 42] }
+    });
+  }
+
+  if (institutionalFlow) {
+    (doc as any).autoTable({
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Institutional Metric", "Value"]],
+      body: [
+        ["Institutional Score", `${institutionalFlow.institutionalScore.toFixed(1)}/100`],
+        ["Institutional Bias", institutionalFlow.institutionalBias],
+        ["Data Quality", `${(institutionalFlow.dataQuality.score * 100).toFixed(0)}%`],
+        ["Available Drivers", institutionalFlow.dataQuality.availableDrivers.join(", ") || "None"],
+        ["Summary", institutionalFlow.summary],
+      ],
+      theme: "striped",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [15, 23, 42] }
+    });
+  }
+
+  if (decision.summary) {
+    const finalY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFontSize(10);
+    doc.text("Decision Summary:", 14, finalY);
+    doc.setFontSize(9);
+    const lines = doc.splitTextToSize(decision.summary, 260);
+    doc.text(lines, 14, finalY + 6);
+  }
+
+  doc.save(filename);
 }
 
 function reportRows(report: GoldResearchReport) {

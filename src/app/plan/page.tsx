@@ -35,16 +35,21 @@ export default function TradingPlanPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Rules and discipline</p>
-        <h1 className="text-2xl font-bold tracking-tight">Trading Plan</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Set the rules that keep daily trade decisions simple and consistent.</p>
+    <div className="space-y-6 animate-fade-in">
+      <header className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-card">
+        <div className="relative">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+          <div className="p-6 sm:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">TradeOS Discipline</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-text-primary sm:text-4xl">Trading Plan</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">Set the rules that keep daily trade decisions simple and consistent.</p>
+          </div>
+        </div>
       </header>
 
-      {message ? <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300">{message}</p> : null}
+      {message ? <p className="rounded-xl border border-profit/20 bg-profit/5 px-4 py-3 text-sm text-profit">{message}</p> : null}
 
-      <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <form onSubmit={handleSubmit} className="rounded-xl border border-border-subtle bg-surface-card p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Main market">
             <input value={form.mainMarket} onChange={(event) => setForm({ ...form, mainMarket: event.target.value })} className={inputClass} />
@@ -75,15 +80,15 @@ export default function TradingPlanPage() {
           </Field>
         </div>
 
-        <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">
-          <p className="font-semibold text-slate-800 dark:text-slate-100">Default discipline guardrails</p>
+        <div className="mt-5 rounded-lg border border-border-subtle bg-surface-panel/40 p-4 text-sm text-text-secondary">
+          <p className="font-semibold text-text-primary">Default discipline guardrails</p>
           <p className="mt-2">Risk per trade: 0.25% to 0.5%. Maximum trades per day: 2. Stop trading after 2 losses. Minimum risk-to-reward: 1:2. No revenge trading, overtrading, moving stop loss, or trading without a clear setup.</p>
         </div>
 
         <button
           type="submit"
           disabled={saving}
-          className="focus-ring mt-5 rounded-md bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-950"
+          className="focus-ring mt-5 inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-3 text-sm font-bold text-surface-base transition-all hover:bg-gold-dim disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save trading plan"}
         </button>
@@ -94,7 +99,7 @@ export default function TradingPlanPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+    <label className="block text-sm font-medium text-text-secondary">
       {label}
       <div className="mt-1">{children}</div>
     </label>
@@ -102,4 +107,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:focus:border-slate-200";
+  "w-full rounded-lg border border-border-subtle bg-surface-panel px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:ring-2 focus:ring-gold/10";

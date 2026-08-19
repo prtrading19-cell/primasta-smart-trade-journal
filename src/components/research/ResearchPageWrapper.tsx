@@ -3,14 +3,14 @@
 import { ResearchAssetProvider, useResearchAsset } from "@/context/ResearchAssetContext";
 import { ResearchAssetSelector } from "@/components/research/ResearchAssetSelector";
 import { ResearchPlaceholder } from "@/components/research/ResearchPlaceholder";
-import { GoldResearchDesk } from "@/components/GoldResearchDesk";
+import { GoldResearchDeskV2 } from "@/components/research/GoldResearchDeskV2";
 import { US100ResearchDesk } from "@/components/research/ResearchDesk";
 
 function ResearchContent() {
   const { selectedAsset } = useResearchAsset();
 
   if (selectedAsset === "gold") {
-    return <GoldResearchDesk />;
+    return <GoldResearchDeskV2 />;
   }
 
   if (selectedAsset === "us100") {
@@ -24,7 +24,7 @@ export function ResearchPageWrapper() {
   return (
     <ResearchAssetProvider>
       <div className="space-y-6">
-        <section className="rounded-lg border border-border-subtle bg-surface-card p-5 shadow-soft">
+        <section className="rounded-xl border border-border-subtle bg-surface-card p-5 shadow-soft">
           <ResearchAssetSelector />
         </section>
         <ResearchContent />

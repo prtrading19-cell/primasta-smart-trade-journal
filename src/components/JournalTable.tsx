@@ -83,8 +83,8 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
               type="button"
               onClick={() => setTab(item)}
               className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium",
-                tab === item ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                "rounded-lg px-4 py-2 text-sm font-semibold transition-all",
+                tab === item ? "bg-gold/10 text-gold shadow-glow" : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
               )}
             >
               {item}
@@ -94,7 +94,7 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
       ) : null}
 
       {!compactOpenOnly ? (
-        <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 rounded-xl border border-border-subtle bg-surface-card p-4 sm:grid-cols-2 xl:grid-cols-6">
           <input value={search} onChange={(event) => setSearch(event.target.value)} className={inputClass} placeholder="Search trades" />
           <select value={pair} onChange={(event) => setPair(event.target.value)} className={inputClass}>
             <option>All</option>
@@ -127,11 +127,11 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-border-subtle bg-surface-card shadow-soft">
         <div className="table-scroll">
           <table className="min-w-[1840px] w-full border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-              <tr>
+            <thead>
+              <tr className="border-b border-border-subtle">
                 {[
                   "Date",
                   "Pair",
@@ -165,10 +165,10 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            <tbody className="divide-y divide-border-subtle">
               {filteredTrades.map((trade) => (
-                <tr key={trade.id} className="align-top hover:bg-slate-50 dark:hover:bg-slate-950/60">
-                  <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{shortDate(trade.date)}</td>
+                <tr key={trade.id} className="align-top hover:bg-surface-hover/60">
+                  <td className="px-3 py-3 text-text-secondary">{shortDate(trade.date)}</td>
                   <td className="px-3 py-3 font-semibold">{trade.pair}</td>
                   <td className="px-3 py-3">{trade.tradeType}</td>
                   <td className="max-w-[220px] px-3 py-3">{trade.strategy}</td>
@@ -203,7 +203,7 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
                         View
                       </Link>
                       {trade.status === "Open" ? (
-                        <button type="button" onClick={() => setClosingTrade(trade)} className="rounded-md bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">
+                        <button type="button" onClick={() => setClosingTrade(trade)} className="rounded-lg bg-gold px-2.5 py-1.5 text-xs font-bold text-surface-base transition-all hover:bg-gold-dim">
                           Close Trade
                         </button>
                       ) : (
@@ -216,7 +216,7 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
                         <Pencil className="h-4 w-4" />
                         Edit
                       </button>
-                      <button type="button" onClick={() => void handleDelete(trade)} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40">
+                      <button type="button" onClick={() => void handleDelete(trade)} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-loss hover:bg-loss/10">
                         <Trash2 className="h-4 w-4" />
                         Delete
                       </button>
@@ -227,10 +227,10 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
 
               {!filteredTrades.length ? (
                 <tr>
-                  <td colSpan={25} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={25} className="px-4 py-12 text-center text-text-muted">
                     <div className="flex flex-col items-center gap-3">
                       <p>{compactOpenOnly ? "No open trades right now." : "No trades match this view."}</p>
-                      <Link href="/new-trade" className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-slate-950">
+                      <Link href="/new-trade" className="inline-flex items-center gap-2 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-surface-base transition-all hover:bg-gold-dim">
                         <Plus className="h-4 w-4" />
                         Add new trade
                       </Link>
@@ -246,16 +246,16 @@ export function JournalTable({ compactOpenOnly = false }: { compactOpenOnly?: bo
       {closingTrade ? <CloseTradeDialog trade={closingTrade} onClose={() => setClosingTrade(null)} onSave={(details) => closeTrade(closingTrade.id, details)} /> : null}
 
       {editingTrade ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6">
-          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-lg bg-white p-5 shadow-soft dark:bg-slate-900">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-surface-base/60 px-4 py-6">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-border-subtle bg-surface-card p-5 shadow-soft">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Edit trade</p>
-                <h2 className="text-xl font-semibold">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">Edit Trade</p>
+                <h2 className="mt-1 text-xl font-bold text-text-primary">
                   {editingTrade.pair} {editingTrade.tradeType}
                 </h2>
               </div>
-              <button type="button" onClick={() => setEditingTrade(null)} className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-800">
+              <button type="button" onClick={() => setEditingTrade(null)} className="rounded-lg border border-border bg-surface-card px-3 py-2 text-sm font-bold text-text-secondary transition-all hover:border-gold hover:text-gold">
                 Close
               </button>
             </div>
@@ -272,7 +272,7 @@ function unique(values: string[]) {
 }
 
 const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50";
+  "w-full rounded-lg border border-border-subtle bg-surface-panel px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-gold focus:ring-2 focus:ring-gold/10";
 
 const actionClass =
-  "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800";
+  "inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-panel px-3 py-2 text-xs font-semibold text-text-secondary transition hover:bg-surface-elevated hover:text-text-primary";

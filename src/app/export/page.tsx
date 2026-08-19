@@ -13,11 +13,16 @@ export default function ExportPage() {
   const monthlyTrades = trades.filter((trade) => trade.status === "Closed" && trade.date.startsWith(month));
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Reports and backups</p>
-        <h1 className="text-2xl font-bold tracking-tight">Export</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">The main performance report clearly uses closed trades only for performance calculations.</p>
+    <div className="space-y-6 animate-fade-in">
+      <header className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-card">
+        <div className="relative">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+          <div className="p-6 sm:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">TradeOS Reports</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-text-primary sm:text-4xl">Export</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">The main performance report clearly uses closed trades only for performance calculations.</p>
+          </div>
+        </div>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -42,13 +47,13 @@ function ExportCard({ title, description, onClick }: { title: string; descriptio
     <button
       type="button"
       onClick={onClick}
-      className="focus-ring rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
+      className="focus-ring group rounded-xl border border-border-subtle bg-surface-card p-5 text-left transition-all duration-300 hover:border-border hover:shadow-card-hover"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950 text-white dark:bg-white dark:text-slate-950">
+      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-gold/20 bg-gold/10 text-gold transition-all group-hover:shadow-glow">
         <Download className="h-4 w-4" />
       </span>
-      <span className="mt-4 block font-semibold">{title}</span>
-      <span className="mt-1 block text-sm text-slate-500 dark:text-slate-400">{description}</span>
+      <span className="mt-4 block font-bold text-text-primary">{title}</span>
+      <span className="mt-1 block text-sm text-text-muted">{description}</span>
     </button>
   );
 }
